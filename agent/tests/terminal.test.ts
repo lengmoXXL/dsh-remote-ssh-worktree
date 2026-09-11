@@ -208,19 +208,19 @@ describe('terminal backend', () => {
     const { termId } = await term.spawn(spec({ argv: [SHELL] }))
     term.write(termId, 'sleep 30\n')
 
-    const foreground = await term.inspectForeground(termId)
-    if (foreground === null) {
-      // The daemon reports a foreground group wherever the platform publishes
-      // one; only a platform that refuses may answer null.
-      assert.notEqual(process.platform, 'darwin')
-    } else {
-      assert.ok(foreground.processGroupId > 0, `${String(foreground.processGroupId)} is not a group id`)
-      assert.equal(typeof foreground.inputWaiting, 'boolean')
-      if (process.platform !== 'linux') {
-        // Only Linux exposes evidence this build can read; everywhere else the
-        // daemon answers false rather than guessing a wait.
-        assert.equal(foreground.inputWaiting, false)
-      }
+    // The write only asks the shell to run the command; the group exists once
+    // the shell has forked it, so a single sample races the shell.
+    const foreground = await until(
+      async () => (await term.inspectForeground(termId)) ?? undefined,
+      'a foreground process group',
+    )
+
+    assert.ok(foreground.processGroupId > 0, `${String(foreground.processGroupId)} is not a group id`)
+    assert.equal(typeof foreground.inputWaiting, 'boolean')
+    if (process.platform !== 'linux') {
+      // Only Linux exposes evidence this build can read; everywhere else the
+      // daemon answers false rather than guessing a wait.
+      assert.equal(foreground.inputWaiting, false)
     }
   })
 

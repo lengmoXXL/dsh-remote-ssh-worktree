@@ -24,7 +24,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run test:all
+      # The bundle and built-daemon suites read `client/client.cjs` and
+      # `agent/lib/main.mjs`, which are build outputs and not committed. A
+      # fresh checkout has neither, so the build has to precede them.
       - run: npm run build
       - name: Built artifacts exist
         run: |
@@ -32,3 +34,4 @@ jobs:
           test -f lib/index.d.ts
           test -f client/client.cjs
           test -f agent/lib/main.mjs
+      - run: npm run test:all

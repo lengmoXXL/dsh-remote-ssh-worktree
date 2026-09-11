@@ -26,6 +26,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 const here = dirname(fileURLToPath(import.meta.url))
 const bundlePath = join(here, '..', 'agent', 'lib', 'main.mjs')
 
+
 const TOKEN = 'built-agent-token-0123456789'
 
 let remoteRoot: string

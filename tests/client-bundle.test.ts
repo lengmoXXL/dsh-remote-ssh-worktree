@@ -24,6 +24,22 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const bundlePath = join(here, '..', 'client', 'client.cjs')
 
+/**
+ * Read a build output, naming the command that produces it.
+ * @param path - absolute path of the artifact.
+ * @returns the artifact's text.
+ * @throws when the artifact is absent, with the command that creates it.
+ */
+async function readArtifact(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    throw new Error(`${path} is a build output and is absent; run \`npm run build\` first`)
+  }
+}
+
+
 /** Icons the section imports; every one renders an empty svg. */
 const ICON_NAMES = [
   'IconBranchOutline16', 'IconChevronLeftOutline14', 'IconFolderOpen16', 'IconGlobeOutline14',
@@ -63,7 +79,7 @@ interface LoadedEntry {
 
 /** Evaluate the built bundle against a stub loader and return what it loaded. */
 async function loadBundle(): Promise<LoadedEntry> {
-  const source = await readFile(bundlePath, 'utf8')
+  const source = await readArtifact(bundlePath)
   const nodeRequire = createRequire(import.meta.url)
   const library = primitivesStub()
   const require = (name: string): unknown =>
@@ -220,7 +236,7 @@ test('the section renders its frame with the injected face threaded through', as
 })
 
 test('the bundle carries its stylesheet inlined under hashed local names', async () => {
-  const source = await readFile(bundlePath, 'utf8')
+  const source = await readArtifact(bundlePath)
 
   // A dynamic bundle has no stylesheet channel, so the build compiles the CSS
   // Module into the artifact and attaches one tagged <style> at factory time.
@@ -234,7 +250,7 @@ test('the bundle carries its stylesheet inlined under hashed local names', async
 })
 
 test('the bundle inlines every dependency the shell does not provide', async () => {
-  const source = await readFile(bundlePath, 'utf8')
+  const source = await readArtifact(bundlePath)
   const required = [...source.matchAll(/require\("([^"]+)"\)/g)].map(match => match[1]).sort()
 
   // The module table supplies React and the client stack; everything else is
