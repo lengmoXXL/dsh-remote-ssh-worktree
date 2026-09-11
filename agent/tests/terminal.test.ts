@@ -187,6 +187,18 @@ describe('terminal backend', () => {
     // assertions below, with the count it actually reached.
     await until(() => term.outcome(termId) ?? undefined, 'the command to exit')
 
+    // The exit event and the final data event are separate, and on some
+    // PTY builds the tail arrives after the exit. Wait for the stream to stop
+    // advancing before reading the claim; a daemon that lost bytes still fails
+    // the assertions below, and the wait above already named the real state.
+    let quiescent = term.read(termId, 0).nextOffset
+    for (;;) {
+      await sleep(POLL_MS)
+      const now = term.read(termId, 0).nextOffset
+      if (now === quiescent) break
+      quiescent = now
+    }
+
     const read = term.read(termId, 0)
     assert.equal(read.lossy, true)
     assert.equal(read.nextOffset, total)
