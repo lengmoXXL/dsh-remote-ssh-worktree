@@ -25,7 +25,9 @@ import { access, mkdir, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import type { Writable } from 'node:stream'
+import { asProcId } from '../../shared/protocol.ts'
 import type {
+  ProcId,
   SpPipeFrame,
   WireCollect,
   WireOutputRead,
@@ -112,7 +114,7 @@ export interface SubprocessBackend {
    * @throws SubprocessFailure `SP_SPAWN_FAILED` when the directory is unusable
    *   or the program cannot be started.
    */
-  spawn(spec: WireSpawnSpec): Promise<{ readonly procId: string }>
+  spawn(spec: WireSpawnSpec): Promise<{ readonly procId: ProcId }>
   /**
    * Read one collected stream from a whole-stream byte offset.
    *
@@ -127,7 +129,7 @@ export interface SubprocessBackend {
    * @throws SubprocessFailure `SP_NO_SUCH_PROCESS` or `SP_UNSUPPORTED_STDIO`
    *   when the stream was not collected.
    */
-  readOutput(procId: string, stream: 'stdout' | 'stderr', fromByte: number): WireOutputRead
+  readOutput(procId: ProcId, stream: 'stdout' | 'stderr', fromByte: number): WireOutputRead
   /**
    * Write bytes to a child started with piped stdin.
    * @param procId - a process this connection started.
@@ -135,14 +137,14 @@ export interface SubprocessBackend {
    * @returns an empty result object.
    * @throws SubprocessFailure `SP_NO_SUCH_PROCESS` or `SP_UNSUPPORTED_STDIO`.
    */
-  writeStdin(procId: string, data: string): Record<string, never>
+  writeStdin(procId: ProcId, data: string): Record<string, never>
   /**
    * Close a child's piped stdin.
    * @param procId - a process this connection started.
    * @returns an empty result object.
    * @throws SubprocessFailure `SP_NO_SUCH_PROCESS` or `SP_UNSUPPORTED_STDIO`.
    */
-  closeStdin(procId: string): Record<string, never>
+  closeStdin(procId: ProcId): Record<string, never>
   /**
    * Signal the managed range and escalate to `SIGKILL` after the grace period.
    *
@@ -152,14 +154,14 @@ export interface SubprocessBackend {
    * @returns an empty result object.
    * @throws SubprocessFailure `SP_NO_SUCH_PROCESS`.
    */
-  terminate(procId: string): Record<string, never>
+  terminate(procId: ProcId): Record<string, never>
   /**
    * Wait until the whole managed range is gone, not merely the direct child.
    * @param procId - a process this connection started.
    * @returns `{ empty: true }` once no member of the range is left.
    * @throws SubprocessFailure `SP_NO_SUCH_PROCESS`.
    */
-  waitForExit(procId: string): Promise<{ readonly empty: boolean }>
+  waitForExit(procId: ProcId): Promise<{ readonly empty: boolean }>
   /**
    * Read the exit facts of a closed child.
    * @param procId - a process this connection started.
@@ -167,7 +169,7 @@ export interface SubprocessBackend {
    *   has not closed yet.
    * @throws SubprocessFailure `SP_NO_SUCH_PROCESS`.
    */
-  outcome(procId: string): WireOutcome | null
+  outcome(procId: ProcId): WireOutcome | null
   /**
    * Kill every managed range and release every retained buffer.
    * @returns nothing; safe to call more than once.
@@ -183,7 +185,7 @@ export function createSubprocessBackend(send: PipeFrameSender): SubprocessBacken
   const processes = new Map<string, ManagedProcess>()
 
   /** The managed process behind an id, or the typed failure. */
-  const require = (procId: string): ManagedProcess => {
+  const require = (procId: ProcId): ManagedProcess => {
     const process_ = processes.get(procId)
     if (process_ === undefined) {
       throw new SubprocessFailure('SP_NO_SUCH_PROCESS', `no such process "${procId}"`)
@@ -220,7 +222,7 @@ export function createSubprocessBackend(send: PipeFrameSender): SubprocessBacken
         throw new SubprocessFailure('SP_SPAWN_FAILED', 'cannot spawn: argv does not name a program')
       }
       const cwd = await usableDirectory(spec.cwd, 'SP_SPAWN_FAILED')
-      const procId = randomUUID()
+      const procId = asProcId(randomUUID())
       const spillDirectory = needsSpill(spec.stdout, spec.stderr) ? join(SPILL_ROOT, procId) : undefined
       if (spillDirectory !== undefined) await mkdir(spillDirectory, { recursive: true })
       const child = spawn(program, spec.argv.slice(1), {
@@ -295,7 +297,7 @@ class ManagedProcess {
   readonly stdout: StreamBuffer | undefined
   readonly stderr: StreamBuffer | undefined
 
-  private readonly procId: string
+  private readonly procId: ProcId
   private readonly child: ChildProcess
   private readonly pid: number | undefined
   private readonly stdin: Writable | undefined
@@ -321,7 +323,7 @@ class ManagedProcess {
    * @param send - delivers one pipe frame to this connection.
    */
   constructor(
-    procId: string,
+    procId: ProcId,
     child: ChildProcess,
     spec: WireSpawnSpec,
     spillDirectory: string | undefined,

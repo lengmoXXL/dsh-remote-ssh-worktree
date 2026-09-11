@@ -20,7 +20,9 @@ import { readFile, readdir } from 'node:fs/promises'
 import { constants as osConstants } from 'node:os'
 import * as nodePty from 'node-pty'
 import type { IDisposable, IPty } from 'node-pty'
+import { asTermId } from '../../shared/protocol.ts'
 import type {
+  TermId,
   WireOutcome,
   WireOutputRead,
   WireTerminalForeground,
@@ -53,7 +55,7 @@ export interface TerminalBackend {
    * @throws SubprocessFailure `SP_TERMINAL_FAILED` when the directory is
    *   unusable or the PTY cannot be allocated.
    */
-  spawn(spec: WireTerminalSpawnSpec): Promise<{ readonly termId: string; readonly pid: number }>
+  spawn(spec: WireTerminalSpawnSpec): Promise<{ readonly termId: TermId; readonly pid: number }>
   /**
    * Read retained terminal output from a whole-stream byte offset.
    * @param termId - a terminal this connection allocated.
@@ -62,7 +64,7 @@ export interface TerminalBackend {
    *   offset had already slid out of the retained window.
    * @throws SubprocessFailure `SP_NO_SUCH_TERMINAL`.
    */
-  read(termId: string, fromByte: number): WireOutputRead
+  read(termId: TermId, fromByte: number): WireOutputRead
   /**
    * Deliver text to the terminal input.
    * @param termId - a terminal this connection allocated.
@@ -71,7 +73,7 @@ export interface TerminalBackend {
    * @throws SubprocessFailure `SP_NO_SUCH_TERMINAL` or `SP_TERMINAL_FAILED`
    *   when the session's top-level process has already exited.
    */
-  write(termId: string, data: string): Record<string, never>
+  write(termId: TermId, data: string): Record<string, never>
   /**
    * Report the current foreground process group.
    * @param termId - a terminal this connection allocated.
@@ -79,7 +81,7 @@ export interface TerminalBackend {
    *   `null` when no foreground group can be resolved.
    * @throws SubprocessFailure `SP_NO_SUCH_TERMINAL`.
    */
-  inspectForeground(termId: string): Promise<WireTerminalForeground | null>
+  inspectForeground(termId: TermId): Promise<WireTerminalForeground | null>
   /**
    * Deliver a signal to the current foreground process group.
    * @param termId - a terminal this connection allocated.
@@ -88,7 +90,7 @@ export interface TerminalBackend {
    * @throws SubprocessFailure `SP_NO_SUCH_TERMINAL`, or `SP_TERMINAL_FAILED`
    *   when no foreground group resolves or the platform cannot deliver it.
    */
-  signalForeground(termId: string, signal: WireTerminalSignal): Promise<{ readonly processGroupId: number }>
+  signalForeground(termId: TermId, signal: WireTerminalSignal): Promise<{ readonly processGroupId: number }>
   /**
    * Terminate the whole terminal session.
    *
@@ -100,14 +102,14 @@ export interface TerminalBackend {
    * @throws SubprocessFailure `SP_NO_SUCH_TERMINAL`, or `SP_TERMINAL_FAILED`
    *   when a session member survives the ladder.
    */
-  terminate(termId: string): Promise<Record<string, never>>
+  terminate(termId: TermId): Promise<Record<string, never>>
   /**
    * Read the exit facts of the session's top-level process.
    * @param termId - a terminal this connection allocated.
    * @returns the exit facts, or `null` while it still runs.
    * @throws SubprocessFailure `SP_NO_SUCH_TERMINAL`.
    */
-  outcome(termId: string): WireOutcome | null
+  outcome(termId: TermId): WireOutcome | null
   /**
    * Kill every terminal session this connection allocated and release its buffers.
    * @returns nothing; safe to call more than once.
@@ -123,7 +125,7 @@ export function createTerminalBackend(): TerminalBackend {
   const terminals = new Map<string, ManagedTerminal>()
 
   /** The terminal behind an id, or the typed failure. */
-  const require = (termId: string): ManagedTerminal => {
+  const require = (termId: TermId): ManagedTerminal => {
     const terminal = terminals.get(termId)
     if (terminal === undefined) {
       throw new SubprocessFailure('SP_NO_SUCH_TERMINAL', `no such terminal "${termId}"`)
@@ -157,7 +159,7 @@ export function createTerminalBackend(): TerminalBackend {
           { cause: error },
         )
       }
-      const termId = randomUUID()
+      const termId = asTermId(randomUUID())
       terminals.set(termId, new ManagedTerminal(terminal, spec.graceMs))
       return { termId, pid: terminal.pid }
     },

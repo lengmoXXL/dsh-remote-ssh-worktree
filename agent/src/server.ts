@@ -21,7 +21,8 @@ import {
   StreamMessageWriter,
   createMessageConnection,
 } from 'vscode-jsonrpc/node.js'
-import type {
+import { asProcId, asTermId } from '../../shared/protocol.ts'
+import type { ProcId, TermId,
   NodeInfo,
   WireEditRequest,
   WireErrorData,
@@ -331,7 +332,7 @@ async function dispatch(method: string, params: unknown, backends: Backends): Pr
     case 'sp.readOutput': {
       const source = asRecord(params, method)
       return backends.sp.readOutput(
-        requireString(source, 'procId', method),
+        requireProcId(params, method),
         readStreamName(source['stream'], method),
         requireInteger(source, 'fromByte', method, 0),
       )
@@ -339,7 +340,7 @@ async function dispatch(method: string, params: unknown, backends: Backends): Pr
     case 'sp.writeStdin': {
       const source = asRecord(params, method)
       return backends.sp.writeStdin(
-        requireString(source, 'procId', method),
+        requireProcId(params, method),
         requireString(source, 'data', method),
       )
     }
@@ -356,14 +357,14 @@ async function dispatch(method: string, params: unknown, backends: Backends): Pr
     case 'term.read': {
       const source = asRecord(params, method)
       return backends.term.read(
-        requireString(source, 'termId', method),
+        requireTermId(params, method),
         requireInteger(source, 'fromByte', method, 0),
       )
     }
     case 'term.write': {
       const source = asRecord(params, method)
       return backends.term.write(
-        requireString(source, 'termId', method),
+        requireTermId(params, method),
         requireString(source, 'data', method),
       )
     }
@@ -372,7 +373,7 @@ async function dispatch(method: string, params: unknown, backends: Backends): Pr
     case 'term.signalForeground': {
       const source = asRecord(params, method)
       return await backends.term.signalForeground(
-        requireString(source, 'termId', method),
+        requireTermId(params, method),
         readTerminalSignal(source['signal'], method),
       )
     }
@@ -386,8 +387,8 @@ async function dispatch(method: string, params: unknown, backends: Backends): Pr
 }
 
 /** Read a required terminal id. */
-function requireTermId(params: unknown, method: string): string {
-  return requireString(asRecord(params, method), 'termId', method)
+function requireTermId(params: unknown, method: string): TermId {
+  return asTermId(requireString(asRecord(params, method), 'termId', method))
 }
 
 /** Read and validate one terminal allocation request. */
@@ -427,8 +428,8 @@ function readTerminalSignal(value: unknown, method: string): WireTerminalSignal 
 }
 
 /** Read a required process id. */
-function requireProcId(params: unknown, method: string): string {
-  return requireString(asRecord(params, method), 'procId', method)
+function requireProcId(params: unknown, method: string): ProcId {
+  return asProcId(requireString(asRecord(params, method), 'procId', method))
 }
 
 /** Read and validate a collected stream name. */

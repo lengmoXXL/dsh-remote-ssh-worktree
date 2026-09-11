@@ -15,6 +15,7 @@ import { NodeRequestError } from '../src/node/channel.ts'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingSubprocessRuntime } from '../src/routing/subprocess.ts'
 import { asNodeId } from '../src/ids.ts'
+import { asProcId } from '../shared/protocol.ts'
 
 const anchors: AnchorRoute[] = [
   { nodeId: asNodeId('n1'), anchorPath: '/local/anchors/n1/app/login', remoteRoot: '/srv/app/login' },
@@ -161,8 +162,8 @@ test('a piped stream is delivered from the daemon frames, in order', async () =>
 
   const seen: string[] = []
   handle.stdout!.on('data', (chunk: Buffer | string) => seen.push(chunk.toString()))
-  emit({ procId: 'p1', stream: 'stdout', seq: 0, data: Buffer.from('hello ').toString('base64') })
-  emit({ procId: 'p1', stream: 'stdout', seq: 1, data: Buffer.from('world').toString('base64') })
+  emit({ procId: asProcId('p1'), stream: 'stdout', seq: 0, data: Buffer.from('hello ').toString('base64') })
+  emit({ procId: asProcId('p1'), stream: 'stdout', seq: 1, data: Buffer.from('world').toString('base64') })
   await new Promise(resolve => setImmediate(resolve))
 
   assert.equal(seen.join(''), 'hello world')
@@ -176,7 +177,7 @@ test('a frame that arrives before the spawn answer is not lost', async () => {
   const seen: string[] = []
   handle.stdout!.on('data', (chunk: Buffer | string) => seen.push(chunk.toString()))
   // Pushed before `sp.spawn` has resolved: the race the buffer exists for.
-  emit({ procId: 'p1', stream: 'stdout', seq: 0, data: Buffer.from('early').toString('base64') })
+  emit({ procId: asProcId('p1'), stream: 'stdout', seq: 0, data: Buffer.from('early').toString('base64') })
   await handle.done
   await new Promise(resolve => setImmediate(resolve))
 
@@ -190,7 +191,7 @@ test('a frame for another process is ignored', async () => {
   const seen: string[] = []
   handle.stdout!.on('data', (chunk: Buffer | string) => seen.push(chunk.toString()))
   await handle.done
-  emit({ procId: 'someone-else', stream: 'stdout', seq: 0, data: Buffer.from('nope').toString('base64') })
+  emit({ procId: asProcId('someone-else'), stream: 'stdout', seq: 0, data: Buffer.from('nope').toString('base64') })
   await new Promise(resolve => setImmediate(resolve))
 
   assert.equal(seen.join(''), '')

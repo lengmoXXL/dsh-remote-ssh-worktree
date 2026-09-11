@@ -46,7 +46,7 @@
 }
 .tree { display: flex; flex-direction: column; gap: 8px; }
 .card {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
   background: var(--dsw-alias-bg-layer-1);
   overflow: hidden;
@@ -95,10 +95,10 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 12px 10px 22px;
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
 }
 .repoCard {
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-2);
   overflow: hidden;
@@ -108,7 +108,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 6px 12px 8px 22px;
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
 }
 .worktree {
   display: flex;
@@ -147,7 +147,7 @@
   flex-direction: column;
   max-height: 260px;
   overflow-y: auto;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-2);
 }

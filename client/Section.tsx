@@ -318,13 +318,13 @@ function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
       <div className={css.fields}>
         <DialogError message={error} />
         <Field label={t('fieldTarget')} hint={t('hintTarget')}>
-          <Input value={target} placeholder="user@build-01" onChange={e => setTarget(e.target.value)} />
+          <Input value={target} placeholder={t('placeholderTarget')} onChange={e => setTarget(e.target.value)} />
         </Field>
         <Field label={`${t('fieldSshPort')} · ${t('optional')}`} hint={t('hintSshPort')}>
           <Input value={sshPort} inputMode="numeric" onChange={e => setSshPort(e.target.value)} />
         </Field>
         <Field label={`${t('fieldIdentityFile')} · ${t('optional')}`} hint={t('hintIdentityFile')}>
-          <Input value={identityFile} placeholder="~/.ssh/id_ed25519" onChange={e => setIdentityFile(e.target.value)} />
+          <Input value={identityFile} placeholder={t('placeholderIdentityFile')} onChange={e => setIdentityFile(e.target.value)} />
         </Field>
         <Field label={t('fieldRemotePort')} hint={t('hintRemotePort')}>
           <Input value={remotePort} inputMode="numeric" onChange={e => setRemotePort(e.target.value)} />
@@ -479,7 +479,7 @@ function AddRepoDialog({ open, nodeId, busy, onClose, onSubmit, listDirs, t }: {
       <div className={css.fields}>
         <DialogError message={error} />
         <Field label={t('fieldRepository')} hint={t('hintRepository')}>
-          <Input value={repoPath} onChange={e => setRepoPath(e.target.value)} placeholder="/workspace/project" />
+          <Input value={repoPath} onChange={e => setRepoPath(e.target.value)} placeholder={t('placeholderRepoPath')} />
         </Field>
         {repoPath.trim() === '' ? null : (
           <DirectoryPicker
@@ -546,7 +546,7 @@ function NewWorktreeDialog({ open, repo, busy, onClose, onSubmit, t }: {
       <div className={css.fields}>
         <DialogError message={error} />
         <Field label={t('fieldWorktreeName')} hint={t('hintWorktreeName')}>
-          <Input value={name} placeholder="feature-x" onChange={e => setName(e.target.value)} />
+          <Input value={name} placeholder={t('placeholderWorktreeName')} onChange={e => setName(e.target.value)} />
         </Field>
       </div>
     </Modal>

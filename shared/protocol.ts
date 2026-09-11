@@ -268,10 +268,45 @@ export interface WireOutcome {
  */
 export const SP_PIPE_NOTIFICATION = 'sp.pipe'
 
+/**
+ * Compile-time brand for the ids this contract carries.
+ *
+ * Declared here rather than imported from `@deepseek-ai/dsh-brand` because this
+ * module takes no imports at all: the daemon is a plain Node program that must
+ * not depend on a Harness package, so both sides inline these declarations.
+ * The mechanism is the same one that package uses — a `unique symbol` keyed
+ * intersection that only the owning domain can mint.
+ */
+declare const WIRE_BRAND: unique symbol
+
+/** A spawned process, as the daemon names it. */
+export type ProcId = string & { readonly [WIRE_BRAND]: 'ProcId' }
+
+/** One terminal session, as the daemon names it. */
+export type TermId = string & { readonly [WIRE_BRAND]: 'TermId' }
+
+/**
+ * Admit a string as a process id.
+ * @param value - a string the daemon minted, or one the wire delivered.
+ * @returns the same string, branded.
+ */
+export function asProcId(value: string): ProcId {
+  return value as ProcId
+}
+
+/**
+ * Admit a string as a terminal id.
+ * @param value - a string the daemon minted, or one the wire delivered.
+ * @returns the same string, branded.
+ */
+export function asTermId(value: string): TermId {
+  return value as TermId
+}
+
 /** One pushed chunk of a raw piped stream. */
 export interface SpPipeFrame {
   /** The process the chunk belongs to. */
-  readonly procId: string
+  readonly procId: ProcId
   /** Which of the two streams produced it. */
   readonly stream: 'stdout' | 'stderr'
   /** Monotonic per-stream sequence number, starting at 0. */
@@ -378,32 +413,32 @@ export interface WireMethods {
     params: { command: string; env?: Readonly<Record<string, string>> }
     result: { path: string }
   }
-  'sp.spawn': { params: WireSpawnSpec; result: { procId: string } }
+  'sp.spawn': { params: WireSpawnSpec; result: { procId: ProcId } }
   'sp.readOutput': {
-    params: { procId: string; stream: 'stdout' | 'stderr'; fromByte: number }
+    params: { procId: ProcId; stream: 'stdout' | 'stderr'; fromByte: number }
     result: WireOutputRead
   }
-  'sp.writeStdin': { params: { procId: string; data: string }; result: Record<string, never> }
-  'sp.closeStdin': { params: { procId: string }; result: Record<string, never> }
-  'sp.terminate': { params: { procId: string }; result: Record<string, never> }
-  'sp.waitForExit': { params: { procId: string }; result: { empty: boolean } }
-  'sp.outcome': { params: { procId: string }; result: WireOutcome | null }
-  'term.spawn': { params: WireTerminalSpawnSpec; result: { termId: string; pid: number } }
+  'sp.writeStdin': { params: { procId: ProcId; data: string }; result: Record<string, never> }
+  'sp.closeStdin': { params: { procId: ProcId }; result: Record<string, never> }
+  'sp.terminate': { params: { procId: ProcId }; result: Record<string, never> }
+  'sp.waitForExit': { params: { procId: ProcId }; result: { empty: boolean } }
+  'sp.outcome': { params: { procId: ProcId }; result: WireOutcome | null }
+  'term.spawn': { params: WireTerminalSpawnSpec; result: { termId: TermId; pid: number } }
   'term.read': {
-    params: { termId: string; fromByte: number }
+    params: { termId: TermId; fromByte: number }
     result: WireOutputRead
   }
-  'term.write': { params: { termId: string; data: string }; result: Record<string, never> }
+  'term.write': { params: { termId: TermId; data: string }; result: Record<string, never> }
   'term.inspectForeground': {
-    params: { termId: string }
+    params: { termId: TermId }
     result: WireTerminalForeground | null
   }
   'term.signalForeground': {
-    params: { termId: string; signal: WireTerminalSignal }
+    params: { termId: TermId; signal: WireTerminalSignal }
     result: { processGroupId: number }
   }
-  'term.terminate': { params: { termId: string }; result: Record<string, never> }
-  'term.outcome': { params: { termId: string }; result: WireOutcome | null }
+  'term.terminate': { params: { termId: TermId }; result: Record<string, never> }
+  'term.outcome': { params: { termId: TermId }; result: WireOutcome | null }
 }
 
 /** Every method this protocol revision defines. */

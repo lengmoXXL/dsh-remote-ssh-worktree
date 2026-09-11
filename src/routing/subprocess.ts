@@ -40,7 +40,7 @@ import type {
   SubprocessTerminalSignal,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import type { SpPipeFrame } from '../../shared/protocol.ts'
+import type { ProcId, SpPipeFrame } from '../../shared/protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../node/channel.ts'
 import type { AnchorRoute } from './classify.ts'
 import { classifyPath } from './classify.ts'
@@ -172,7 +172,7 @@ function createRemoteHandle(
   const stdoutPipe = spec.stdio.stdout === 'pipe' ? new PassThrough() : undefined
   const stderrPipe = spec.stdio.stderr === 'pipe' ? new PassThrough() : undefined
   const bufferedFrames: SpPipeFrame[] = []
-  let procId: string | undefined
+  let procId: ProcId | undefined
   let offPipe: (() => void) | undefined
 
   const deliverPipeFrame = (frame: SpPipeFrame): void => {
@@ -214,7 +214,7 @@ function createRemoteHandle(
     : undefined
 
   /** Fetch every remaining byte of one stream until the daemon stops advancing. */
-  const drain = async (id: string, stream: 'stdout' | 'stderr', mirror: CollectedMirror): Promise<void> => {
+  const drain = async (id: ProcId, stream: 'stdout' | 'stderr', mirror: CollectedMirror): Promise<void> => {
     for (;;) {
       const read = await channel.request('sp.readOutput', {
         procId: id,
@@ -228,7 +228,7 @@ function createRemoteHandle(
   }
 
   const run = async (): Promise<void> => {
-    let id: string
+    let id: ProcId
     try {
       const started = await channel.request('sp.spawn', {
         argv: [...spec.argv],

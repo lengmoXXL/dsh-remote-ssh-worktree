@@ -10,6 +10,15 @@
     "lib"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lengmoXXL/dsh-remote-ssh-worktrees.git",
+    "directory": "agent"
+  },
+  "homepage": "https://github.com/lengmoXXL/dsh-remote-ssh-worktrees#readme",
+  "bugs": {
+    "url": "https://github.com/lengmoXXL/dsh-remote-ssh-worktrees/issues"
+  },
   "dependencies": {
     "node-pty": "1.2.0-beta.15",
     "vscode-jsonrpc": "^8.2.0"

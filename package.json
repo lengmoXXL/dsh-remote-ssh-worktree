@@ -115,6 +115,7 @@
   "engines": {
     "node": "^22.19 || >=24"
   },
+  "packageManager": "npm@10",
   "overrides": {
     "@deepseek-ai/dsh-bash-local": "0.1.5-rc.1",
     "@deepseek-ai/dsh-bash-sandbox": "0.1.5-rc.1",
@@ -146,5 +147,7 @@
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "test:agent": "node --test --experimental-strip-types agent/tests/*.test.ts",
     "test:all": "npm run test && npm run test:agent"
-  }
+  },
+  "author": "lengmoXXL",
+  "sideEffects": false
 }
