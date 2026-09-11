@@ -182,10 +182,20 @@ describe('terminal backend', () => {
       argv: [SHELL, '-c', `head -c ${String(total)} /dev/zero | tr '\\0' y`],
     }))
 
-    await until(() => {
-      const read = term.read(termId, 0)
-      return read.nextOffset >= total ? read : undefined
-    }, 'the terminal to fill the retained window', 60_000)
+    // Synchronized on the stream offset itself. The failure carries what the
+    // daemon last reported, because "it never got there" and "it got there with
+    // the wrong byte count" need different answers.
+    const deadline = Date.now() + 60_000
+    let last = term.read(termId, 0)
+    while (last.nextOffset < total && Date.now() < deadline) {
+      await sleep(POLL_MS)
+      last = term.read(termId, 0)
+    }
+    assert.ok(
+      last.nextOffset >= total,
+      `the terminal reached ${String(last.nextOffset)} of ${String(total)} bytes `
+      + `(retained ${String(Buffer.from(last.data, 'base64').length)}, lossy ${String(last.lossy)})`,
+    )
 
     const read = term.read(termId, 0)
     assert.equal(read.lossy, true)
