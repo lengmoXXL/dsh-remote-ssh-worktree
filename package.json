@@ -4,6 +4,9 @@
   "private": true,
   "description": "Remote execution worlds for DeepSeek Harness: create a git worktree on a remote machine over a self-hosted node daemon, and run the stock read / write / edit / bash / grep tools inside it.",
   "type": "module",
+  "workspaces": [
+    "agent"
+  ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
