@@ -73,7 +73,7 @@ type ParsedKey =
   | { readonly kind: 'remote'; readonly nodeId: NodeId; readonly remotePath: string }
 
 /** Compose the opaque key the harness passes back to this provider. */
-function composeKey(nodeId: string, remotePath: string): FsTargetKey {
+function composeKey(nodeId: NodeId, remotePath: string): FsTargetKey {
   return FsTargetKey(`${TARGET_KEY_PREFIX}${nodeId}:${remotePath}`)
 }
 
@@ -219,7 +219,7 @@ function remoteWriteAllowed(
  */
 export function createRoutingFileSystem(deps: RoutingFileSystemDeps): FileSystemContract {
   /** The anchor whose remote root owns `remotePath`, when one does. */
-  const anchorFor = (nodeId: string, remotePath: string): AnchorRoute | undefined =>
+  const anchorFor = (nodeId: NodeId, remotePath: string): AnchorRoute | undefined =>
     deps.anchors().find(anchor =>
       anchor.nodeId === nodeId && isWithin(anchor.remoteRoot, remotePath))
 
