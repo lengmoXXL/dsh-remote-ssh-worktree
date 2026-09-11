@@ -173,7 +173,11 @@ describe('terminal backend', () => {
 
   it('reports lossy once the retained window has been trimmed', async t => {
     if (skipWithoutPty(t)) return
-    const total = 1_572_864
+    // One byte past the retained window is what makes it trim; the extra
+    // 64 KiB only forces the whole window to have been replaced. The pipeline
+    // is the slow part — every byte crosses a PTY — so the work stays at the
+    // smallest amount that proves the claim.
+    const total = (1 << 20) + (1 << 16)
     const { termId } = await term.spawn(spec({
       argv: [SHELL, '-c', `head -c ${String(total)} /dev/zero | tr '\\0' y`],
     }))
@@ -181,7 +185,7 @@ describe('terminal backend', () => {
     await until(() => {
       const read = term.read(termId, 0)
       return read.nextOffset >= total ? read : undefined
-    }, 'the terminal to fill the retained window', 30_000)
+    }, 'the terminal to fill the retained window', 60_000)
 
     const read = term.read(termId, 0)
     assert.equal(read.lossy, true)
