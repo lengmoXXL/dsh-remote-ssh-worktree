@@ -8,6 +8,7 @@
  * @module dsh-remote-worktree/node/channel
  */
 
+import type { NodeId } from '../ids.ts'
 import type { SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../../shared/protocol.ts'
 
 /** One live connection to a node's daemon. */
@@ -50,4 +51,4 @@ export class NodeRequestError extends Error {
 }
 
 /** Resolves the live channel for one node, or undefined when it is not connected. */
-export type ChannelLookup = (nodeId: string) => NodeChannel | undefined
+export type ChannelLookup = (nodeId: NodeId) => NodeChannel | undefined

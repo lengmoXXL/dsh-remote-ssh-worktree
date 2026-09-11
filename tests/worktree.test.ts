@@ -16,6 +16,8 @@ import type { NodeChannel } from '../src/node/channel.ts'
 import { NodeRequestError } from '../src/node/channel.ts'
 import { createWorktreeManager } from '../src/worktree/manager.ts'
 import type { WorktreeManager } from '../src/worktree/manager.ts'
+import { asNodeId } from '../src/ids.ts'
+import { asAnchorId } from '../src/ids.ts'
 
 let root: string
 let anchors: AnchorStore
@@ -57,7 +59,7 @@ function managerWith(answers: Record<string, unknown>, nodeId = 'n1'): { manager
   }
 }
 
-const draft = { nodeId: 'n1', repoPath: '/srv/app', name: 'login' }
+const draft = { nodeId: asNodeId('n1'), repoPath: '/srv/app', name: 'login' }
 
 test('create cuts the checkout and records an anchor at the reported path', async () => {
   const { manager, calls } = managerWith({
@@ -214,6 +216,6 @@ test('bringBack merges the anchor branch into the repository branch', async () =
 
 test('an unknown anchor is refused before any remote call', async () => {
   const { manager, calls } = managerWith({})
-  await assert.rejects(() => manager.bringBack('nope'), /no anchor/)
+  await assert.rejects(() => manager.bringBack(asAnchorId('nope')), /no anchor/)
   assert.deepEqual(calls, [])
 })

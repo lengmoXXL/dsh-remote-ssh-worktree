@@ -11,6 +11,7 @@ import type { ConnectedNode } from '../src/node/client.ts'
 import type { NodeInfo } from '../shared/protocol.ts'
 import { createNodeConnections } from '../src/nodes/connections.ts'
 import type { NodeRecord } from '../src/nodes/registry.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const info: NodeInfo = {
   protocol: 1,
@@ -23,7 +24,7 @@ const info: NodeInfo = {
 }
 
 const record: NodeRecord = {
-  nodeId: 'n1',
+  nodeId: asNodeId('n1'),
   title: 'build-01',
   transport: { kind: 'direct', host: 'build-01', port: 7801 },
   remotePort: 7801,
@@ -50,8 +51,8 @@ function stubNode(): ConnectedNode & { closed: boolean } {
 
 test('a node that was never connected reports idle and offers no channel', () => {
   const connections = createNodeConnections()
-  assert.deepEqual(connections.status('n1'), { nodeId: 'n1', state: 'idle' })
-  assert.equal(connections.channel('n1'), undefined)
+  assert.deepEqual(connections.status(asNodeId('n1')), { nodeId: asNodeId('n1'), state: 'idle' })
+  assert.equal(connections.channel(asNodeId('n1')), undefined)
 })
 
 test('a successful handshake publishes the channel and the daemon facts', async () => {
@@ -59,8 +60,8 @@ test('a successful handshake publishes the channel and the daemon facts', async 
   const connections = createNodeConnections({ connect: () => Promise.resolve(node) })
 
   assert.deepEqual(await connections.connect(record), info)
-  assert.equal(connections.channel('n1'), node.channel)
-  assert.deepEqual(connections.status('n1'), { nodeId: 'n1', state: 'ready', info })
+  assert.equal(connections.channel(asNodeId('n1')), node.channel)
+  assert.deepEqual(connections.status(asNodeId('n1')), { nodeId: asNodeId('n1'), state: 'ready', info })
 })
 
 test('concurrent connects share one handshake', async () => {
@@ -97,12 +98,12 @@ test('a failed handshake records the failure and offers no channel', async () =>
   })
 
   await assert.rejects(() => connections.connect(record), /connection refused/)
-  assert.deepEqual(connections.status('n1'), {
-    nodeId: 'n1',
+  assert.deepEqual(connections.status(asNodeId('n1')), {
+    nodeId: asNodeId('n1'),
     state: 'failed',
     error: 'connection refused',
   })
-  assert.equal(connections.channel('n1'), undefined)
+  assert.equal(connections.channel(asNodeId('n1')), undefined)
 })
 
 test('a retry after a failure is allowed and replaces the state', async () => {
@@ -117,8 +118,8 @@ test('a retry after a failure is allowed and replaces the state', async () => {
 
   await assert.rejects(() => connections.connect(record))
   await connections.connect(record)
-  assert.equal(connections.status('n1').state, 'ready')
-  assert.equal(connections.status('n1').error, undefined)
+  assert.equal(connections.status(asNodeId('n1')).state, 'ready')
+  assert.equal(connections.status(asNodeId('n1')).error, undefined)
 })
 
 test('disconnect closes the transport and clears the channel', async () => {
@@ -126,12 +127,12 @@ test('disconnect closes the transport and clears the channel', async () => {
   const connections = createNodeConnections({ connect: () => Promise.resolve(node) })
 
   await connections.connect(record)
-  connections.disconnect('n1')
+  connections.disconnect(asNodeId('n1'))
 
   assert.equal(node.closed, true)
-  assert.equal(connections.channel('n1'), undefined)
-  assert.equal(connections.status('n1').state, 'disconnected')
-  connections.disconnect('n1')
+  assert.equal(connections.channel(asNodeId('n1')), undefined)
+  assert.equal(connections.status(asNodeId('n1')).state, 'disconnected')
+  connections.disconnect(asNodeId('n1'))
 })
 
 test('dispose closes every connection', async () => {
@@ -142,7 +143,7 @@ test('dispose closes every connection', async () => {
   })
 
   await connections.connect(record)
-  await connections.connect({ ...record, nodeId: 'n2', transport: { kind: 'direct', host: 'build-01', port: 7802 } })
+  await connections.connect({ ...record, nodeId: asNodeId('n2'), transport: { kind: 'direct', host: 'build-01', port: 7802 } })
   connections.dispose()
 
   assert.equal(first.closed, true)
@@ -172,7 +173,7 @@ test('an ssh record is dialled through the forward it opens', async () => {
   await connections.connect(sshRecord())
 
   assert.deepEqual(seen, [{ host: '127.0.0.1', port: 52096 }])
-  assert.equal(connections.status('n1').localPort, 52096)
+  assert.equal(connections.status(asNodeId('n1')).localPort, 52096)
 })
 
 test('a direct record is dialled at its recorded address and reports no forward', async () => {
@@ -187,7 +188,7 @@ test('a direct record is dialled at its recorded address and reports no forward'
   await connections.connect(record)
 
   assert.deepEqual(seen, [{ host: 'build-01', port: 7801 }])
-  assert.equal(connections.status('n1').localPort, undefined)
+  assert.equal(connections.status(asNodeId('n1')).localPort, undefined)
 })
 
 test('either deadline through a forward blames the absent daemon', async () => {
@@ -210,7 +211,7 @@ test('either deadline through a forward blames the absent daemon', async () => {
     )
     // The forward exists only to carry the connection that just failed.
     assert.equal(closed, true, message)
-    assert.equal(connections.status('n1').state, 'failed', message)
+    assert.equal(connections.status(asNodeId('n1')).state, 'failed', message)
   }
 })
 
@@ -231,13 +232,13 @@ test('a forward that dies after connecting publishes the loss', async () => {
   })
 
   await connections.connect(sshRecord())
-  assert.equal(connections.status('n1').state, 'ready')
+  assert.equal(connections.status(asNodeId('n1')).state, 'ready')
 
   die()
   await new Promise(resolve => setImmediate(resolve))
 
-  assert.equal(connections.status('n1').state, 'failed')
-  assert.match(String(connections.status('n1').error), /forward to "build-01" closed/)
+  assert.equal(connections.status(asNodeId('n1')).state, 'failed')
+  assert.match(String(connections.status(asNodeId('n1')).error), /forward to "build-01" closed/)
 })
 
 test('disconnecting closes the forward it opened', async () => {
@@ -248,10 +249,10 @@ test('disconnecting closes the forward it opened', async () => {
   })
 
   await connections.connect(sshRecord())
-  connections.disconnect('n1')
+  connections.disconnect(asNodeId('n1'))
 
   assert.equal(closed, true)
-  assert.equal(connections.status('n1').localPort, undefined)
+  assert.equal(connections.status(asNodeId('n1')).localPort, undefined)
 })
 
 test('disposing closes every forward', async () => {

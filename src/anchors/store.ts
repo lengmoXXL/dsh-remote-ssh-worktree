@@ -21,11 +21,13 @@
  * @module dsh-remote-worktree/anchors/store
  */
 
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { Dirent } from 'node:fs'
 import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import type { AnchorId, NodeId } from '../ids.ts'
 import type { AnchorRoute } from '../routing/classify.ts'
 
 /** Metadata file name inside every anchor directory. */
@@ -43,9 +45,9 @@ const SCAN_DEPTH = 3
 /** One remote worktree's local handle. */
 export interface AnchorRecord {
   /** Stable generated id; the anchor path is the identity, this is a handle. */
-  readonly anchorId: string
+  readonly anchorId: AnchorId
   /** The node the remote root lives on. */
-  readonly nodeId: string
+  readonly nodeId: NodeId
   /** Worktree name, which is also the branch suffix. */
   readonly name: string
   /** Absolute local directory: the session cwd and workspace path. */
@@ -62,7 +64,7 @@ export interface AnchorRecord {
 
 /** Fields a caller supplies when creating an anchor. */
 export interface AnchorDraft {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly name: string
   readonly repoPath: string
   readonly remoteRoot: string
@@ -93,7 +95,7 @@ export interface AnchorStore {
    * @param anchorId - the generated handle.
    * @returns the record, or undefined when no anchor carries that id.
    */
-  get(anchorId: string): AnchorRecord | undefined
+  get(anchorId: AnchorId): AnchorRecord | undefined
   /**
    * Create the anchor directory and its metadata.
    * @param draft - the remote coordinates to record.
@@ -105,7 +107,7 @@ export interface AnchorStore {
    * @param anchorId - the generated handle.
    * @returns the removed record, or undefined when the id is unknown.
    */
-  remove(anchorId: string): Promise<AnchorRecord | undefined>
+  remove(anchorId: AnchorId): Promise<AnchorRecord | undefined>
   /** The routing table the filesystem consults. */
   routes(): readonly AnchorRoute[]
 }
@@ -234,7 +236,7 @@ export function createAnchorStore(deps: AnchorStoreDeps): AnchorStore {
         throw new Error(`an anchor already owns ${anchorPath}`)
       }
       const record: AnchorRecord = {
-        anchorId: randomUUID(),
+        anchorId: brandString<AnchorId>(randomUUID()),
         nodeId: draft.nodeId,
         name: draft.name,
         anchorPath,

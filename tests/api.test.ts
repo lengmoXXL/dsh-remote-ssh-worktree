@@ -19,6 +19,7 @@ import { createRepoStore } from '../src/repos/store.ts'
 import { createWorktreeManager } from '../src/worktree/manager.ts'
 import type { ApiRequest } from '../src/web/api.ts'
 import { handleNodeApi } from '../src/web/api.ts'
+import { asNodeId, asRepoId } from '../src/ids.ts'
 
 let dir: string
 
@@ -110,7 +111,7 @@ test('an out-of-range port is a client error', async () => {
 test('reading one node joins its live status', async () => {
   const { deps } = await setup()
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
 
   const response = await handleNodeApi(request('GET', `/nodes/${nodeId}`), deps)
   assert.equal(response.status, 200)
@@ -134,7 +135,7 @@ test('patching keeps the fields the caller omitted', async () => {
     request('POST', '/nodes', { ssh: { target: 'a' }, remotePort: 7801, token: 't', title: 'First' }),
     deps,
   )
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
 
   await handleNodeApi(request('PATCH', `/nodes/${nodeId}`, { title: 'Second' }), deps)
   const record = registry.get(nodeId)
@@ -147,7 +148,7 @@ test('patching keeps the fields the caller omitted', async () => {
 test('deleting a node disconnects it and drops the record', async () => {
   const { deps, registry } = await setup()
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
 
   const response = await handleNodeApi(request('DELETE', `/nodes/${nodeId}`), deps)
   assert.deepEqual(response, { status: 200, body: { deleted: true } })
@@ -168,7 +169,7 @@ test('connecting reports the daemon facts', async () => {
     connect: () => Promise.resolve({ info, channel: { request: () => Promise.reject(new Error('unused')), onPipeFrame: () => () => {} }, close: () => {} }),
   })
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
 
   const response = await handleNodeApi(request('POST', `/nodes/${nodeId}/connect`), deps)
   assert.equal(response.status, 200)
@@ -178,7 +179,7 @@ test('connecting reports the daemon facts', async () => {
 test('a failed connection is reported, not swallowed', async () => {
   const { deps } = await setup({ connect: () => Promise.reject(new Error('connection refused')) })
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
 
   const response = await handleNodeApi(request('POST', `/nodes/${nodeId}/connect`), deps)
   assert.equal(response.status, 502)
@@ -188,7 +189,7 @@ test('a failed connection is reported, not swallowed', async () => {
 test('browsing directories without a connection is a conflict, not a crash', async () => {
   const { deps } = await setup()
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
 
   const response = await handleNodeApi(request('GET', `/nodes/${nodeId}/dirs`, undefined, 'path=/srv'), deps)
   assert.equal(response.status, 409)
@@ -224,7 +225,7 @@ test('browsing directories lists resolved children', async () => {
     }),
   })
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
   await handleNodeApi(request('POST', `/nodes/${nodeId}/connect`), deps)
 
   const response = await handleNodeApi(request('GET', `/nodes/${nodeId}/dirs`, undefined, 'path=/srv'), deps)
@@ -256,7 +257,7 @@ test('an empty anchor store lists no worktrees', async () => {
 
 test('creating a worktree requires its three coordinates', async () => {
   const { deps, anchors } = await setup()
-  for (const body of [{ repoPath: '/srv/app', name: 'x' }, { nodeId: 'n1', name: 'x' }, { nodeId: 'n1', repoPath: '/srv/app' }]) {
+  for (const body of [{ repoPath: '/srv/app', name: 'x' }, { nodeId: asNodeId('n1'), name: 'x' }, { nodeId: asNodeId('n1'), repoPath: '/srv/app' }]) {
     const response = await handleNodeApi(request('POST', '/worktrees', body), deps)
     assert.equal(response.status, 400, JSON.stringify(body))
   }
@@ -304,7 +305,7 @@ async function connected(channel: NodeChannel) {
     }),
   })
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), context.deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
   await handleNodeApi(request('POST', `/nodes/${nodeId}/connect`), context.deps)
   return { ...context, nodeId }
 }
@@ -319,21 +320,21 @@ test('an empty repository store lists no repositories', async () => {
 
 test('registering a repository requires its machine and path', async () => {
   const { deps } = await setup()
-  for (const body of [{ repoPath: '/srv/app' }, { nodeId: 'n1' }]) {
+  for (const body of [{ repoPath: '/srv/app' }, { nodeId: asNodeId('n1') }]) {
     assert.equal((await handleNodeApi(request('POST', '/repos', body), deps)).status, 400)
   }
 })
 
 test('registering a repository on an unknown machine is a 404', async () => {
   const { deps } = await setup()
-  const response = await handleNodeApi(request('POST', '/repos', { nodeId: 'nope', repoPath: '/srv/app' }), deps)
+  const response = await handleNodeApi(request('POST', '/repos', { nodeId: asNodeId('nope'), repoPath: '/srv/app' }), deps)
   assert.equal(response.status, 404)
 })
 
 test('registering a repository without a connection is a conflict', async () => {
   const { deps } = await setup()
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
   const response = await handleNodeApi(request('POST', '/repos', { nodeId, repoPath: '/srv/app' }), deps)
   assert.equal(response.status, 409)
 })
@@ -376,7 +377,7 @@ test('a path that is not a git repository is refused with the reason', async () 
 test('an offline machine still lists its repositories and says why state is missing', async () => {
   const { deps, repos } = await setup()
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
-  const nodeId = (created.body as { node: { nodeId: string } }).node.nodeId
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
   await repos.upsert({ nodeId, repoPath: '/srv/app' })
 
   const response = await handleNodeApi(request('GET', '/repos'), deps)
@@ -429,7 +430,7 @@ test('creating a worktree from a repository id resolves its machine and path', a
 
 test('creating a worktree from an unknown repository id is a 404', async () => {
   const { deps, anchors } = await connected(daemon())
-  const response = await handleNodeApi(request('POST', '/worktrees', { repoId: 'nope', name: 'x' }), deps)
+  const response = await handleNodeApi(request('POST', '/worktrees', { repoId: asRepoId('nope'), name: 'x' }), deps)
   assert.equal(response.status, 404)
   assert.deepEqual(anchors.list(), [])
 })

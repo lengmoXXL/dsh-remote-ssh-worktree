@@ -15,10 +15,12 @@
  * @module dsh-remote-worktree/repos/store
  */
 
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import type { NodeId, RepoId } from '../ids.ts'
 
 /** Document revision; a shape change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1
@@ -29,9 +31,9 @@ const FILE_MODE = 0o600
 /** One registered repository. */
 export interface RepoRecord {
   /** Stable generated id; never the path, so moving a checkout is free. */
-  readonly repoId: string
+  readonly repoId: RepoId
   /** The machine holding the checkout. */
-  readonly nodeId: string
+  readonly nodeId: NodeId
   /** Absolute POSIX path of the repository on that machine. */
   readonly repoPath: string
   /** Display name. Defaults to the path's last segment. */
@@ -43,9 +45,9 @@ export interface RepoRecord {
 /** A caller's registration request. */
 export interface RepoDraft {
   /** Existing id to update in place; omitted registers a new repository. */
-  readonly repoId?: string
+  readonly repoId?: RepoId
   /** The machine holding the checkout. */
-  readonly nodeId: string
+  readonly nodeId: NodeId
   /** Absolute POSIX path of the repository on that machine. */
   readonly repoPath: string
   /** Display name; omitted derives one from the path. */
@@ -71,7 +73,7 @@ export interface RepoStore {
    * @param repoId - the generated record id.
    * @returns the record, or undefined when no repository carries that id.
    */
-  get(repoId: string): RepoRecord | undefined
+  get(repoId: RepoId): RepoRecord | undefined
   /**
    * The record already covering one machine path.
    * @param ref - the machine and absolute path.
@@ -89,13 +91,13 @@ export interface RepoStore {
    * @param repoId - the record to drop.
    * @returns true when a record was removed.
    */
-  remove(repoId: string): Promise<boolean>
+  remove(repoId: RepoId): Promise<boolean>
   /**
    * Drop every repository of one machine, for machine removal.
    * @param nodeId - the machine whose registrations go away.
    * @returns the number of records removed.
    */
-  removeByNode(nodeId: string): Promise<number>
+  removeByNode(nodeId: NodeId): Promise<number>
 }
 
 /** Build a repository store over one document. */
@@ -230,7 +232,7 @@ export function createRepoStore(deps: RepoStoreDeps): RepoStore {
       // the old path would misdescribe the new one.
       const kept = existing !== undefined && existing.repoPath === draft.repoPath
       const record: RepoRecord = {
-        repoId: existing?.repoId ?? draft.repoId ?? randomUUID(),
+        repoId: existing?.repoId ?? draft.repoId ?? brandString<RepoId>(randomUUID()),
         nodeId: draft.nodeId,
         repoPath: draft.repoPath,
         name: draft.name?.trim() || (kept ? existing.name : '') || defaultRepoName(draft.repoPath),

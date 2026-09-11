@@ -20,6 +20,7 @@ import type { ConnectedNode } from '../src/node/client.ts'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingFileSystem } from '../src/routing/fs.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const TOKEN = 'test-token-0123456789'
 
@@ -49,7 +50,7 @@ function router(anchors: readonly AnchorRoute[]) {
 
 /** The single anchor this suite configures. */
 function baseAnchors(): AnchorRoute[] {
-  return [{ nodeId: 'n1', anchorPath: anchorRoot, remoteRoot }]
+  return [{ nodeId: asNodeId('n1'), anchorPath: anchorRoot, remoteRoot }]
 }
 
 before(async () => {
@@ -178,8 +179,8 @@ test('stat reports a version a later write accepts', async () => {
 
 test('an ambiguous remote path is refused instead of picking a node', async () => {
   const anchors: AnchorRoute[] = [
-    { nodeId: 'n1', anchorPath: anchorRoot, remoteRoot },
-    { nodeId: 'n2', anchorPath: join(anchorRoot, 'other'), remoteRoot },
+    { nodeId: asNodeId('n1'), anchorPath: anchorRoot, remoteRoot },
+    { nodeId: asNodeId('n2'), anchorPath: join(anchorRoot, 'other'), remoteRoot },
   ]
   await assert.rejects(
     () => router(anchors).resolve(join(remoteRoot, 'hello.txt')),

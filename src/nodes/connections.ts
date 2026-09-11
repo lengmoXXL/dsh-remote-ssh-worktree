@@ -18,6 +18,7 @@ import type { ConnectOptions, ConnectedNode } from '../node/client.ts'
 import { connectNode } from '../node/client.ts'
 import type { NodeInfo } from '../../shared/protocol.ts'
 import type { NodeRecord } from './registry.ts'
+import type { NodeId } from '../ids.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../ssh/tunnel.ts'
 
 /** Where one node's connection stands. */
@@ -25,7 +26,7 @@ export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnect
 
 /** One node's connection state, as a surface may render it. */
 export interface NodeStatus {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly state: NodeState
   /** Present once the handshake succeeded. */
   readonly info?: NodeInfo
@@ -149,13 +150,13 @@ export interface NodeConnections {
    * @param nodeId - the record id.
    * @returns the channel, or undefined when the node is not connected.
    */
-  channel(nodeId: string): NodeChannel | undefined
+  channel(nodeId: NodeId): NodeChannel | undefined
   /**
    * One node's connection state.
    * @param nodeId - the record id.
    * @returns the status; `idle` for a node that was never connected.
    */
-  status(nodeId: string): NodeStatus
+  status(nodeId: NodeId): NodeStatus
   /** Every node this manager has seen a state for, in insertion order. */
   list(): readonly NodeStatus[]
   /**
@@ -169,7 +170,7 @@ export interface NodeConnections {
    * Close one node's connection. Idempotent.
    * @param nodeId - the record id.
    */
-  disconnect(nodeId: string): void
+  disconnect(nodeId: NodeId): void
   /** Close every connection. Idempotent. */
   dispose(): void
 }
@@ -195,9 +196,9 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
   const openTransport = deps.openTransport
     ?? defaultOpenTransport(deps.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS)
   const handshakeTimeoutMs = deps.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS
-  const entries = new Map<string, Entry>()
+  const entries = new Map<NodeId, Entry>()
 
-  const entryFor = (nodeId: string): Entry => {
+  const entryFor = (nodeId: NodeId): Entry => {
     const existing = entries.get(nodeId)
     if (existing !== undefined) return existing
     const created: Entry = {

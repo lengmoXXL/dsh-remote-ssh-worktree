@@ -18,11 +18,13 @@
  */
 
 import { posix } from 'node:path'
+import { asNodeId } from '../ids.ts'
+import type { NodeId } from '../ids.ts'
 
 /** One remote worktree this plugin currently owns. */
 export interface AnchorRoute {
   /** The node the anchor's remote root lives on. */
-  readonly nodeId: string
+  readonly nodeId: NodeId
   /** Absolute local directory used as the session cwd and workspace path. */
   readonly anchorPath: string
   /** Absolute POSIX root the anchor maps onto. */
@@ -32,12 +34,12 @@ export interface AnchorRoute {
 /** Where one path resolves to. */
 export type Route =
   | { readonly kind: 'local' }
-  | { readonly kind: 'remote'; readonly nodeId: string; readonly remotePath: string }
+  | { readonly kind: 'remote'; readonly nodeId: NodeId; readonly remotePath: string }
   | {
     readonly kind: 'ambiguous'
     readonly remotePath: string
     /** The nodes whose remote root also claims `remotePath`, in discovery order. */
-    readonly nodeIds: readonly string[]
+    readonly nodeIds: readonly NodeId[]
   }
 
 /**
@@ -95,7 +97,7 @@ export function classifyPath(
 ): Route {
   const explicit = EXPLICIT.exec(input)
   if (explicit !== null) {
-    return { kind: 'remote', nodeId: explicit[1]!, remotePath: posix.normalize(explicit[2]!) }
+    return { kind: 'remote', nodeId: asNodeId(explicit[1]!), remotePath: posix.normalize(explicit[2]!) }
   }
 
   const absolute = toAbsolute(input, cwd)

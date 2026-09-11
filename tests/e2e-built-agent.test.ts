@@ -20,6 +20,7 @@ import { connectNode } from '../src/node/client.ts'
 import type { ConnectedNode } from '../src/node/client.ts'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingSubprocessRuntime } from '../src/routing/subprocess.ts'
+import { asNodeId } from '../src/ids.ts'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -91,7 +92,7 @@ test('the built daemon completes a handshake', () => {
 })
 
 test('a command runs through the built daemon and its output returns', async () => {
-  const anchors: AnchorRoute[] = [{ nodeId: 'n1', anchorPath: anchorRoot, remoteRoot }]
+  const anchors: AnchorRoute[] = [{ nodeId: asNodeId('n1'), anchorPath: anchorRoot, remoteRoot }]
   const runtime = createRoutingSubprocessRuntime({
     localProc: new Proxy({}, {
       get: () => () => {

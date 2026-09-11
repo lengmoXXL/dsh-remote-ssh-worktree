@@ -14,9 +14,10 @@ import type { NodeChannel } from '../src/node/channel.ts'
 import { NodeRequestError } from '../src/node/channel.ts'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingSubprocessRuntime } from '../src/routing/subprocess.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const anchors: AnchorRoute[] = [
-  { nodeId: 'n1', anchorPath: '/local/anchors/n1/app/login', remoteRoot: '/srv/app/login' },
+  { nodeId: asNodeId('n1'), anchorPath: '/local/anchors/n1/app/login', remoteRoot: '/srv/app/login' },
 ]
 
 /** A spawn spec for one world. */
@@ -241,7 +242,7 @@ test('an offline node is refused before any process is created', () => {
 })
 
 test('an ambiguous remote cwd is refused, never guessed', () => {
-  const twoNodes: AnchorRoute[] = [...anchors, { ...anchors[0]!, nodeId: 'n2' }]
+  const twoNodes: AnchorRoute[] = [...anchors, { ...anchors[0]!, nodeId: asNodeId('n2') }]
   const { channel } = fakeDaemon({})
   const routing = createRoutingSubprocessRuntime({
     localProc: unusedLocal,

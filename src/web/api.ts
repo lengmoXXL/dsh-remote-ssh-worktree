@@ -14,8 +14,10 @@
  */
 
 import type { NodeConnections, NodeStatus } from '../nodes/connections.ts'
+import type { NodeId } from '../ids.ts'
 import type { NodeRegistry, NodeTransport, NodeView } from '../nodes/registry.ts'
 import { toNodeView } from '../nodes/registry.ts'
+import { asAnchorId, asNodeId, asRepoId } from '../ids.ts'
 import type { RepoRecord, RepoStore } from '../repos/store.ts'
 import type { WorktreeManager } from '../worktree/manager.ts'
 
@@ -178,7 +180,7 @@ function withStatuses(
  * @returns the record.
  * @throws ApiError 404 when no node carries that id.
  */
-function requireNode(registry: NodeRegistry, nodeId: string) {
+function requireNode(registry: NodeRegistry, nodeId: NodeId) {
   const record = registry.get(nodeId)
   if (record === undefined) throw new ApiError(404, `no node "${nodeId}"`)
   return record
@@ -195,7 +197,7 @@ function requireNode(registry: NodeRegistry, nodeId: string) {
  */
 async function resolveRemotePath(
   deps: ManagementApiDeps,
-  nodeId: string,
+  nodeId: NodeId,
   path: string,
 ): Promise<string> {
   const channel = deps.connections.channel(nodeId)
@@ -239,7 +241,10 @@ async function handleRepos(
   parts: readonly string[],
   deps: ManagementApiDeps,
 ): Promise<ApiResponse> {
-  const [repoId] = parts
+  const [rawRepoId] = parts
+  // A route segment is a string from an untrusted request; this is where it
+  // becomes an id. Everything below passes the branded value.
+  const repoId = rawRepoId === undefined ? undefined : asRepoId(rawRepoId)
   const notAllowed = new ApiError(405, `${request.method} is not allowed on ${request.path}`)
 
   if (repoId === undefined) {
@@ -250,7 +255,7 @@ async function handleRepos(
     if (request.method === 'POST') {
       // Both required fields are read before any lookup, so a malformed body is
       // always a 400 rather than whichever existence check runs first.
-      const nodeId = requireString(request.body, 'nodeId')
+      const nodeId = asNodeId(requireString(request.body, 'nodeId'))
       const requested = requireString(request.body, 'repoPath')
       requireNode(deps.registry, nodeId)
       const repoPath = await resolveRemotePath(deps, nodeId, requested)
@@ -308,17 +313,19 @@ async function handleWorktrees(
   parts: readonly string[],
   deps: ManagementApiDeps,
 ): Promise<ApiResponse> {
-  const [anchorId, action] = parts
+  const [rawAnchorId, action] = parts
+  const anchorId = rawAnchorId === undefined ? undefined : asAnchorId(rawAnchorId)
 
   if (anchorId === undefined) {
     if (request.method === 'GET') {
       return { status: 200, body: { worktrees: await deps.worktrees.list() } }
     }
     if (request.method === 'POST') {
-      const repoId = stringField(request.body, 'repoId')?.trim()
-      const target = repoId === undefined || repoId === ''
+      const rawRepoId = stringField(request.body, 'repoId')?.trim()
+      const repoId = rawRepoId === undefined || rawRepoId === '' ? undefined : asRepoId(rawRepoId)
+      const target = repoId === undefined
         ? {
-            nodeId: requireString(request.body, 'nodeId'),
+            nodeId: asNodeId(requireString(request.body, 'nodeId')),
             repoPath: requireString(request.body, 'repoPath'),
           }
         : (() => {
@@ -375,7 +382,8 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
     if (head === 'worktrees') return await handleWorktrees(request, parts.slice(1), deps)
     if (head === 'repos') return await handleRepos(request, parts.slice(1), deps)
 
-    const [, nodeId, action] = parts
+    const [, rawNodeId, action] = parts
+  const nodeId = rawNodeId === undefined ? undefined : asNodeId(rawNodeId)
 
     if (head !== 'nodes') {
       throw new ApiError(404, `unknown endpoint ${request.method} ${request.path}`)

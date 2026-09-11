@@ -23,6 +23,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as remoteWorktree from '../src/index.ts'
+import { asAnchorId, asNodeId } from '../src/ids.ts'
 
 /** The remote root the seeded anchor claims. It must not overlap the local fixture. */
 const REMOTE_ROOT = '/srv/remote-app/.dsh-worktrees/worktree/login'
@@ -41,8 +42,8 @@ before(async () => {
   await writeFile(join(anchorPath, '.dsh-remote-worktree.json'), JSON.stringify({
     version: 1,
     anchor: {
-      anchorId: 'a1',
-      nodeId: 'n1',
+      anchorId: asAnchorId('a1'),
+      nodeId: asNodeId('n1'),
       name: 'login',
       anchorPath,
       remoteRoot: REMOTE_ROOT,

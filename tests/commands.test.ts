@@ -16,6 +16,7 @@ import type { NodeRecord, NodeRegistry } from '../src/nodes/registry.ts'
 import { createWorktreeManager } from '../src/worktree/manager.ts'
 import { runWorktreeCommand } from '../src/commands.ts'
 import type { WorktreeCommandDeps } from '../src/commands.ts'
+import { asNodeId } from '../src/ids.ts'
 
 let root: string
 let anchors: AnchorStore
@@ -31,7 +32,7 @@ after(async () => {
 })
 
 const record: NodeRecord = {
-  nodeId: 'n1',
+  nodeId: asNodeId('n1'),
   title: 'build-01',
   transport: { kind: 'direct', host: 'build-01', port: 7801 },
   remotePort: 7801,

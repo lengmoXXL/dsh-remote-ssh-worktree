@@ -9,15 +9,16 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { classifyPath, isWithin, toAbsolute } from '../src/routing/classify.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const anchorA: AnchorRoute = {
-  nodeId: 'a',
+  nodeId: asNodeId('a'),
   anchorPath: '/Users/dev/.dsh/remote-worktrees/a/proj/main',
   remoteRoot: '/home/dev/proj',
 }
 
 const anchorB: AnchorRoute = {
-  nodeId: 'b',
+  nodeId: asNodeId('b'),
   anchorPath: '/Users/dev/.dsh/remote-worktrees/b/proj/main',
   remoteRoot: '/home/dev/proj',
 }
@@ -43,7 +44,7 @@ test('an anchor path routes to its node and maps onto the remote root', () => {
   const route = classifyPath(`${anchorA.anchorPath}/src/index.ts`, undefined, [anchorA])
   assert.deepEqual(route, {
     kind: 'remote',
-    nodeId: 'a',
+    nodeId: asNodeId('a'),
     remotePath: '/home/dev/proj/src/index.ts',
   })
 })
@@ -52,21 +53,21 @@ test('a relative path resolves against an anchor cwd', () => {
   const route = classifyPath('src/index.ts', anchorA.anchorPath, [anchorA])
   assert.deepEqual(route, {
     kind: 'remote',
-    nodeId: 'a',
+    nodeId: asNodeId('a'),
     remotePath: '/home/dev/proj/src/index.ts',
   })
 })
 
 test('the anchor itself maps to the remote root', () => {
   const route = classifyPath(anchorA.anchorPath, undefined, [anchorA])
-  assert.deepEqual(route, { kind: 'remote', nodeId: 'a', remotePath: '/home/dev/proj' })
+  assert.deepEqual(route, { kind: 'remote', nodeId: asNodeId('a'), remotePath: '/home/dev/proj' })
 })
 
 test('a remote root claimed by exactly one anchor routes there', () => {
   const route = classifyPath('/home/dev/proj/README.md', undefined, [anchorA])
   assert.deepEqual(route, {
     kind: 'remote',
-    nodeId: 'a',
+    nodeId: asNodeId('a'),
     remotePath: '/home/dev/proj/README.md',
   })
 })
@@ -82,7 +83,7 @@ test('a remote root claimed by two anchors is refused, not guessed', () => {
 
 test('the explicit spelling outranks anchor matching', () => {
   const route = classifyPath('node:b:/home/dev/proj/x.ts', undefined, [anchorA, anchorB])
-  assert.deepEqual(route, { kind: 'remote', nodeId: 'b', remotePath: '/home/dev/proj/x.ts' })
+  assert.deepEqual(route, { kind: 'remote', nodeId: asNodeId('b'), remotePath: '/home/dev/proj/x.ts' })
 })
 
 test('a sibling directory sharing a name prefix does not match a remote root', () => {

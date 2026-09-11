@@ -15,6 +15,7 @@ import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands
 import type { NodeConnections } from './nodes/connections.ts'
 import type { NodeRegistry } from './nodes/registry.ts'
 import { defaultNodeTitle } from './nodes/registry.ts'
+import { asAnchorId, asNodeId } from './ids.ts'
 import type { WorktreeManager } from './worktree/manager.ts'
 
 /** What the command needs from the plugin. */
@@ -91,12 +92,12 @@ export async function runWorktreeCommand(
     if (nodeId === undefined || repoPath === undefined || name === undefined) {
       return { kind: 'error', text: USAGE }
     }
-    const record = deps.registry.get(nodeId)
+    const record = deps.registry.get(asNodeId(nodeId))
     if (record === undefined) return { kind: 'error', text: `no node "${nodeId}"` }
     try {
-      if (deps.connections.channel(nodeId) === undefined) await deps.connections.connect(record)
+      if (deps.connections.channel(asNodeId(nodeId)) === undefined) await deps.connections.connect(record)
       const anchor = await deps.worktrees.create({
-        nodeId,
+        nodeId: asNodeId(nodeId),
         repoPath,
         name,
         ...baseRef === undefined ? {} : { baseRef },
@@ -116,7 +117,7 @@ export async function runWorktreeCommand(
     const [anchorId, ...flags] = rest
     if (anchorId === undefined) return { kind: 'error', text: USAGE }
     try {
-      const removal = await deps.worktrees.remove(anchorId, {
+      const removal = await deps.worktrees.remove(asAnchorId(anchorId), {
         force: flags.includes('--force'),
         deleteBranch: !flags.includes('--keep-branch'),
       })
@@ -134,7 +135,7 @@ export async function runWorktreeCommand(
     const [anchorId] = rest
     if (anchorId === undefined) return { kind: 'error', text: USAGE }
     try {
-      const merge = await deps.worktrees.bringBack(anchorId)
+      const merge = await deps.worktrees.bringBack(asAnchorId(anchorId))
       return {
         kind: 'success',
         text: merge.alreadyMerged

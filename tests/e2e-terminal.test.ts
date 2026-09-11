@@ -20,6 +20,7 @@ import { connectNode } from '../src/node/client.ts'
 import type { ConnectedNode } from '../src/node/client.ts'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingSubprocessRuntime } from '../src/routing/subprocess.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const TOKEN = 'terminal-token-0123456789'
 
@@ -71,7 +72,7 @@ after(async () => {
 
 /** The routing terminal runtime over this node. */
 function runtime(): ReturnType<typeof createRoutingSubprocessRuntime> {
-  const anchors: AnchorRoute[] = [{ nodeId: 'n1', anchorPath: anchorRoot, remoteRoot }]
+  const anchors: AnchorRoute[] = [{ nodeId: asNodeId('n1'), anchorPath: anchorRoot, remoteRoot }]
   return createRoutingSubprocessRuntime({
     localProc: new Proxy({}, {
       get: () => () => {

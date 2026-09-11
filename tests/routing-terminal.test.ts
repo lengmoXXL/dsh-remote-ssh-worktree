@@ -11,9 +11,10 @@ import type { SubprocessRuntime, SubprocessTerminalSpawnSpec } from '@deepseek-a
 import type { NodeChannel } from '../src/node/channel.ts'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingSubprocessRuntime } from '../src/routing/subprocess.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const anchors: AnchorRoute[] = [
-  { nodeId: 'n1', anchorPath: '/local/anchors/n1/app/login', remoteRoot: '/srv/app/login' },
+  { nodeId: asNodeId('n1'), anchorPath: '/local/anchors/n1/app/login', remoteRoot: '/srv/app/login' },
 ]
 
 const spec = (cwd: string): SubprocessTerminalSpawnSpec => ({

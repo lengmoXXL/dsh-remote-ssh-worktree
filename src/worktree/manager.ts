@@ -19,6 +19,7 @@ import type { WireMergeOutcome, WireRepoState, WireWorktree } from '../../shared
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../anchors/store.ts'
 import type { ChannelLookup, NodeChannel } from '../node/channel.ts'
 import { NodeRequestError } from '../node/channel.ts'
+import type { AnchorId, NodeId } from '../ids.ts'
 import type { RepoRef } from '../repos/store.ts'
 
 /** Directory, relative to the repository, that holds every managed checkout. */
@@ -33,7 +34,7 @@ export const BRANCH_PREFIX = 'worktree/'
 /** What a caller supplies to cut a new worktree. */
 export interface WorktreeDraft {
   /** The node whose repository is cut. */
-  readonly nodeId: string
+  readonly nodeId: NodeId
   /** Absolute POSIX path of the repository on that node. */
   readonly repoPath: string
   /** Worktree name; the branch becomes `worktree/<name>`. */
@@ -118,7 +119,7 @@ export interface WorktreeManager {
    * @returns what was removed, and whether the branch followed.
    * @throws the daemon's typed failure when git refuses; the anchor stays.
    */
-  remove(anchorId: string, options: { force: boolean; deleteBranch: boolean }): Promise<WorktreeRemoval>
+  remove(anchorId: AnchorId, options: { force: boolean; deleteBranch: boolean }): Promise<WorktreeRemoval>
   /**
    * Merge one worktree's branch into its repository's current branch.
    * @param anchorId - the anchor handle.
@@ -126,7 +127,7 @@ export interface WorktreeManager {
    * @throws the daemon's typed failure, including `GIT_DIRTY` for a conflicted
    *   merge, which the daemon aborts before answering.
    */
-  bringBack(anchorId: string): Promise<WireMergeOutcome>
+  bringBack(anchorId: AnchorId): Promise<WireMergeOutcome>
 }
 
 /** The remote path a managed checkout lives at. */
@@ -197,7 +198,7 @@ async function ensureIgnored(channel: NodeChannel, repoPath: string): Promise<vo
  */
 export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManager {
   /** The live channel for an anchor's node, or the typed offline failure. */
-  const channelFor = (nodeId: string) => {
+  const channelFor = (nodeId: NodeId) => {
     const channel = deps.channel(nodeId)
     if (channel === undefined) {
       throw new NodeRequestError({
@@ -208,7 +209,7 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
     return channel
   }
 
-  const anchorById = (anchorId: string): AnchorRecord => {
+  const anchorById = (anchorId: AnchorId): AnchorRecord => {
     const anchor = deps.anchors.get(anchorId)
     if (anchor === undefined) throw new Error(`no anchor "${anchorId}"`)
     return anchor

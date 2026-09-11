@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createNodeRegistry, toNodeView } from '../src/nodes/registry.ts'
 import type { NodeTransport } from '../src/nodes/registry.ts'
+import { asNodeId } from '../src/ids.ts'
 
 let dir: string
 
@@ -109,7 +110,7 @@ test('a document from another build version is refused', async () => {
 
 test('a record the build does not understand is refused', async () => {
   const file = fileIn()
-  await writeFile(file, JSON.stringify({ version: 2, nodes: [{ nodeId: 'a' }] }), 'utf8')
+  await writeFile(file, JSON.stringify({ version: 2, nodes: [{ nodeId: asNodeId('a') }] }), 'utf8')
   const registry = createNodeRegistry({ file })
   await assert.rejects(() => registry.load(), /does not understand/)
 })
@@ -121,7 +122,7 @@ test('a revision-1 document carries over without losing its id', async () => {
   await writeFile(file, JSON.stringify({
     version: 1,
     nodes: [{
-      nodeId: 'kept-id',
+      nodeId: asNodeId('kept-id'),
       title: 'build-01',
       host: '10.0.0.4',
       port: 7801,
@@ -141,7 +142,7 @@ test('a revision-1 document carries over without losing its id', async () => {
 
 test('a revision-1 entry with no usable address is refused', async () => {
   const file = fileIn()
-  await writeFile(file, JSON.stringify({ version: 1, nodes: [{ nodeId: 'a', title: 'b' }] }), 'utf8')
+  await writeFile(file, JSON.stringify({ version: 1, nodes: [{ nodeId: asNodeId('a'), title: 'b' }] }), 'utf8')
   const registry = createNodeRegistry({ file })
   await assert.rejects(() => registry.load(), /revision 1/)
 })

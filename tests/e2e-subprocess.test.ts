@@ -18,6 +18,7 @@ import { connectNode } from '../src/node/client.ts'
 import type { ConnectedNode } from '../src/node/client.ts'
 import type { AnchorRoute } from '../src/routing/classify.ts'
 import { createRoutingSubprocessRuntime } from '../src/routing/subprocess.ts'
+import { asNodeId } from '../src/ids.ts'
 
 const TOKEN = 'subprocess-token-0123456789'
 
@@ -71,7 +72,7 @@ before(async () => {
   const port = Number(server.boundAddress.slice(server.boundAddress.lastIndexOf(':') + 1))
   node = await connectNode({ host: '127.0.0.1', port, token: TOKEN, timeoutMs: 5_000 })
 
-  const anchors: AnchorRoute[] = [{ nodeId: 'n1', anchorPath: anchorRoot, remoteRoot }]
+  const anchors: AnchorRoute[] = [{ nodeId: asNodeId('n1'), anchorPath: anchorRoot, remoteRoot }]
   runtime = createRoutingSubprocessRuntime({
     localProc: localDelegate,
     anchors: () => anchors,

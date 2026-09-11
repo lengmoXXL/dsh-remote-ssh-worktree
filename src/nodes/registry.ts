@@ -10,9 +10,11 @@
  * @module dsh-remote-worktree/nodes/registry
  */
 
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import type { NodeId } from '../ids.ts'
 import { randomUUID } from 'node:crypto'
 
 /**
@@ -67,7 +69,7 @@ export type NodeTransport =
 /** One configured remote machine. */
 export interface NodeRecord {
   /** Stable generated id; never the target, so renaming a machine is free. */
-  readonly nodeId: string
+  readonly nodeId: NodeId
   /** Display title. Defaults to the `ssh` destination. */
   readonly title: string
   /** How the host reaches this machine's daemon. */
@@ -88,7 +90,7 @@ export interface NodeRecord {
 
 /** What a browser or another plugin may see: a record without its secret. */
 export interface NodeView {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly title: string
   readonly transport: NodeTransport
   readonly remotePort: number
@@ -100,7 +102,7 @@ export interface NodeView {
 
 /** Fields a caller supplies when creating or updating a node. */
 export interface NodeDraft {
-  readonly nodeId?: string
+  readonly nodeId?: NodeId
   readonly title?: string
   readonly transport: NodeTransport
   readonly remotePort?: number
@@ -132,7 +134,7 @@ export interface NodeRegistry {
    * @param nodeId - the generated record id.
    * @returns the record, or undefined when no node carries that id.
    */
-  get(nodeId: string): NodeRecord | undefined
+  get(nodeId: NodeId): NodeRecord | undefined
   /**
    * Create or update one node and persist the result.
    * @param draft - the caller's fields; omitted `nodeId` generates one.
@@ -144,7 +146,7 @@ export interface NodeRegistry {
    * @param nodeId - the record to remove.
    * @returns true when a record was removed.
    */
-  remove(nodeId: string): Promise<boolean>
+  remove(nodeId: NodeId): Promise<boolean>
 }
 
 /** The on-disk document. */
@@ -207,7 +209,7 @@ function migrateV1(value: unknown, index: number): NodeRecord {
   const port = record['port'] as number
   const host = record['host'] as string
   return {
-    nodeId: record['nodeId'] as string,
+    nodeId: brandString<NodeId>(record['nodeId'] as string),
     title: record['title'] as string,
     transport: { kind: 'direct', host, port },
     remotePort: port,
@@ -321,7 +323,7 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
         ? undefined
         : nodes.find(node => node.nodeId === draft.nodeId)
       const record: NodeRecord = {
-        nodeId: existing?.nodeId ?? draft.nodeId ?? randomUUID(),
+        nodeId: existing?.nodeId ?? draft.nodeId ?? brandString<NodeId>(randomUUID()),
         title: draft.title?.trim() || defaultNodeTitle(draft.transport),
         transport: draft.transport,
         remotePort: draft.remotePort ?? DEFAULT_REMOTE_PORT,

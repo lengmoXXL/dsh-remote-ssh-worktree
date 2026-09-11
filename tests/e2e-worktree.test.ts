@@ -23,6 +23,8 @@ import { connectNode } from '../src/node/client.ts'
 import type { ConnectedNode } from '../src/node/client.ts'
 import { createWorktreeManager } from '../src/worktree/manager.ts'
 import type { WorktreeManager } from '../src/worktree/manager.ts'
+import { asNodeId } from '../src/ids.ts'
+import type { AnchorId } from '../src/ids.ts'
 
 const run = promisify(execFile)
 const TOKEN = 'worktree-token-0123456789'
@@ -79,10 +81,10 @@ after(async () => {
   await rm(dataDir, { recursive: true, force: true })
 })
 
-let anchorId: string
+let anchorId: AnchorId
 
 test('creating a worktree cuts a real checkout and records an anchor', async () => {
-  const anchor = await worktrees.create({ nodeId: 'n1', repoPath, name: 'login' })
+  const anchor = await worktrees.create({ nodeId: asNodeId('n1'), repoPath, name: 'login' })
   anchorId = anchor.anchorId
 
   assert.equal(anchor.branch, 'worktree/login')

@@ -13,6 +13,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ANCHOR_FILE, createAnchorStore } from '../src/anchors/store.ts'
+import { asNodeId } from '../src/ids.ts'
 
 let root: string
 
@@ -25,7 +26,7 @@ after(async () => {
 })
 
 const draft = {
-  nodeId: 'n1',
+  nodeId: asNodeId('n1'),
   name: 'login',
   repoPath: '/srv/app',
   remoteRoot: '/srv/app/.dsh-worktrees/worktree/worktree/login',
@@ -64,7 +65,7 @@ test('routes project the records the classifier reads', async () => {
   const anchor = await store.create(draft)
 
   assert.deepEqual(store.routes(), [{
-    nodeId: 'n1',
+    nodeId: asNodeId('n1'),
     anchorPath: anchor.anchorPath,
     remoteRoot: draft.remoteRoot,
   }])

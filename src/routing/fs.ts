@@ -22,6 +22,8 @@ import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandb
 import { TARGET_KEY_PREFIX, isFsErrorCode } from '../../shared/protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../node/channel.ts'
 import { NodeRequestError } from '../node/channel.ts'
+import { asNodeId } from '../ids.ts'
+import type { NodeId } from '../ids.ts'
 import type { AnchorRoute } from './classify.ts'
 import { classifyPath, isWithin } from './classify.ts'
 
@@ -68,7 +70,7 @@ export interface RoutingFileSystemDeps {
 /** A target key the plugin minted, decomposed back into its two facts. */
 type ParsedKey =
   | { readonly kind: 'local' }
-  | { readonly kind: 'remote'; readonly nodeId: string; readonly remotePath: string }
+  | { readonly kind: 'remote'; readonly nodeId: NodeId; readonly remotePath: string }
 
 /** Compose the opaque key the harness passes back to this provider. */
 function composeKey(nodeId: string, remotePath: string): FsTargetKey {
@@ -87,11 +89,13 @@ function parseKey(key: FsTargetKey): ParsedKey {
   const rest = raw.slice(TARGET_KEY_PREFIX.length)
   const separator = rest.indexOf(':')
   if (separator <= 0 || !rest.slice(separator + 1).startsWith('/')) return { kind: 'local' }
-  return { kind: 'remote', nodeId: rest.slice(0, separator), remotePath: rest.slice(separator + 1) }
+  // The key is a synthetic path this plugin both writes and parses, so its
+  // node half becomes an id again here.
+  return { kind: 'remote', nodeId: asNodeId(rest.slice(0, separator)), remotePath: rest.slice(separator + 1) }
 }
 
 /** The remote target the daemon needs, or a typed failure when the node is offline. */
-function requireChannel(deps: RoutingFileSystemDeps, nodeId: string) {
+function requireChannel(deps: RoutingFileSystemDeps, nodeId: NodeId) {
   const channel = deps.channel(nodeId)
   if (channel === undefined) {
     throw new FsError(
@@ -127,7 +131,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
  * @param route - the ambiguous verdict naming every claiming node.
  * @returns the typed error to throw.
  */
-function ambiguousError(route: { readonly remotePath: string; readonly nodeIds: readonly string[] }): FsError {
+function ambiguousError(route: { readonly remotePath: string; readonly nodeIds: readonly NodeId[] }): FsError {
   return new FsError(
     `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
     + 'address it as node:<id>:<path>',

@@ -12,6 +12,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { asAnchorId, asNodeId } from './ids.ts'
 import type { NodeConnections } from './nodes/connections.ts'
 import type { NodeRegistry } from './nodes/registry.ts'
 import type { WorktreeManager } from './worktree/manager.ts'
@@ -101,12 +102,12 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
         render: (_args, value: ToolText) => [{ type: 'text', text: value.text }],
       },
       async execute(args: { nodeId: string; repoPath: string; name: string; baseRef?: string }) {
-        const record = deps.registry.get(args.nodeId)
+        const record = deps.registry.get(asNodeId(args.nodeId))
         if (record === undefined) return { text: `Error: no machine "${args.nodeId}"`, anchorId: '', localPath: '', branch: '' }
         try {
-          if (deps.connections.channel(args.nodeId) === undefined) await deps.connections.connect(record)
+          if (deps.connections.channel(asNodeId(args.nodeId)) === undefined) await deps.connections.connect(record)
           const anchor = await deps.worktrees.create({
-            nodeId: args.nodeId,
+            nodeId: asNodeId(args.nodeId),
             repoPath: args.repoPath,
             name: args.name,
             ...args.baseRef === undefined ? {} : { baseRef: args.baseRef },
@@ -146,7 +147,7 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
       },
       async execute(args: { anchorId: string }) {
         try {
-          const merge = await deps.worktrees.bringBack(args.anchorId)
+          const merge = await deps.worktrees.bringBack(asAnchorId(args.anchorId))
           return {
             text: merge.alreadyMerged
               ? 'Already merged; the repository is unchanged.'
@@ -177,7 +178,7 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
       },
       async execute(args: { anchorId: string; force?: boolean }) {
         try {
-          const removal = await deps.worktrees.remove(args.anchorId, {
+          const removal = await deps.worktrees.remove(asAnchorId(args.anchorId), {
             force: args.force === true,
             deleteBranch: true,
           })
