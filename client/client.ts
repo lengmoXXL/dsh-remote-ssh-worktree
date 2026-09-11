@@ -21,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type { AnchorId, NodeId, RepoId } from '../src/ids.ts'
 import type { DirListing, RemoteWorktreesFace, Snapshot } from './Section.tsx'
 import { RemoteWorktreesSection } from './Section.tsx'
 import type { RemoteWorktreesKey } from './locales.ts'
@@ -46,7 +47,7 @@ interface NodeTransport {
 
 /** One machine as the host projects it. */
 interface NodeView {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly title: string
   readonly transport: NodeTransport
   readonly remotePort: number
@@ -58,7 +59,7 @@ type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'
 
 /** One machine's connection state. */
 interface NodeStatus {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly state: NodeState
   /** The local port carrying this machine's traffic, once a forward is up. */
   readonly localPort?: number
@@ -68,8 +69,8 @@ interface NodeStatus {
 /** One registered repository with the live state read from its machine. */
 interface RepoReport {
   readonly repo: {
-    readonly repoId: string
-    readonly nodeId: string
+    readonly repoId: RepoId
+    readonly nodeId: NodeId
     readonly repoPath: string
     readonly name: string
   }
@@ -80,8 +81,8 @@ interface RepoReport {
 /** One worktree joined with its repository's live state. */
 interface WorktreeStatus {
   readonly anchor: {
-    readonly anchorId: string
-    readonly nodeId: string
+    readonly anchorId: AnchorId
+    readonly nodeId: NodeId
     readonly repoPath: string
     readonly name: string
     readonly branch: string

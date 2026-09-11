@@ -32,6 +32,7 @@ import {
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { AnchorId, NodeId, RepoId } from '../src/ids.ts'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { NS } from './locales.ts'
 import css from './Section.module.css'
@@ -49,7 +50,7 @@ interface NodeTransport {
 
 /** One machine as the host projects it. */
 interface NodeView {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly title: string
   readonly transport: NodeTransport
   readonly remotePort: number
@@ -61,7 +62,7 @@ type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'
 
 /** One machine's connection state. */
 interface NodeStatus {
-  readonly nodeId: string
+  readonly nodeId: NodeId
   readonly state: NodeState
   /** The local port carrying this machine's traffic, once a forward is up. */
   readonly localPort?: number
@@ -70,8 +71,8 @@ interface NodeStatus {
 
 /** One registered repository. */
 interface RepoRecord {
-  readonly repoId: string
-  readonly nodeId: string
+  readonly repoId: RepoId
+  readonly nodeId: NodeId
   readonly repoPath: string
   readonly name: string
 }
@@ -91,8 +92,8 @@ interface RepoReport {
 
 /** One local anchor. */
 interface AnchorRecord {
-  readonly anchorId: string
-  readonly nodeId: string
+  readonly anchorId: AnchorId
+  readonly nodeId: NodeId
   readonly repoPath: string
   readonly name: string
   readonly branch: string
@@ -140,23 +141,23 @@ export interface RemoteWorktreesFace {
     title?: string
   }): Promise<void>
   /** Remove a machine and its repository registrations. */
-  removeNode(nodeId: string): Promise<void>
+  removeNode(nodeId: NodeId): Promise<void>
   /** Open a connection to a machine. */
-  connectNode(nodeId: string): Promise<void>
+  connectNode(nodeId: NodeId): Promise<void>
   /** Close a machine's connection. */
-  disconnectNode(nodeId: string): Promise<void>
+  disconnectNode(nodeId: NodeId): Promise<void>
   /** Register a repository on a machine. */
-  addRepo(draft: { nodeId: string; repoPath: string; name?: string }): Promise<void>
+  addRepo(draft: { nodeId: NodeId; repoPath: string; name?: string }): Promise<void>
   /** Drop a repository registration. */
-  removeRepo(repoId: string): Promise<void>
+  removeRepo(repoId: RepoId): Promise<void>
   /** List one directory level on a machine. */
-  listDirs(nodeId: string, path: string): Promise<DirListing>
+  listDirs(nodeId: NodeId, path: string): Promise<DirListing>
   /** Cut a worktree from a registered repository. */
-  createWorktree(draft: { repoId: string; name: string }): Promise<void>
+  createWorktree(draft: { repoId: RepoId; name: string }): Promise<void>
   /** Remove a worktree and its branch. */
-  removeWorktree(anchorId: string): Promise<void>
+  removeWorktree(anchorId: AnchorId): Promise<void>
   /** Merge a worktree's branch back into its repository. */
-  bringBack(anchorId: string): Promise<void>
+  bringBack(anchorId: AnchorId): Promise<void>
 }
 
 /** Props the shell composes for this section. */
@@ -175,7 +176,7 @@ interface Confirmation {
 /** Which dialog is open, if any. */
 type Dialog =
   | { readonly kind: 'machine' }
-  | { readonly kind: 'repo'; readonly nodeId: string }
+  | { readonly kind: 'repo'; readonly nodeId: NodeId }
   | { readonly kind: 'worktree'; readonly repo: RepoRecord }
   | undefined
 
@@ -347,10 +348,10 @@ function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
  * what the picker shows is what a session opened on the result would see.
  */
 function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
-  nodeId: string
+  nodeId: NodeId
   value: string
   onChange: (path: string) => void
-  listDirs: (nodeId: string, path: string) => Promise<DirListing>
+  listDirs: (nodeId: NodeId, path: string) => Promise<DirListing>
   t: T
 }) {
   const [listing, setListing] = useState<DirListing | undefined>(undefined)
@@ -427,25 +428,17 @@ function parentOf(path: string): string | undefined {
 }
 
 /** Register a repository on a machine. */
-function AddRepoDialog({ open, nodeId, busy, onClose, onSubmit, listDirs, t }: {
-  open: boolean
-  nodeId: string
+function AddRepoDialog({ nodeId, busy, onClose, onSubmit, listDirs, t }: {
+  nodeId: NodeId
   busy: boolean
   onClose: () => void
-  onSubmit: (draft: { nodeId: string; repoPath: string; name?: string }) => Promise<void>
-  listDirs: (nodeId: string, path: string) => Promise<DirListing>
+  onSubmit: (draft: { nodeId: NodeId; repoPath: string; name?: string }) => Promise<void>
+  listDirs: (nodeId: NodeId, path: string) => Promise<DirListing>
   t: T
 }) {
   const [repoPath, setRepoPath] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    if (!open) return
-    setRepoPath('')
-    setName('')
-    setError(undefined)
-  }, [open])
 
   const submit = async (): Promise<void> => {
     setError(undefined)
@@ -463,7 +456,7 @@ function AddRepoDialog({ open, nodeId, busy, onClose, onSubmit, listDirs, t }: {
 
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       title={t('addRepository')}
       closeLabel={t('close')}
@@ -504,7 +497,7 @@ function NewWorktreeDialog({ open, repo, busy, onClose, onSubmit, t }: {
   repo: RepoRecord | undefined
   busy: boolean
   onClose: () => void
-  onSubmit: (draft: { repoId: string; name: string }) => Promise<void>
+  onSubmit: (draft: { repoId: RepoId; name: string }) => Promise<void>
   t: T
 }) {
   const [name, setName] = useState('')
@@ -663,9 +656,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
     set(list.includes(id) ? list.filter(entry => entry !== id) : [...list, id])
   }
 
-  const statusFor = (nodeId: string): NodeStatus | undefined =>
+  const statusFor = (nodeId: NodeId): NodeStatus | undefined =>
     snapshot?.statuses.find(status => status.nodeId === nodeId)
-  const reposOf = (nodeId: string): readonly RepoReport[] =>
+  const reposOf = (nodeId: NodeId): readonly RepoReport[] =>
     (snapshot?.repos ?? []).filter(entry => entry.repo.nodeId === nodeId)
   const worktreesOf = (repo: RepoRecord): readonly WorktreeStatus[] =>
     (snapshot?.worktrees ?? []).filter(entry =>
@@ -865,15 +858,16 @@ export function RemoteWorktreesSection(props: SectionProps) {
         t={t}
       />
 
-      <AddRepoDialog
-        open={dialog?.kind === 'repo'}
-        nodeId={dialog?.kind === 'repo' ? dialog.nodeId : ''}
-        busy={busy}
-        onClose={() => setDialog(undefined)}
-        onSubmit={draft => submit(() => props.addRepo(draft))}
-        listDirs={props.listDirs}
-        t={t}
-      />
+      {dialog?.kind === 'repo' ? (
+        <AddRepoDialog
+          nodeId={dialog.nodeId}
+          busy={busy}
+          onClose={() => setDialog(undefined)}
+          onSubmit={draft => submit(() => props.addRepo(draft))}
+          listDirs={props.listDirs}
+          t={t}
+        />
+      ) : null}
 
       <NewWorktreeDialog
         open={dialog?.kind === 'worktree'}
