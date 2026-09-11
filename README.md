@@ -103,8 +103,8 @@ node scripts/verify-remote-host.ts 14780 <token-file>
 Four tools are registered when a session runs: `rw_list`, `rw_create`,
 `rw_bring_back`, and `rw_remove`. Each takes string identifiers — a machine id,
 an absolute repository path, and a worktree name — and returns the local anchor
-path of the worktree it acted on. Their schemas and prose are rendered in the
-generated [tool catalog](../../docs/tool-catalog.md).
+path of the worktree it acted on. Their schemas and prose live in
+[`src/tools.ts`](src/tools.ts).
 
 #### Token effect
 
