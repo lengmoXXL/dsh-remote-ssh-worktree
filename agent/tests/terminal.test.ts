@@ -174,28 +174,18 @@ describe('terminal backend', () => {
   it('reports lossy once the retained window has been trimmed', async t => {
     if (skipWithoutPty(t)) return
     // One byte past the retained window is what makes it trim; the extra
-    // 64 KiB only forces the whole window to have been replaced. The pipeline
-    // is the slow part — every byte crosses a PTY — so the work stays at the
-    // smallest amount that proves the claim.
+    // 64 KiB is what forces the whole window to have been replaced.
     const total = (1 << 20) + (1 << 16)
     const { termId } = await term.spawn(spec({
       argv: [SHELL, '-c', `head -c ${String(total)} /dev/zero | tr '\\0' y`],
     }))
 
-    // Synchronized on the stream offset itself. The failure carries what the
-    // daemon last reported, because "it never got there" and "it got there with
-    // the wrong byte count" need different answers.
-    const deadline = Date.now() + 60_000
-    let last = term.read(termId, 0)
-    while (last.nextOffset < total && Date.now() < deadline) {
-      await sleep(POLL_MS)
-      last = term.read(termId, 0)
-    }
-    assert.ok(
-      last.nextOffset >= total,
-      `the terminal reached ${String(last.nextOffset)} of ${String(total)} bytes `
-      + `(retained ${String(Buffer.from(last.data, 'base64').length)}, lossy ${String(last.lossy)})`,
-    )
+    // Wait for the producer to exit, not for a byte count. The child exiting is
+    // the definitive end of output; sampling the offset instead means reading
+    // and concatenating the whole window on every poll, which competes with the
+    // PTY drain in this same process. A daemon that lost output still fails the
+    // assertions below, with the count it actually reached.
+    await until(() => term.outcome(termId) ?? undefined, 'the command to exit')
 
     const read = term.read(termId, 0)
     assert.equal(read.lossy, true)
