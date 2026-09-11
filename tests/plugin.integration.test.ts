@@ -9,6 +9,11 @@
  * one anchor on disk, and then mounts the plugin under test. If
  * `ctx.provide` + `ctx.isolate` + `ctx.inject` did not compose, this is where
  * it would fail.
+ *
+ * This tree is hand-built, so it does not satisfy the package policy's
+ * real-composition requirement on its own;
+ * `tests/loader-composition.test.ts` is the guard that boots the published
+ * entry through a real Loader.
  */
 
 import assert from 'node:assert/strict'
