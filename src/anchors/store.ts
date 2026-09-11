@@ -33,7 +33,7 @@ import type { AnchorRoute } from '../routing/classify.ts'
 /** Metadata file name inside every anchor directory. */
 export const ANCHOR_FILE = '.dsh-remote-worktree.json'
 
-/** Metadata revision; a shape change bumps it and refuses the old form. */
+/** Metadata revision; a field change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1
 
 /** Owner-only permissions: the file is bookkeeping, not a secret. */
@@ -138,7 +138,7 @@ function isAnchorRecord(value: unknown): value is AnchorRecord {
  * @param file - the path, used only to name a failure.
  * @returns the record.
  * @throws when the JSON is malformed, the version is unsupported, or the
- *   record does not match the stored shape.
+ *   record does not match the stored fields.
  */
 function parseAnchor(text: string, file: string): AnchorRecord {
   let parsed: unknown

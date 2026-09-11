@@ -73,6 +73,7 @@ export const zh = {
   pickerUp: '上一层',
   pickerUse: '使用这个目录',
 
+  requestFailed: '请求失败（{status}）',
   create: '创建',
   cancel: '取消',
   close: '关闭',
@@ -152,6 +153,7 @@ export const en = {
   pickerUp: 'Parent directory',
   pickerUse: 'Use this directory',
 
+  requestFailed: 'Request failed with {status}',
   create: 'Create',
   cancel: 'Cancel',
   close: 'Close',

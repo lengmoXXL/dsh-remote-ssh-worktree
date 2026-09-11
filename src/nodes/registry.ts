@@ -184,7 +184,7 @@ function isNodeRecord(value: unknown): value is NodeRecord {
 }
 
 /**
- * Read one revision-1 record as the revision-2 shape.
+ * Read one revision-1 record as the revision-2 record.
  *
  * Revision 1 recorded a reachable address and nothing else, which is what the
  * `direct` transport still means. The record therefore carries over with no
@@ -225,7 +225,7 @@ function migrateV1(value: unknown, index: number): NodeRecord {
  * @param file - the path, used only to name the failure.
  * @returns the parsed nodes.
  * @throws when the JSON is malformed, the version is unsupported, or a record
- *   does not match the stored shape.
+ *   does not match the stored fields.
  */
 function parseDocument(text: string, file: string): readonly NodeRecord[] {
   let parsed: unknown

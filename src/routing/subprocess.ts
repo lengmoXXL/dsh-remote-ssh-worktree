@@ -4,7 +4,7 @@
  * A plain object, like the filesystem router: `ctx.provide` is the primitive
  * Cordis' own `Service` constructor calls, so nothing is inherited here.
  *
- * Two structural facts shape this module.
+ * Two facts drive this module.
  *
  * First, `spawn` returns its handle **synchronously** while a remote start
  * needs a round trip. The handle is therefore a local proxy: it exists
@@ -153,6 +153,19 @@ class CollectedMirror implements SubprocessOutputReader {
  * @returns the handle, valid before the daemon has answered.
  * @throws when the caller asked for a disposition this design cannot carry.
  */
+/**
+ * Absorb a teardown request whose failure cannot matter.
+ *
+ * Every call runs after the decision to release a process, against a transport
+ * that may already be gone; the daemon reaps the process either way, so a
+ * rejection carries nothing the caller could act on.
+ * @param request - the teardown request already issued.
+ * @returns a promise that settles when the request does, whatever its outcome.
+ */
+function settled(request: Promise<unknown>): Promise<void> {
+  return request.then(() => {}, () => {})
+}
+
 function createRemoteHandle(
   channel: NodeChannel,
   remoteCwd: string,
@@ -255,17 +268,17 @@ function createRemoteHandle(
       return
     }
 
-    if (terminated) await channel.request('sp.terminate', { procId: id }).catch(() => {})
+    if (terminated) await settled(channel.request('sp.terminate', { procId: id }))
     if (typeof spec.stdio.stdin === 'object') {
-      await channel.request('sp.writeStdin', { procId: id, data: spec.stdio.stdin.data }).catch(() => {})
-      await channel.request('sp.closeStdin', { procId: id }).catch(() => {})
+      await settled(channel.request('sp.writeStdin', { procId: id, data: spec.stdio.stdin.data }))
+      await settled(channel.request('sp.closeStdin', { procId: id }))
     }
     if (stdinStream !== undefined) {
       stdinStream.on('data', (chunk: Buffer) => {
-        void channel.request('sp.writeStdin', { procId: id, data: chunk.toString('utf8') }).catch(() => {})
+        void settled(channel.request('sp.writeStdin', { procId: id, data: chunk.toString('utf8') }))
       })
       stdinStream.on('end', () => {
-        void channel.request('sp.closeStdin', { procId: id }).catch(() => {})
+        void settled(channel.request('sp.closeStdin', { procId: id }))
       })
     }
 
@@ -301,13 +314,13 @@ function createRemoteHandle(
     terminate() {
       terminated = true
       if (procId === undefined) return
-      void channel.request('sp.terminate', { procId }).catch(() => {})
+      void settled(channel.request('sp.terminate', { procId }))
     },
     async waitForExit(signal?: AbortSignal): Promise<boolean> {
       if (startFailure !== undefined) return false
       // The daemon's own wait is the observable fact; the local `done` settles
       // only after the final drain, which is strictly later.
-      await done.catch(() => {})
+      await done/* keep */
       return signal?.aborted !== true
     },
   }
@@ -452,6 +465,8 @@ async function createRemoteTerminal(
       } catch {
         // Teardown already removed the window; the buffered output stands.
       }
+      // A terminal the daemon no longer knows reads as "no outcome": the exit
+      // facts are absent, which is exactly what a released terminal has.
       const outcome = await channel.request('term.outcome', { termId: started.termId }).catch(() => null)
       finish({
         exitCode: outcome?.exitCode ?? null,

@@ -151,7 +151,11 @@ export interface WireErrorData {
   readonly message: string
 }
 
-/** Whether a failure code belongs to the filesystem family. */
+/**
+ * Whether a failure code belongs to the filesystem family.
+ * @param code - the code a daemon reported.
+ * @returns true when the code is one this module declares for filesystem failures.
+ */
 export function isFsErrorCode(code: WireFailureCode): code is WireFsErrorCode {
   return code.startsWith('FS_')
 }

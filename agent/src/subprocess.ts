@@ -73,7 +73,8 @@ const SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i
 const DSH_ENV_PREFIX = 'DSH_'
 
 /** A subprocess operation failure carrying the protocol's own stable code. */
-export class SubprocessFailure extends Error {  /** The wire code the plugin rethrows unchanged. */
+export class SubprocessFailure extends Error {
+  /** The wire code the plugin rethrows unchanged. */
   readonly code: WireSubprocessErrorCode
 
   /**
@@ -179,6 +180,7 @@ export interface SubprocessBackend {
 
 /**
  * Build the subprocess backend for one connection.
+ * @param send - delivers one pipe frame to the connection that owns the process.
  * @returns the backend owning the processes this connection starts.
  */
 export function createSubprocessBackend(send: PipeFrameSender): SubprocessBackend {
@@ -534,7 +536,10 @@ export class StreamBuffer {
     this.spillPath = spillPath
   }
 
-  /** Append captured bytes, keeping only the last `maxBytes` of them. */
+  /**
+   * Append captured bytes, keeping only the last `maxBytes` of them.
+   * @param chunk - the bytes one read produced.
+   */
   push(chunk: Buffer): void {
     this.total += chunk.length
     this.writeSpill(chunk)
@@ -589,6 +594,8 @@ export class StreamBuffer {
       this.spillBroken = true
       this.spill?.destroy()
       this.spill = undefined
+      // Best effort: the spill file is already unreachable, and a removal that
+      // fails leaves only a file the machine's own cleanup will collect.
       void rm(this.spillPath, { force: true }).catch(() => {})
       return
     }

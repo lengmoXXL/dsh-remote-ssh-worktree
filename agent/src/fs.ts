@@ -509,12 +509,24 @@ async function publish(
  *   non-UTF-8, or unreadable pre-image; a presentation-only basis never fails
  *   the write that follows.
  */
+/**
+ * Read and normalize the pre-image, refusing anything a diff cannot show.
+ * @param verb - the operation being attempted, for the failure message.
+ * @param path - the file to read.
+ * @param size - its size as observed before the write.
+ * @returns the LF-normalized text, or `null` for an oversized, binary, or
+ *   non-UTF-8 pre-image.
+ */
+async function readBasisText(verb: string, path: string, size: number): Promise<string | null> {
+  if (size >= DIFF_BASIS_MAX_BYTES) return null
+  const bytes = await readWindow(verb, path, 0, size)
+  if (bytes.includes(0)) return null
+  return normalizeLineEndings(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+}
+
 async function readBasis(verb: string, path: string, size: number): Promise<string | null> {
   try {
-    if (size >= DIFF_BASIS_MAX_BYTES) return null
-    const bytes = await readWindow(verb, path, 0, size)
-    if (bytes.includes(0)) return null
-    return normalizeLineEndings(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+    return await readBasisText(verb, path, size)
   } catch {
     // An unreadable or raced pre-image costs only the contextual diff; the
     // caller falls back to a whole-file diff of the committed write.

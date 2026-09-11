@@ -50,6 +50,27 @@ host picks a free local port and forwards it over the operator's own `ssh`, so
 `~/.ssh/config`, `ssh-agent`, `ProxyJump`, and bastion hosts work as they
 already do, and the local port is never part of a machine's identity.
 
+## Alternatives considered
+
+**Subclassing the shipped seams.** Rejected: it charges rent on every upstream
+change to a class this plugin uses a fraction of, and the seams are `Service`
+subclasses whose `protected` members are nominal, so an inheriting
+implementation could not be swapped for a plain object where that is correct.
+
+**Copying the repository to the machine per task.** Rejected: the task's
+identity would become a path on another host, the user's checkout would not be
+the thing being edited, and bringing work back would be a file transfer rather
+than the local git operation the operator already knows.
+
+**Binding the daemon to a reachable interface instead of forwarding.** Rejected:
+the daemon grants shell access as the user that runs it and carries no TLS, so
+exposing it is a deliberate unsafe choice. Forwarding over the operator's own
+`ssh` reuses trust they already configured, and keeps the daemon on loopback.
+
+**Installing the daemon with `npm install` on the machine.** Rejected for now:
+it requires npm and outbound network on the machine, where uploading the single
+bundled file needs only `node`. Revisit when the daemon is rewritten.
+
 ## Consequences
 
 - A change to a shipped seam implementation cannot break this plugin unless the

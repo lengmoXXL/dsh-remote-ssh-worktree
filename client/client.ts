@@ -92,64 +92,83 @@ interface WorktreeStatus {
   readonly error?: string
 }
 
-/** One JSON request against the management API. */
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Translate this plugin's copy at call time, so a language change is followed
+ * without anyone subscribing to locale state.
+ */
+type Translate = (key: RemoteWorktreesKey, params?: Record<string, unknown>) => string
+
+/**
+ * One JSON request against the management API.
+ * @param t - the locale seat, for the failure the host did not describe.
+ * @param path - the route below the plugin's prefix.
+ * @param init - the request to send.
+ * @returns the parsed body.
+ * @throws when the host answered with a non-2xx status.
+ */
+async function call<T>(t: Translate, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     credentials: 'same-origin',
     headers: init?.body === undefined ? {} : { 'content-type': 'application/json' },
     ...init,
   })
+  // A failure body is optional: a proxy or an aborted request can answer with
+  // something that is not JSON, and the status below is the fact that matters.
   const body: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
     const message = typeof body === 'object' && body !== null && 'error' in body
       ? String((body as { error: unknown }).error)
-      : `request failed with ${String(response.status)}`
+      : t('requestFailed', { status: response.status })
     throw new Error(message)
   }
   return body as T
 }
 
-/** Build the injected face over the host routes. */
-function sectionFace(): RemoteWorktreesFace {
+/**
+ * Build the injected face over the host routes.
+ * @param t - the locale seat every request failure is reported through.
+ * @returns the face the section drives.
+ */
+function sectionFace(t: Translate): RemoteWorktreesFace {
   return {
     async load(): Promise<Snapshot> {
       const [listing, repos, worktrees] = await Promise.all([
-        call<{ nodes: readonly NodeView[]; statuses: readonly NodeStatus[] }>('/nodes'),
-        call<{ repos: readonly RepoReport[] }>('/repos'),
-        call<{ worktrees: readonly WorktreeStatus[] }>('/worktrees'),
+        call<{ nodes: readonly NodeView[]; statuses: readonly NodeStatus[] }>(t, '/nodes'),
+        call<{ repos: readonly RepoReport[] }>(t, '/repos'),
+        call<{ worktrees: readonly WorktreeStatus[] }>(t, '/worktrees'),
       ])
       return { nodes: listing.nodes, statuses: listing.statuses, repos: repos.repos, worktrees: worktrees.worktrees }
     },
     async addNode(draft) {
-      await call('/nodes', { method: 'POST', body: JSON.stringify(draft) })
+      await call(t, '/nodes', { method: 'POST', body: JSON.stringify(draft) })
     },
     async removeNode(nodeId) {
-      await call(`/nodes/${encodeURIComponent(nodeId)}`, { method: 'DELETE' })
+      await call(t, `/nodes/${encodeURIComponent(nodeId)}`, { method: 'DELETE' })
     },
     async connectNode(nodeId) {
-      await call(`/nodes/${encodeURIComponent(nodeId)}/connect`, { method: 'POST' })
+      await call(t, `/nodes/${encodeURIComponent(nodeId)}/connect`, { method: 'POST' })
     },
     async disconnectNode(nodeId) {
-      await call(`/nodes/${encodeURIComponent(nodeId)}/disconnect`, { method: 'POST' })
+      await call(t, `/nodes/${encodeURIComponent(nodeId)}/disconnect`, { method: 'POST' })
     },
     async addRepo(draft) {
-      await call('/repos', { method: 'POST', body: JSON.stringify(draft) })
+      await call(t, '/repos', { method: 'POST', body: JSON.stringify(draft) })
     },
     async removeRepo(repoId) {
-      await call(`/repos/${encodeURIComponent(repoId)}`, { method: 'DELETE' })
+      await call(t, `/repos/${encodeURIComponent(repoId)}`, { method: 'DELETE' })
     },
     async listDirs(nodeId, path): Promise<DirListing> {
       const query = new URLSearchParams({ path })
-      return await call<DirListing>(`/nodes/${encodeURIComponent(nodeId)}/dirs?${query.toString()}`)
+      return await call<DirListing>(t, `/nodes/${encodeURIComponent(nodeId)}/dirs?${query.toString()}`)
     },
     async createWorktree(draft) {
-      await call('/worktrees', { method: 'POST', body: JSON.stringify(draft) })
+      await call(t, '/worktrees', { method: 'POST', body: JSON.stringify(draft) })
     },
     async removeWorktree(anchorId) {
-      await call(`/worktrees/${encodeURIComponent(anchorId)}?force=true`, { method: 'DELETE' })
+      await call(t, `/worktrees/${encodeURIComponent(anchorId)}?force=true`, { method: 'DELETE' })
     },
     async bringBack(anchorId) {
-      await call(`/worktrees/${encodeURIComponent(anchorId)}/bring-back`, { method: 'POST' })
+      await call(t, `/worktrees/${encodeURIComponent(anchorId)}/bring-back`, { method: 'POST' })
     },
   }
 }
@@ -166,7 +185,9 @@ export const inject = ['slots', 'locale']
  */
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-remote-worktree: dictionaries')
-  const face = sectionFace()
+  // Bound, not called: the seat reads the current language on every use, so a
+  // request that fails after a language change is reported in the new one.
+  const face = sectionFace(ctx.locale.bind(NS))
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'remote-worktrees',

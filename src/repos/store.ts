@@ -22,7 +22,7 @@ import { dirname, posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { NodeId, RepoId } from '../ids.ts'
 
-/** Document revision; a shape change bumps it and refuses the old form. */
+/** Document revision; a field change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1
 
 /** Owner-only permissions: the document names paths on other machines. */

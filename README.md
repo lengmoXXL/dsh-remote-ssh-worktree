@@ -38,7 +38,7 @@ Then open **Settings → Remote worktrees** and add the machine by its **SSH des
 
 ### The forward is opened for you
 
-You do not run `ssh -L` yourself. The daemon binds the machine's loopback, and the host picks a free local port, forwards it to the daemon's port over SSH, and dials through it — the same shape the VS Code Remote-SSH extension uses. The chosen port is shown next to the machine once it connects, and the forward is torn down when the machine is disconnected or the plugin unloads.
+You do not run `ssh -L` yourself. The daemon binds the machine's loopback, and the host picks a free local port, forwards it to the daemon's port over SSH, and dials through it — the same arrangement the VS Code Remote-SSH extension uses. The chosen port is shown next to the machine once it connects, and the forward is torn down when the machine is disconnected or the plugin unloads.
 
 The host shells out to your own `ssh`, so `~/.ssh/config`, `ssh-agent`, `ProxyJump`, and bastion hosts all work as they already do. Authentication is key or agent only: nothing prompts for a password, so a machine that needs one must be unlocked in your agent first, and an unknown host key is refused with the command that would accept it rather than accepted silently.
 
