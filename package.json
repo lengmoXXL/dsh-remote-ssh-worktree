@@ -114,6 +114,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-brand": "^0.1.5-rc.1",
     "@deepseek-ai/schemastery": "^3.18.2",
     "vscode-jsonrpc": "^8.2.0"
   },
