@@ -18,7 +18,7 @@ import type { ConnectOptions, ConnectedNode } from '../node/client.ts'
 import { connectNode } from '../node/client.ts'
 import type { NodeInfo } from '../../shared/protocol.ts'
 import type { NodeRecord } from './registry.ts'
-import { openTunnel } from '../ssh/tunnel.ts'
+import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../ssh/tunnel.ts'
 
 /** Where one node's connection stands. */
 export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'
@@ -72,15 +72,22 @@ export interface NodeConnectionsDeps {
    * {@link DEFAULT_HANDSHAKE_TIMEOUT_MS}; without one an unreachable daemon
    * leaves the attempt pending forever.
    */
-  readonly handshakeTimeoutMs?: number
+  readonly daemonHandshakeTimeoutMs?: number
+  /**
+   * Budget for an SSH forward to start accepting connections. Defaults to
+   * {@link DEFAULT_FORWARD_TIMEOUT_MS}.
+   */
+  readonly sshForwardTimeoutMs?: number
 }
 
 /**
  * How long a handshake may take. Generous enough for a slow forward over a
  * long link, short enough that a daemon which is simply not running is
- * reported rather than waited on.
+ * reported rather than waited on. The plugin exposes this as
+ * `Config.daemonHandshakeTimeoutMs`; it is the fallback for a caller that
+ * composes the manager directly.
  */
-const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000
+export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000
 
 /**
  * Explain a failed connect attempt in the terms the operator can act on.
@@ -106,25 +113,32 @@ function describeFailure(record: NodeRecord, error: unknown): Error {
 }
 
 /**
- * Open the transport one record describes.
- * @param record - the stored machine.
- * @returns the address to dial and the forward carrying it.
- * @throws when the SSH forward could not be established.
+ * Build the default transport opener.
+ * @param forwardTimeoutMs - budget for an SSH forward to become ready.
+ * @returns an opener that dials a direct address as recorded and opens a
+ *   forward for an `ssh` one.
  */
-async function defaultOpenTransport(record: NodeRecord): Promise<ResolvedTransport> {
-  if (record.transport.kind === 'direct') {
-    return {
-      host: record.transport.host,
-      port: record.transport.port,
-      close: () => {},
+function defaultOpenTransport(
+  forwardTimeoutMs: number,
+): (record: NodeRecord) => Promise<ResolvedTransport> {
+  return async (record) => {
+    if (record.transport.kind === 'direct') {
+      return {
+        host: record.transport.host,
+        port: record.transport.port,
+        close: () => {},
+      }
     }
-  }
-  const tunnel = await openTunnel({ ssh: record.transport, remotePort: record.remotePort })
-  return {
-    host: '127.0.0.1',
-    port: tunnel.localPort,
-    exited: tunnel.exited,
-    close: () => { tunnel.close() },
+    const tunnel = await openTunnel(
+      { ssh: record.transport, remotePort: record.remotePort },
+      { readyTimeoutMs: forwardTimeoutMs },
+    )
+    return {
+      host: '127.0.0.1',
+      port: tunnel.localPort,
+      exited: tunnel.exited,
+      close: () => { tunnel.close() },
+    }
   }
 }
 
@@ -178,8 +192,9 @@ interface Entry {
  */
 export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConnections {
   const connect = deps.connect ?? connectNode
-  const openTransport = deps.openTransport ?? defaultOpenTransport
-  const handshakeTimeoutMs = deps.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS
+  const openTransport = deps.openTransport
+    ?? defaultOpenTransport(deps.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS)
+  const handshakeTimeoutMs = deps.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS
   const entries = new Map<string, Entry>()
 
   const entryFor = (nodeId: string): Entry => {
@@ -199,7 +214,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
   }
 
   /** Publish a terminal state and drop everything the failure invalidates. */
-  const fail = (nodeId: string, entry: Entry, error: unknown): void => {
+  const fail = (entry: Entry, error: unknown): void => {
     entry.live?.close()
     entry.live = undefined
     entry.pending = undefined
@@ -269,12 +284,12 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
           // `ready` node whose every call hangs.
           void transport.exited?.then(() => {
             if (entry.transport !== transport) return
-            fail(record.nodeId, entry, new Error(`the SSH forward to "${record.title}" closed`))
+            fail(entry, new Error(`the SSH forward to "${record.title}" closed`))
           })
           return live.info
         } catch (error) {
           const reported = describeFailure(record, error)
-          fail(record.nodeId, entry, reported)
+          fail(entry, reported)
           throw reported
         }
       })()

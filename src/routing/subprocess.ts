@@ -42,7 +42,6 @@ import type {
 } from '@deepseek-ai/dsh-subprocess'
 import type { SpPipeFrame } from '../../shared/protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../node/channel.ts'
-import { NodeRequestError } from '../node/channel.ts'
 import type { AnchorRoute } from './classify.ts'
 import { classifyPath } from './classify.ts'
 

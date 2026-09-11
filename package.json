@@ -24,6 +24,23 @@
     "README.md"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lengmoXXL/dsh-remote-ssh-worktrees.git"
+  },
+  "homepage": "https://github.com/lengmoXXL/dsh-remote-ssh-worktrees#readme",
+  "bugs": {
+    "url": "https://github.com/lengmoXXL/dsh-remote-ssh-worktrees/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "remote",
+    "ssh",
+    "worktree",
+    "git"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -40,7 +57,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-bash-local": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-bash-sandbox": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
@@ -56,10 +73,10 @@
     "@deepseek-ai/dsh-shell": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-subprocess": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-subprocess-local": "^0.1.5-rc.1",
-    "@deepseek-ai/schemastery": "*"
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-bash-local": "0.1.5-rc.1",
     "@deepseek-ai/dsh-bash-sandbox": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
@@ -80,10 +97,10 @@
     "@deepseek-ai/dsh-subprocess-local": "0.1.5-rc.1",
     "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.1",
-    "@deepseek-ai/schemastery": "3.18.2",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "lightningcss": "^1.33.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsdown": "^0.23.0",
@@ -92,6 +109,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.2",
     "vscode-jsonrpc": "^8.2.0"
   },
   "engines": {
@@ -124,6 +142,9 @@
     "build:host": "tsdown -c tsdown.host.config.ts",
     "build:client": "tsdown",
     "build:agent": "tsdown -c tsdown.agent.config.ts",
-    "build": "npm run build:host && npm run build:client && npm run build:agent"
+    "build": "npm run build:host && npm run build:client && npm run build:agent",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:agent": "node --test --experimental-strip-types agent/tests/*.test.ts",
+    "test:all": "npm run test && npm run test:agent"
   }
 }

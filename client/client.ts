@@ -8,8 +8,9 @@
  * host half registers; the browser side has no privileged access and no other
  * way in.
  *
- * The module is the plugin body: it installs the section's stylesheet,
- * registers the locale dictionaries, and contributes one component. The
+ * The module is the plugin body: it registers the locale dictionaries and
+ * contributes one component. The section's stylesheet travels inside
+ * `Section`, which attaches it to the document when it is first evaluated. The
  * component itself receives all data and callbacks through its prop shares.
  *
  * @module dsh-remote-worktree/client
@@ -24,7 +25,6 @@ import type { DirListing, RemoteWorktreesFace, Snapshot } from './Section.tsx'
 import { RemoteWorktreesSection } from './Section.tsx'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { en, NS, zh } from './locales.ts'
-import { installStyles } from './styles.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -165,7 +165,6 @@ export const inject = ['slots', 'locale']
  * @param ctx - the client context this plugin was mounted on.
  */
 export function apply(ctx: Context): void {
-  if (typeof document !== 'undefined') installStyles(document)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-remote-worktree: dictionaries')
   const face = sectionFace()
   ctx.slots.inject('settings.section', () => ctx.slots.register({

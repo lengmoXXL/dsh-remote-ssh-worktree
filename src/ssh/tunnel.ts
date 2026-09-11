@@ -68,8 +68,12 @@ export interface TunnelProcess {
   kill(): void
 }
 
-/** Default budget for a forward to start accepting connections. */
-const READY_TIMEOUT_MS = 15_000
+/**
+ * Default budget for a forward to start accepting connections. The plugin
+ * exposes this as `Config.sshForwardTimeoutMs`; it is the fallback for a caller
+ * that composes the tunnel directly.
+ */
+export const DEFAULT_FORWARD_TIMEOUT_MS = 15_000
 
 /** Default gap between readiness probes. */
 const READY_POLL_MS = 120
@@ -234,7 +238,7 @@ export async function openTunnel(spec: TunnelSpec, deps: TunnelDeps = {}): Promi
       spec.ssh.target,
       localPort,
       process,
-      deps.readyTimeoutMs ?? READY_TIMEOUT_MS,
+      deps.readyTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS,
       deps.readyPollMs ?? READY_POLL_MS,
     )
   } catch (error) {

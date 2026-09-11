@@ -31,9 +31,10 @@ import z from '@deepseek-ai/schemastery'
 import { join } from 'node:path'
 import { createAnchorStore } from './anchors/store.ts'
 import { registerWorktreeCommand } from './commands.ts'
-import { createNodeConnections } from './nodes/connections.ts'
+import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './nodes/connections.ts'
 import { createNodeRegistry, defaultNodeTitle } from './nodes/registry.ts'
 import { createRepoStore } from './repos/store.ts'
+import { DEFAULT_FORWARD_TIMEOUT_MS } from './ssh/tunnel.ts'
 import { createRoutingFileSystem } from './routing/fs.ts'
 import { createRoutingShellExecutor } from './routing/shell.ts'
 import { createRoutingSubprocessRuntime } from './routing/subprocess.ts'
@@ -63,12 +64,31 @@ export interface Config {
    * Remote binary a host-resolved ripgrep is rewritten to. Defaults to `rg`.
    */
   remoteRipgrep?: string
+  /**
+   * How long the SSH forward may take to start accepting connections, in
+   * milliseconds. Defaults to {@link DEFAULT_FORWARD_TIMEOUT_MS}.
+   *
+   * A deployment across a slow link or through a bastion raises this; the
+   * failure it prevents is a forward that was still negotiating when the
+   * budget ran out.
+   */
+  sshForwardTimeoutMs?: number
+  /**
+   * How long the daemon may take to answer the handshake once its forward is
+   * up, in milliseconds. Defaults to {@link DEFAULT_HANDSHAKE_TIMEOUT_MS}.
+   *
+   * This is what turns "the daemon is not running" into a report instead of a
+   * call that never returns, so a deployment should not raise it far.
+   */
+  daemonHandshakeTimeoutMs?: number
 }
 
 /** Validated plugin config. */
 export const Config: z<Config> = z.object({
   dataDir: z.string(),
   remoteRipgrep: z.string(),
+  sshForwardTimeoutMs: z.number().step(1).min(1),
+  daemonHandshakeTimeoutMs: z.number().step(1).min(1),
 })
 
 /**
@@ -89,7 +109,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const repos = createRepoStore({ file: join(dataDir, 'repos.json') })
   await repos.load()
 
-  const connections = createNodeConnections()
+  const connections = createNodeConnections({
+    sshForwardTimeoutMs: config.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS,
+    daemonHandshakeTimeoutMs: config.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS,
+  })
   ctx.effect(() => () => {
     connections.dispose()
   })
@@ -225,7 +248,8 @@ export { NodeRequestError } from './node/channel.ts'
 export type { ChannelLookup, NodeChannel } from './node/channel.ts'
 export { connectNode } from './node/client.ts'
 export type { ConnectOptions, ConnectedNode } from './node/client.ts'
-export { createNodeConnections } from './nodes/connections.ts'
+export { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './nodes/connections.ts'
+export { DEFAULT_FORWARD_TIMEOUT_MS } from './ssh/tunnel.ts'
 export type { NodeConnections, NodeState, NodeStatus } from './nodes/connections.ts'
 export { createNodeRegistry, toNodeView } from './nodes/registry.ts'
 export type { NodeDraft, NodeRecord, NodeRegistry, NodeView } from './nodes/registry.ts'

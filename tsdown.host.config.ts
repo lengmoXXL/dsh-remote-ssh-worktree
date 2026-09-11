@@ -15,7 +15,8 @@ export default defineConfig({
   format: 'esm',
   platform: 'node',
   target: 'node22',
-  dts: false,
+  // `package.json` names `lib/index.d.ts`, so the declaration must exist.
+  dts: true,
   sourcemap: true,
   clean: true,
   // `package.json` names `lib/index.js`, which is the convention a profile

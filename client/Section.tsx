@@ -34,7 +34,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { NS } from './locales.ts'
-import { CLASS } from './styles.ts'
+import css from './Section.module.css'
 
 /** The locale seat this section reads, including its template parameters. */
 type T = (key: RemoteWorktreesKey, params?: Record<string, unknown>) => string
@@ -203,10 +203,10 @@ function Field({ label, hint, children }: {
   children: ReactNode
 }) {
   return (
-    <div className={CLASS.field}>
-      <span className={CLASS.label}>{label}</span>
+    <div className={css.field}>
+      <span className={css.label}>{label}</span>
       {children}
-      {hint === undefined ? null : <span className={CLASS.hint}>{hint}</span>}
+      {hint === undefined ? null : <span className={css.hint}>{hint}</span>}
     </div>
   )
 }
@@ -215,7 +215,7 @@ function Field({ label, hint, children }: {
 function DialogError({ message }: { message: string | undefined }) {
   if (message === undefined) return null
   return (
-    <div className={CLASS.alert}>
+    <div className={css.alert}>
       <IconWarningOutline16 />
       <span>{message}</span>
     </div>
@@ -229,7 +229,7 @@ function RepoFacts({ state, error, t }: {
   t: T
 }) {
   if (state === undefined) {
-    return <span className={CLASS.dim}>{error ?? '—'}</span>
+    return <span className={css.dim}>{error ?? '—'}</span>
   }
   return (
     <>
@@ -315,7 +315,7 @@ function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
         </>
       )}
     >
-      <div className={CLASS.fields}>
+      <div className={css.fields}>
         <DialogError message={error} />
         <Field label={t('fieldTarget')} hint={t('hintTarget')}>
           <Input value={target} placeholder="user@build-01" onChange={e => setTarget(e.target.value)} />
@@ -383,8 +383,8 @@ function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
   const parent = listing === undefined ? undefined : parentOf(listing.path)
 
   return (
-    <div className={CLASS.picker}>
-      <div className={CLASS.pickerBar}>
+    <div className={css.picker}>
+      <div className={css.pickerBar}>
         <Button
           size="sm"
           icon={<IconChevronLeftOutline14 />}
@@ -393,20 +393,20 @@ function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
         >
           {t('pickerUp')}
         </Button>
-        <span className={CLASS.pickerPath} title={listing?.path ?? value}>{listing?.path ?? value}</span>
+        <span className={css.pickerPath} title={listing?.path ?? value}>{listing?.path ?? value}</span>
         <Button size="sm" disabled={loading || listing === undefined} onClick={() => { if (listing !== undefined) onChange(listing.path) }}>
           {t('pickerUse')}
         </Button>
       </div>
       <DialogError message={error} />
-      <div className={CLASS.pickerList}>
+      <div className={css.pickerList}>
         {entries.length === 0
-          ? <div className={CLASS.pickerEmpty}>{loading ? t('loading') : t('pickerEmpty')}</div>
+          ? <div className={css.pickerEmpty}>{loading ? t('loading') : t('pickerEmpty')}</div>
           : entries.map(entry => (
             <button
               key={entry.path}
               type="button"
-              className={CLASS.pickerItem}
+              className={css.pickerItem}
               onClick={() => void browse(entry.path)}
             >
               <IconFolderOpen16 />
@@ -476,7 +476,7 @@ function AddRepoDialog({ open, nodeId, busy, onClose, onSubmit, listDirs, t }: {
         </>
       )}
     >
-      <div className={CLASS.fields}>
+      <div className={css.fields}>
         <DialogError message={error} />
         <Field label={t('fieldRepository')} hint={t('hintRepository')}>
           <Input value={repoPath} onChange={e => setRepoPath(e.target.value)} placeholder="/workspace/project" />
@@ -543,7 +543,7 @@ function NewWorktreeDialog({ open, repo, busy, onClose, onSubmit, t }: {
         </>
       )}
     >
-      <div className={CLASS.fields}>
+      <div className={css.fields}>
         <DialogError message={error} />
         <Field label={t('fieldWorktreeName')} hint={t('hintWorktreeName')}>
           <Input value={name} placeholder="feature-x" onChange={e => setName(e.target.value)} />
@@ -573,14 +573,14 @@ function WorktreeRow({ entry, busy, onRemove, onBringBack, t }: {
   t: T
 }) {
   return (
-    <div className={CLASS.worktree}>
+    <div className={css.worktree}>
       <IconBranchOutline16 />
-      <span className={CLASS.worktreeMain}>
-        <span className={CLASS.worktreeName}>{entry.anchor.name}</span>
-        <span className={CLASS.meta}>{entry.anchor.branch}</span>
-        {entry.error === undefined ? null : <span className={CLASS.dim}>{entry.error}</span>}
+      <span className={css.worktreeMain}>
+        <span className={css.worktreeName}>{entry.anchor.name}</span>
+        <span className={css.meta}>{entry.anchor.branch}</span>
+        {entry.error === undefined ? null : <span className={css.dim}>{entry.error}</span>}
       </span>
-      <span className={CLASS.trailing}>
+      <span className={css.trailing}>
         <Button
           size="sm"
           icon={<IconRightUpOutline16 />}
@@ -676,13 +676,13 @@ export function RemoteWorktreesSection(props: SectionProps) {
   const nodes = snapshot?.nodes ?? []
 
   return (
-    <div className={CLASS.section}>
-      <div className={CLASS.head}>
-        <h3 className={CLASS.title}>{t('title')}</h3>
-        <p className={CLASS.subtitle}>{t('subtitle')}</p>
+    <div className={css.section}>
+      <div className={css.head}>
+        <h3 className={css.title}>{t('title')}</h3>
+        <p className={css.subtitle}>{t('subtitle')}</p>
       </div>
 
-      <div className={CLASS.toolbar}>
+      <div className={css.toolbar}>
         <Button
           variant="outline"
           icon={<IconPlusOutline16 />}
@@ -697,18 +697,18 @@ export function RemoteWorktreesSection(props: SectionProps) {
       </div>
 
       {error === undefined ? null : (
-        <div className={CLASS.alert} role="alert">
+        <div className={css.alert} role="alert">
           <IconWarningOutline16 />
           <span>{error}</span>
         </div>
       )}
 
       {snapshot === undefined ? (
-        <div className={CLASS.empty}>{t('loading')}</div>
+        <div className={css.empty}>{t('loading')}</div>
       ) : nodes.length === 0 ? (
-        <div className={CLASS.empty}>{t('machinesEmpty')}</div>
+        <div className={css.empty}>{t('machinesEmpty')}</div>
       ) : (
-        <div className={CLASS.tree}>
+        <div className={css.tree}>
           {nodes.map(node => {
             const status = statusFor(node.nodeId)
             const state = status?.state ?? 'idle'
@@ -716,7 +716,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
             const machineOpen = openMachines.includes(node.nodeId)
             const repos = reposOf(node.nodeId)
             return (
-              <div key={node.nodeId} className={CLASS.card}>
+              <div key={node.nodeId} className={css.card}>
                 <DisclosureRow
                   icon={<IconGlobeOutline14 />}
                   title={node.title}
@@ -724,22 +724,22 @@ export function RemoteWorktreesSection(props: SectionProps) {
                   expandable
                   expandOnRowClick
                   keepContentWhenOpen
-                  rowClassName={CLASS.row}
-                  leadingClassName={CLASS.leading}
+                  rowClassName={css.row}
+                  leadingClassName={css.leading}
                   onToggle={() => toggle(openMachines, setOpenMachines, node.nodeId)}
                   collapsedContent={(
-                    <span className={CLASS.trailing}>
-                      <span className={CLASS.meta}>{node.transport.target}</span>
+                    <span className={css.trailing}>
+                      <span className={css.meta}>{node.transport.target}</span>
                       {status?.localPort === undefined
                         ? null
                         : <Tag tone="neutral">{t('forwarding', { port: status.localPort })}</Tag>}
                       {node.hasToken ? null : <Tag tone="warning">{t('noToken')}</Tag>}
                       <StateDot state={badge.dot} />
-                      <span className={CLASS.meta}>{t(badge.key)}</span>
+                      <span className={css.meta}>{t(badge.key)}</span>
                     </span>
                   )}
                 >
-                  <div className={CLASS.actions}>
+                  <div className={css.actions}>
                     {state === 'ready'
                       ? (
                         <Button
@@ -780,15 +780,15 @@ export function RemoteWorktreesSection(props: SectionProps) {
                       {t('removeMachine')}
                     </Button>
                   </div>
-                  <div className={CLASS.repos}>
+                  <div className={css.repos}>
                     {repos.length === 0
-                      ? <div className={CLASS.empty}>{t('repositoriesEmpty')}</div>
+                      ? <div className={css.empty}>{t('repositoriesEmpty')}</div>
                       : repos.map(entry => {
                         const repo = entry.repo
                         const repoOpen = openRepos.includes(repo.repoId)
                         const worktrees = worktreesOf(repo)
                         return (
-                          <div key={repo.repoId} className={CLASS.repoCard}>
+                          <div key={repo.repoId} className={css.repoCard}>
                             <DisclosureRow
                               icon={<IconFolderOpen16 />}
                               title={repo.name}
@@ -796,16 +796,16 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               expandable
                               expandOnRowClick
                               keepContentWhenOpen
-                              rowClassName={CLASS.row}
-                              leadingClassName={CLASS.leading}
+                              rowClassName={css.row}
+                              leadingClassName={css.leading}
                               onToggle={() => toggle(openRepos, setOpenRepos, repo.repoId)}
                               collapsedContent={(
-                                <span className={CLASS.trailing}>
+                                <span className={css.trailing}>
                                   <RepoFacts state={entry.state} error={entry.error} t={t} />
                                 </span>
                               )}
                             >
-                              <div className={CLASS.actions}>
+                              <div className={css.actions}>
                                 <Button
                                   size="sm"
                                   icon={<IconPlusOutline16 />}
@@ -827,9 +827,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                   {t('forgetRepository')}
                                 </Button>
                               </div>
-                              <div className={CLASS.worktrees}>
+                              <div className={css.worktrees}>
                                 {worktrees.length === 0
-                                  ? <div className={CLASS.empty}>{t('worktreesEmpty')}</div>
+                                  ? <div className={css.empty}>{t('worktreesEmpty')}</div>
                                   : worktrees.map(item => (
                                     <WorktreeRow
                                       key={item.anchor.anchorId}
@@ -906,8 +906,8 @@ export function RemoteWorktreesSection(props: SectionProps) {
           </>
         )}
       >
-        <div className={CLASS.confirm}>
-          <p className={CLASS.subtitle}>
+        <div className={css.confirm}>
+          <p className={css.subtitle}>
             {confirmation === undefined ? null : t(confirmation.bodyKey)}
           </p>
         </div>

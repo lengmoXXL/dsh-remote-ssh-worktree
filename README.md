@@ -72,14 +72,6 @@ The model sees the same vocabulary through `rw_list`, `rw_create`, `rw_bring_bac
 - **The daemon is a plain Node program.** It depends on neither Cordis nor any `@deepseek-ai/*` package, so it cannot drift with the Harness.
 - **A remote world is not sandboxed.** `ctx.sandbox` wraps processes for *this* host's kernel, so it cannot confine a process on another machine. The machine is the boundary, and the approval policy is the tripwire.
 
-## Known limitations
-
-- **A stalled piped stream costs the process, not the daemon.** Raw `stdout`/`stderr` is pushed, so a consumer that stops reading would otherwise grow the daemon's memory without bound. After 64 unacknowledged frames on one stream (about 4 MiB) the daemon stops sending that process's frames and terminates it. The client can see the gap from the last sequence number it received; a terminated process is recoverable where an exhausted daemon is not.
-- **Termination reports a killed process, not a clean exit.** The managed ladder ends in `SIGKILL`, so a terminal or process torn down through it reports `null`/non-zero rather than `0`.
-- **Spill files stay on the machine.** Collected output beyond its in-memory cap is retained as a bounded tail; the full stream is not fetched to the host.
-- **An attachment cannot be read remotely.** The Harness resolves an image or file from a host path, which names a file this world cannot read; the failure surfaces at the daemon rather than as a wrong file.
-- **The client surface is a settings section only.** There is no directory-flow integration, so a worktree is opened by its printed local path. The section's directory picker lists through the same remote filesystem a session sees, so what it shows is what a session opened on the result would read.
-
 ## Verification
 
 Everything the plugin does has been exercised against a real second host — a Linux VM reached through an SSH tunnel, which is the documented deployment — not only against a daemon on loopback: handshake, guarded file writes, commands running as the remote user in the remote working directory, live piped stdout crossing the network while the child still runs, a `git worktree` cut and removed through the plugin's own lifecycle, and a PTY allocated and answering on the machine.
@@ -102,6 +94,57 @@ node scripts/verify-remote-host.ts 14780 <token-file>
 - `node-pty` on the machine (installed with the daemon) for terminal support — it ships prebuilds, so no compiler is needed.
 - `git` on the machine for the worktree lifecycle.
 
-## License
+## Model Experience
 
-MIT.
+### Remote worktree tools
+
+#### What the model sees
+
+Four tools are registered when a session runs: `rw_list`, `rw_create`,
+`rw_bring_back`, and `rw_remove`. Each takes string identifiers — a machine id,
+an absolute repository path, and a worktree name — and returns the local anchor
+path of the worktree it acted on. Their schemas and prose are rendered in the
+generated [tool catalog](../../docs/tool-catalog.md).
+
+#### Token effect
+
+Fixed per turn while the plugin is mounted: four tool schemas are present in
+every request whether or not the model uses them, in proportion to the rendered
+schema length. Unmounting the plugin removes all four.
+
+#### KV Cache effect
+
+Prefix-stable. The schemas and their order do not depend on session data, so a
+request prefix that included them stays reusable across turns. A `rw_*` result
+is an ordinary tool result appended after the cached prefix and does not
+invalidate it.
+
+### Stock tools routed to a machine
+
+#### What the model sees
+
+`read`, `write`, `edit`, `bash`, `grep`, glob, and the terminal run against the
+machine for any path under a registered anchor, with no change to their schemas
+or prompts. What changes is the data: results carry **machine** paths (for
+example `/workspace/app/src/main.ts`) rather than local ones, and the process
+facts a `bash` result reports — user, working directory, exit status — describe
+the machine.
+
+#### Token effect
+
+Zero direct effect. The plugin contributes no prompt text of its own; only the
+tool results a session already produces change content.
+
+#### KV Cache effect
+
+Append-only. The routed results are ordinary tool results, so they extend the
+transcript without replacing earlier request tokens. Because the same content is
+never produced twice, a routed result does not itself invalidate reuse.
+
+## Known Limitations and Deferred Work
+
+- **A stalled piped stream costs the process, not the daemon.** Raw `stdout`/`stderr` is pushed, so a consumer that stops reading would otherwise grow the daemon's memory without bound. After 64 unacknowledged frames on one stream (about 4 MiB) the daemon stops sending that process's frames and terminates it. The client can see the gap from the last sequence number it received; a terminated process is recoverable where an exhausted daemon is not.
+- **Termination reports a killed process, not a clean exit.** The managed ladder ends in `SIGKILL`, so a terminal or process torn down through it reports `null`/non-zero rather than `0`.
+- **Spill files stay on the machine.** Collected output beyond its in-memory cap is retained as a bounded tail; the full stream is not fetched to the host.
+- **An attachment cannot be read remotely.** The Harness resolves an image or file from a host path, which names a file this world cannot read; the failure surfaces at the daemon rather than as a wrong file.
+- **The client surface is a settings section only.** There is no directory-flow integration, so a worktree is opened by its printed local path. The section's directory picker lists through the same remote filesystem a session sees, so what it shows is what a session opened on the result would read.

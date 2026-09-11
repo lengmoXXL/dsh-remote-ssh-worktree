@@ -24,11 +24,6 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const bundlePath = join(here, '..', 'client', 'client.cjs')
 
-/** Primitives the section imports, rendered as inert stand-ins. */
-const PRIMITIVE_NAMES = [
-  'Button', 'DisclosureRow', 'Input', 'Modal', 'StateDot', 'Tag',
-] as const
-
 /** Icons the section imports; every one renders an empty svg. */
 const ICON_NAMES = [
   'IconBranchOutline16', 'IconChevronLeftOutline14', 'IconFolderOpen16', 'IconGlobeOutline14',
@@ -222,4 +217,29 @@ test('the section renders its frame with the injected face threaded through', as
   assert.match(markup, /addMachine/)
   assert.match(markup, /refresh/)
   assert.match(markup, /loading/)
+})
+
+test('the bundle carries its stylesheet inlined under hashed local names', async () => {
+  const source = await readFile(bundlePath, 'utf8')
+
+  // A dynamic bundle has no stylesheet channel, so the build compiles the CSS
+  // Module into the artifact and attaches one tagged <style> at factory time.
+  assert.match(source, /data-plugin-css/)
+  // Local names, so nothing this section renders can collide with the shell or
+  // another plugin: `drw-section` must not survive into the artifact.
+  assert.equal(source.includes('drw-section'), false)
+  assert.match(source, /\.[A-Za-z0-9]{6}_section\s*\{/)
+  // The component resolves those names through the compiled map, not a literal.
+  assert.match(source, /"section":\s*"[A-Za-z0-9]{6}_section"/)
+})
+
+test('the bundle inlines every dependency the shell does not provide', async () => {
+  const source = await readFile(bundlePath, 'utf8')
+  const required = [...source.matchAll(/require\("([^"]+)"\)/g)].map(match => match[1]).sort()
+
+  // The module table supplies React and the client stack; everything else is
+  // inlined, so a bundled helper must not appear as a request.
+  for (const name of required) {
+    assert.match(String(name), /^(react($|\/)|@deepseek-ai\/)/, `unexpected request "${String(name)}"`)
+  }
 })

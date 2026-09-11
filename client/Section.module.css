@@ -1,0 +1,169 @@
+/*
+ * Styles for the Remote worktrees settings section.
+ *
+ * Class names are local: the client bundle inlines this stylesheet through the
+ * build's CSS Modules plugin, which hashes every selector and hands the
+ * component the resulting map. Nothing here is global.
+ *
+ * Every value is a semantic --dsw-* alias, never a literal colour, so the
+ * section follows the shell's light and dark themes without a second palette.
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+  font-size: 13px;
+}
+.head { display: flex; flex-direction: column; gap: 6px; }
+.title { margin: 0; font-size: 14px; font-weight: 600; }
+.subtitle {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 8px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.empty {
+  padding: 10px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.tree { display: flex; flex-direction: column; gap: 8px; }
+.card {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  overflow: hidden;
+}
+.trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  /* Keeps the cluster off the title however short the title is. */
+  padding-left: 14px;
+  /* A leading title truncates before the status or an action is squeezed. */
+  flex: 0 0 auto;
+}
+/* The shared disclosure row is a 24px line built for dense list rows. A
+   machine or repository header carries a status cluster, so it gets the height
+   and the horizontal room that cluster needs. */
+/* Scoped under the card so these rules outrank the primitive's own module
+   classes regardless of which stylesheet the document received last. */
+.card .row {
+  height: auto;
+  min-height: calc(28px + var(--dsh-content-font-delta, 0px));
+  /* Horizontal padding belongs on the row: without it the status cluster ends
+     flush against the card border while the leading glyph only looks inset. */
+  padding: 3px 12px;
+}
+/* The shared row is built for dense lists and leaves 6px between the glyph and
+   the title; a header in this tree reads better with more. */
+.card .leading {
+  margin-right: 8px;
+}
+.meta {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dim { color: var(--dsw-alias-label-dimmed); font-size: 12px; }
+.path {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  word-break: break-all;
+}
+.repos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px 22px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+.repoCard {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+}
+.worktrees {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px 8px 22px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+.worktree {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.worktree:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.worktreeMain { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.worktreeName {
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+}
+.actions { display: flex; align-items: center; gap: 8px; padding: 7px 12px; flex-wrap: wrap; }
+.fields { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.label { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.hint { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 1.5; }
+.picker { display: flex; flex-direction: column; gap: 8px; }
+.pickerBar { display: flex; align-items: center; gap: 8px; }
+.pickerPath {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+.pickerList {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+.pickerItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.pickerItem:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pickerEmpty { padding: 14px 10px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.confirm { display: flex; flex-direction: column; gap: 12px; }
