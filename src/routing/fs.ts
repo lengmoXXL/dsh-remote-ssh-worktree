@@ -1,0 +1,454 @@
+/**
+ * The routing filesystem the plugin registers as `ctx.fs`.
+ *
+ * It is a plain object, not a subclass: `ctx.provide('fs', …)` is the primitive
+ * Cordis' own `Service` constructor calls, so no implementation class — not
+ * even the abstract seam class — is inherited here. `FileSystem` supplies the
+ * contract type only, and `FileSystemContract` narrows it to the members this
+ * provider must implement.
+ *
+ * The local branch delegates to the factory `SandboxedFileSystem` instance the
+ * caller composed in an isolated scope, so sandbox fencing, atomic publication,
+ * version guards, and cross-chunk decoding keep their shipped behavior. The
+ * remote branch forwards to the node's daemon and maps its answers back onto
+ * the same seam vocabulary.
+ *
+ * @module dsh-remote-worktree/routing/fs
+ */
+
+import type { FileSystem, FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsTarget, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { TARGET_KEY_PREFIX, isFsErrorCode } from '../../shared/protocol.ts'
+import type { ChannelLookup, NodeChannel } from '../node/channel.ts'
+import { NodeRequestError } from '../node/channel.ts'
+import type { AnchorRoute } from './classify.ts'
+import { classifyPath, isWithin } from './classify.ts'
+
+/** Bytes per remote text pull. Bounds one round trip without capping file size. */
+const TEXT_CHUNK_BYTES = 1 << 20
+
+/** Remote paths `workspace-write` always permits, matching the local provider's temp allowance. */
+const REMOTE_TEMP_ROOT = '/tmp'
+
+/**
+ * The members this provider implements, narrowed from the seam class so the
+ * object literal is checked against the real contract without inheriting the
+ * `Service` members that make the class nominally typed.
+ */
+export type FileSystemContract = Pick<
+  FileSystem,
+  | 'resolve'
+  | 'processPath'
+  | 'processPathFromHostPath'
+  | 'fileUrl'
+  | 'contains'
+  | 'stat'
+  | 'lstat'
+  | 'readText'
+  | 'streamText'
+  | 'readBytes'
+  | 'readByteRange'
+  | 'listDir'
+  | 'writeText'
+  | 'editText'
+  | 'sandboxMode'
+>
+
+/** What the routing filesystem needs from its owner. */
+export interface RoutingFileSystemDeps {
+  /** The composed factory implementation serving every local path. */
+  readonly localFs: FileSystem
+  /** Every anchor this plugin currently owns. */
+  readonly anchors: () => readonly AnchorRoute[]
+  /** Resolves the live channel for a node; undefined means "not connected". */
+  readonly channel: ChannelLookup
+}
+
+/** A target key the plugin minted, decomposed back into its two facts. */
+type ParsedKey =
+  | { readonly kind: 'local' }
+  | { readonly kind: 'remote'; readonly nodeId: string; readonly remotePath: string }
+
+/** Compose the opaque key the harness passes back to this provider. */
+function composeKey(nodeId: string, remotePath: string): FsTargetKey {
+  return FsTargetKey(`${TARGET_KEY_PREFIX}${nodeId}:${remotePath}`)
+}
+
+/**
+ * Decompose this provider's own key. The seam forbids a *consumer* from
+ * parsing a key; the provider that mints one owns its format.
+ * @param key - a key this provider previously returned.
+ * @returns the local verdict, or the node and remote path for a remote target.
+ */
+function parseKey(key: FsTargetKey): ParsedKey {
+  const raw = key as string
+  if (!raw.startsWith(TARGET_KEY_PREFIX)) return { kind: 'local' }
+  const rest = raw.slice(TARGET_KEY_PREFIX.length)
+  const separator = rest.indexOf(':')
+  if (separator <= 0 || !rest.slice(separator + 1).startsWith('/')) return { kind: 'local' }
+  return { kind: 'remote', nodeId: rest.slice(0, separator), remotePath: rest.slice(separator + 1) }
+}
+
+/** The remote target the daemon needs, or a typed failure when the node is offline. */
+function requireChannel(deps: RoutingFileSystemDeps, nodeId: string) {
+  const channel = deps.channel(nodeId)
+  if (channel === undefined) {
+    throw new FsError(
+      `remote node "${nodeId}" is not connected; open the machine before using this workspace`,
+      'FS_IO_ERROR',
+    )
+  }
+  return channel
+}
+
+/**
+ * Translate a daemon failure into the seam's typed error so callers branch on
+ * the same codes they would see locally. A failure outside the filesystem
+ * family is left as the transport error it is.
+ * @param error - any failure raised by a channel request.
+ * @returns the error to throw.
+ */
+function toFsError(error: unknown): unknown {
+  if (!(error instanceof NodeRequestError)) return error
+  if (!isFsErrorCode(error.data.code)) return error
+  return new FsError(error.data.message, error.data.code)
+}
+
+/** Reject an operation whose signal already fired, before any round trip. */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) throw new FsError('filesystem operation aborted', 'FS_ABORTED')
+}
+
+/**
+ * The failure an ambiguous remote path raises. Two nodes commonly share a
+ * remote root, and picking one would read on one machine while writing on
+ * another, so the path is refused with the spellings that would work.
+ * @param route - the ambiguous verdict naming every claiming node.
+ * @returns the typed error to throw.
+ */
+function ambiguousError(route: { readonly remotePath: string; readonly nodeIds: readonly string[] }): FsError {
+  return new FsError(
+    `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
+    + 'address it as node:<id>:<path>',
+    'FS_IO_ERROR',
+  )
+}
+
+/**
+ * Pull one remote text file as decoded chunks.
+ *
+ * The daemon decodes and rejects binary content, so this loop never splits a
+ * code point; the plugin only reassembles what it is given.
+ * @param channel - the live node channel.
+ * @param remotePath - canonical remote path.
+ * @param signal - aborts the pull between round trips.
+ * @returns the chunk iterable.
+ */
+function remoteTextStream(
+  channel: NodeChannel,
+  remotePath: string,
+  signal: AbortSignal | undefined,
+): AsyncIterable<string> {
+  return (async function* pull() {
+    let offset = 0
+    for (;;) {
+      throwIfAborted(signal)
+      let chunk
+      try {
+        chunk = await channel.request('fs.readTextChunk', {
+          path: remotePath,
+          offset,
+          length: TEXT_CHUNK_BYTES,
+        })
+      } catch (error) {
+        throw toFsError(error)
+      }
+      if (chunk.text.length > 0) yield chunk.text
+      offset = chunk.nextOffset
+      if (chunk.eof) return
+    }
+  })()
+}
+
+/**
+ * Whether the resolved policy permits writing `remotePath` on a node.
+ *
+ * A remote world is not confined by `ctx.sandbox`, so the only enforceable
+ * boundary is the one this provider applies per call: `workspace-write` allows
+ * the anchor's remote root and the remote temp area, `read-only` allows
+ * nothing, and `danger-full-access` allows everything.
+ * @param policy - the per-call policy the caller resolved, when it supplied one.
+ * @param remotePath - the canonical remote path about to be written.
+ * @param remoteRoot - the anchor's remote root, or undefined when unknown.
+ * @returns true when the write may proceed.
+ */
+function remoteWriteAllowed(
+  policy: SandboxExecutionPolicy | undefined,
+  remotePath: string,
+  remoteRoot: string | undefined,
+): boolean {
+  if (policy === undefined) return true
+  switch (policy.mode) {
+    case 'danger-full-access': return true
+    case 'read-only': return false
+    case 'workspace-write':
+      if (isWithin(REMOTE_TEMP_ROOT, remotePath)) return true
+      return remoteRoot !== undefined && isWithin(remoteRoot, remotePath)
+    default:
+      return false
+  }
+}
+
+/**
+ * Build the routing filesystem.
+ * @param deps - the composed local delegate, the live anchors, and channel lookup.
+ * @returns an object satisfying the filesystem seam, ready for `ctx.provide`.
+ */
+export function createRoutingFileSystem(deps: RoutingFileSystemDeps): FileSystemContract {
+  /** The anchor whose remote root owns `remotePath`, when one does. */
+  const anchorFor = (nodeId: string, remotePath: string): AnchorRoute | undefined =>
+    deps.anchors().find(anchor =>
+      anchor.nodeId === nodeId && isWithin(anchor.remoteRoot, remotePath))
+
+  const router: FileSystemContract = {
+    // Delegated for the same reason as the shell executor: this provider really
+    // does fence local mutations at the deployment's mode through the composed
+    // sandboxed filesystem, and reporting `undefined` would misstate that.
+    // Remote writes are bounded by the remote policy instead.
+    get sandboxMode(): SandboxMode | undefined {
+      return deps.localFs.sandboxMode
+    },
+
+    async resolve(path, opts) {
+      throwIfAborted(opts?.signal)
+      const route = classifyPath(path, opts?.cwd, deps.anchors())
+      if (route.kind === 'local') return deps.localFs.resolve(path, opts)
+      if (route.kind === 'ambiguous') throw ambiguousError(route)
+      const channel = requireChannel(deps, route.nodeId)
+      try {
+        const resolved = await channel.request('fs.resolve', { path: route.remotePath })
+        return {
+          targetKey: composeKey(route.nodeId, resolved.canonicalPath),
+          displayPath: resolved.canonicalPath,
+        }
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    processPath(target) {
+      const parsed = parseKey(target.targetKey)
+      return parsed.kind === 'local'
+        ? deps.localFs.processPath(target)
+        : parsed.remotePath
+    },
+
+    // A host file is not a remote file. Delegating keeps local attachments
+    // working; an attachment inside a remote session resolves to a host path
+    // the remote world cannot read, and fails there with the daemon's own
+    // error rather than silently reading a different file.
+    processPathFromHostPath(hostPath) {
+      return deps.localFs.processPathFromHostPath(hostPath)
+    },
+
+    fileUrl(target) {
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.fileUrl(target)
+      return `file://${parsed.remotePath.split('/').map(encodeURIComponent).join('/')}`
+    },
+
+    contains(parent, child) {
+      const left = parseKey(parent.targetKey)
+      const right = parseKey(child.targetKey)
+      if (left.kind === 'local' || right.kind === 'local') {
+        return left.kind === 'local' && right.kind === 'local'
+          ? deps.localFs.contains(parent, child)
+          : false
+      }
+      return left.nodeId === right.nodeId && isWithin(left.remotePath, right.remotePath)
+    },
+
+    async stat(target, signal) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.stat(target, signal)
+      try {
+        const info = await requireChannel(deps, parsed.nodeId)
+          .request('fs.stat', { path: parsed.remotePath })
+        if (info === null) return undefined
+        return {
+          version: FsVersion(info.version),
+          type: info.type,
+          ...info.size === undefined ? {} : { size: info.size },
+        } satisfies FsInfo
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    async lstat(path, opts, signal) {
+      throwIfAborted(signal)
+      const route = classifyPath(path, opts?.cwd, deps.anchors())
+      if (route.kind === 'local') return deps.localFs.lstat(path, opts, signal)
+      if (route.kind === 'ambiguous') throw ambiguousError(route)
+      try {
+        const info = await requireChannel(deps, route.nodeId)
+          .request('fs.lstat', { path: route.remotePath })
+        if (info === null) return undefined
+        return {
+          version: FsVersion(info.version),
+          type: info.type,
+          ...info.size === undefined ? {} : { size: info.size },
+        } satisfies FsPathInfo
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    async readText(target, signal) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.readText(target, signal)
+      const chunks: string[] = []
+      const stream = remoteTextStream(
+        requireChannel(deps, parsed.nodeId),
+        parsed.remotePath,
+        signal,
+      )
+      for await (const chunk of stream) chunks.push(chunk)
+      return chunks.join('')
+    },
+
+    async streamText(target, signal) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.streamText(target, signal)
+      return remoteTextStream(
+        requireChannel(deps, parsed.nodeId),
+        parsed.remotePath,
+        signal,
+      )
+    },
+
+    async readBytes(target, signal, maxBytes) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.readBytes(target, signal, maxBytes)
+      try {
+        const bytes = await requireChannel(deps, parsed.nodeId)
+          .request('fs.readBytes', { path: parsed.remotePath, maxBytes })
+        return new Uint8Array(Buffer.from(bytes.data, 'base64'))
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    async readByteRange(target, range, signal) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.readByteRange(target, range, signal)
+      try {
+        const bytes = await requireChannel(deps, parsed.nodeId)
+          .request('fs.readByteRange', {
+            path: parsed.remotePath,
+            offset: range.offset,
+            length: range.length,
+          })
+        return new Uint8Array(Buffer.from(bytes.data, 'base64'))
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    async listDir(target, signal) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') return deps.localFs.listDir(target, signal)
+      try {
+        const entries = await requireChannel(deps, parsed.nodeId)
+          .request('fs.listDir', { path: parsed.remotePath })
+        return entries.map((entry): FsDirEntry => ({
+          name: entry.name,
+          type: entry.type,
+          target: {
+            targetKey: composeKey(parsed.nodeId, entry.target.canonicalPath),
+            displayPath: entry.target.canonicalPath,
+          },
+          ...entry.version === undefined ? {} : { version: FsVersion(entry.version) },
+          ...entry.size === undefined ? {} : { size: entry.size },
+        }))
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    async writeText(target, content, expected, signal, sandboxPolicy) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') {
+        return deps.localFs.writeText(target, content, expected, signal, sandboxPolicy)
+      }
+      const anchor = anchorFor(parsed.nodeId, parsed.remotePath)
+      if (!remoteWriteAllowed(sandboxPolicy, parsed.remotePath, anchor?.remoteRoot)) {
+        throw new FsError(
+          `remote write denied by the ${String(sandboxPolicy?.mode)} policy: ${parsed.remotePath}`,
+          'FS_SANDBOX_DENIED',
+        )
+      }
+      try {
+        const outcome = await requireChannel(deps, parsed.nodeId).request('fs.writeText', {
+          path: parsed.remotePath,
+          content,
+          ...expected === undefined ? {} : { expected: toWireIntent(expected) },
+        })
+        return {
+          operation: outcome.operation,
+          version: FsVersion(outcome.version),
+          before: outcome.before,
+          after: outcome.after,
+        } satisfies FsWriteOutcome
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+
+    async editText(target, edit: FsEditRequest, expected, signal, sandboxPolicy) {
+      throwIfAborted(signal)
+      const parsed = parseKey(target.targetKey)
+      if (parsed.kind === 'local') {
+        return deps.localFs.editText(target, edit, expected, signal, sandboxPolicy)
+      }
+      const anchor = anchorFor(parsed.nodeId, parsed.remotePath)
+      if (!remoteWriteAllowed(sandboxPolicy, parsed.remotePath, anchor?.remoteRoot)) {
+        throw new FsError(
+          `remote edit denied by the ${String(sandboxPolicy?.mode)} policy: ${parsed.remotePath}`,
+          'FS_SANDBOX_DENIED',
+        )
+      }
+      try {
+        const outcome = await requireChannel(deps, parsed.nodeId).request('fs.editText', {
+          path: parsed.remotePath,
+          edit: { oldString: edit.oldString, newString: edit.newString, replaceAll: edit.replaceAll },
+          ...expected === undefined ? {} : { expected: { version: expected.version as string } },
+        })
+        return {
+          version: FsVersion(outcome.version),
+          before: outcome.before,
+          after: outcome.after,
+        } satisfies FsEditOutcome
+      } catch (error) {
+        throw toFsError(error)
+      }
+    },
+  }
+
+  return router
+}
+
+/** Project a seam write intent onto the wire form. */
+function toWireIntent(intent: FsWriteIntent) {
+  return intent.kind === 'createIfAbsent'
+    ? { kind: 'createIfAbsent' as const }
+    : { kind: 'replaceIfVersion' as const, version: intent.version as string }
+}
