@@ -23,8 +23,7 @@
     "lib",
     "client/client.cjs",
     "client/client.cjs.map",
-    "cordis.patch.yml",
-    "README.md"
+    "cordis.patch.yml"
   ],
   "license": "MIT",
   "repository": {
@@ -150,6 +149,7 @@
     "build:client": "tsdown",
     "build:agent": "tsdown -c tsdown.agent.config.ts",
     "build": "npm run build:host && npm run build:client && npm run build:agent",
+    "pretest": "npm run build",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "test:agent": "node --test --experimental-strip-types agent/tests/*.test.ts",
     "test:all": "npm run test && npm run test:agent"

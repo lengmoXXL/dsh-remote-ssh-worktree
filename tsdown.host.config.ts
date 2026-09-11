@@ -24,6 +24,6 @@ export default defineConfig({
   outExtensions: () => ({ js: '.js' }),
   external: [/^@deepseek-ai\//],
   outputOptions: {
-    banner: '// dsh-remote-worktree host half — see README.md',
+    banner: '// dsh-remote-worktree host half',
   },
 })

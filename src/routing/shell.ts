@@ -68,7 +68,7 @@ export function createRoutingShellExecutor(deps: RoutingShellDeps): ShellExecuto
     // through the sandboxed delegate. Reporting `undefined` instead would make
     // the plugin uncomposable with `dsh-base`: `permission-presets` refuses to
     // mount over an executor that claims not to confine at all. The remote
-    // branch is bounded by the machine, which the README states.
+    // branch is bounded by the machine.
     get sandboxMode(): SandboxMode | undefined {
       return deps.localShell.sandboxMode
     },
