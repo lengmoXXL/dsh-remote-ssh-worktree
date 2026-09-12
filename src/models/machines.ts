@@ -10,18 +10,18 @@
  * remote identity alone cannot reconstruct pending calls, output cursors, or
  * process state.
  *
- * @module dsh-remote-ssh-worktree/nodes/connections
+ * @module dsh-remote-ssh-worktree/models/machines
  */
 
 import type { NodeChannel } from '../channel.ts'
-import type { ConnectOptions, ConnectedNode } from './client.ts'
-import { connectNode } from './client.ts'
+import type { ConnectOptions, ConnectedNode } from '../nodes/client.ts'
+import { connectNode } from '../nodes/client.ts'
 import type { NodeInfo } from '../protocol.ts'
 import type { NodeRecord } from '../storage/nodes.ts'
 import type { NodeId } from '../ids.ts'
-import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from './ssh.ts'
-import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from './agent/install.ts'
-import { AGENT_VERSION, ensureAgent } from './agent/install.ts'
+import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../nodes/ssh.ts'
+import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from '../nodes/agent/install.ts'
+import { AGENT_VERSION, ensureAgent } from '../nodes/agent/install.ts'
 
 /** Where one node's connection stands. */
 export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'

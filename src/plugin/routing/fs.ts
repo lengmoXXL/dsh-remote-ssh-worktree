@@ -25,7 +25,7 @@ import { NodeRequestError } from '../../channel.ts'
 import { asNodeId } from '../../ids.ts'
 import type { NodeId } from '../../ids.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
-import { classifyPath, isWithin } from './classify.ts'
+import { classifyPath, isWithin } from '../../models/routing.ts'
 
 /** Bytes per remote text pull. Bounds one round trip without capping file size. */
 const TEXT_CHUNK_BYTES = 1 << 20

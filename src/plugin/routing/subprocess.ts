@@ -43,7 +43,7 @@ import type {
 import type { ProcId, SpPipeFrame } from '../../protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../../channel.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
-import { classifyPath } from './classify.ts'
+import { classifyPath } from '../../models/routing.ts'
 
 /**
  * The members this provider implements, narrowed from the seam class so the

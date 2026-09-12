@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { worktreeLabel } from '../../src/worktree/manager.ts'
+import { worktreeLabel } from '../../src/models/worktrees.ts'
 
 test('a title names machine, repository, and checkout in that order', () => {
   assert.equal(

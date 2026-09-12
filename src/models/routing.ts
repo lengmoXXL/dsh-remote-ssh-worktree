@@ -14,13 +14,13 @@
  * ambiguous match is a typed failure rather than a silent pick: guessing would
  * read one machine and write another.
  *
- * @module dsh-remote-ssh-worktree/plugin/routing/classify
+ * @module dsh-remote-ssh-worktree/models/routing
  */
 
 import { posix } from 'node:path'
-import type { AnchorRoute } from '../../storage/anchors.ts'
-import { asNodeId } from '../../ids.ts'
-import type { NodeId } from '../../ids.ts'
+import type { AnchorRoute } from '../storage/anchors.ts'
+import { asNodeId } from '../ids.ts'
+import type { NodeId } from '../ids.ts'
 
 /** Where one path resolves to. */
 export type Route =

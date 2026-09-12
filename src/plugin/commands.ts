@@ -12,11 +12,11 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
-import type { NodeConnections } from '../nodes/connections.ts'
+import type { NodeConnections } from '../models/machines.ts'
 import type { NodeRegistry } from '../storage/nodes.ts'
 import { defaultNodeTitle } from '../storage/nodes.ts'
 import { asAnchorId, asNodeId } from '../ids.ts'
-import type { WorktreeManager } from '../worktree/manager.ts'
+import type { WorktreeManager } from '../models/worktrees.ts'
 
 /** What the command needs from the plugin. */
 export interface WorktreeCommandDeps {

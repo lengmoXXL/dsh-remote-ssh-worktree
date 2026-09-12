@@ -27,7 +27,7 @@ import type {
 } from '@deepseek-ai/dsh-shell'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { AnchorRoute } from '../../storage/anchors.ts'
-import { classifyPath } from './classify.ts'
+import { classifyPath } from '../../models/routing.ts'
 
 /**
  * The members this provider implements, narrowed from the seam class so the

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { ConnectedNode } from '../../src/nodes/client.ts'
 import type { NodeInfo } from '../../src/protocol.ts'
-import { createNodeConnections } from '../../src/nodes/connections.ts'
+import { createNodeConnections } from '../../src/models/machines.ts'
 import type { NodeRecord } from '../../src/storage/nodes.ts'
 import { asNodeId } from '../../src/ids.ts'
 

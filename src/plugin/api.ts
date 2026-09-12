@@ -21,13 +21,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { NodeConnections, NodeStatus } from '../nodes/connections.ts'
+import type { NodeConnections, NodeStatus } from '../models/machines.ts'
 import type { NodeId } from '../ids.ts'
 import type { NodeRegistry, NodeTransport, NodeView } from '../storage/nodes.ts'
 import { toNodeView } from '../storage/nodes.ts'
 import { asAnchorId, asNodeId, asRepoId } from '../ids.ts'
 import type { RepoRecord, RepoStore } from '../storage/repos.ts'
-import type { WorktreeManager } from '../worktree/manager.ts'
+import type { WorktreeManager } from '../models/worktrees.ts'
 
 /** One normalized request, already routed to this API's prefix. */
 export interface ApiRequest {

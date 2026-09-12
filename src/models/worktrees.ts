@@ -20,7 +20,7 @@
  * swallowed: the worktree is gone either way, and the operator needs to know
  * the branch outlived it.
  *
- * @module dsh-remote-ssh-worktree/worktree/manager
+ * @module dsh-remote-ssh-worktree/models/worktrees
  */
 
 import { posix } from 'node:path'

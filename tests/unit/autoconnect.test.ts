@@ -7,9 +7,9 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { NodeConnections } from '../../src/nodes/connections.ts'
+import type { NodeConnections } from '../../src/models/machines.ts'
 import type { NodeRecord } from '../../src/storage/nodes.ts'
-import { autoconnect } from '../../src/nodes/autoconnect.ts'
+import { autoconnect } from '../../src/models/autoconnect.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 /** A machine record, as the registry would hand one over. */
