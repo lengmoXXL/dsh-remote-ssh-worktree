@@ -12,12 +12,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lengmoXXL/dsh-remote-ssh-worktrees.git",
+    "url": "git+https://github.com/lengmoXXL/dsh-remote-ssh-worktree.git",
     "directory": "agent"
   },
-  "homepage": "https://github.com/lengmoXXL/dsh-remote-ssh-worktrees#readme",
+  "homepage": "https://github.com/lengmoXXL/dsh-remote-ssh-worktree#readme",
   "bugs": {
-    "url": "https://github.com/lengmoXXL/dsh-remote-ssh-worktrees/issues"
+    "url": "https://github.com/lengmoXXL/dsh-remote-ssh-worktree/issues"
   },
   "dependencies": {
     "node-pty": "1.2.0-beta.15",
