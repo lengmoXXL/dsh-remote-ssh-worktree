@@ -15,7 +15,8 @@ import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands
 import type { NodeConnections } from '../models/machines.ts'
 import type { NodeRegistry } from '../storage/nodes.ts'
 import { defaultNodeTitle } from '../storage/nodes.ts'
-import { asAnchorId, asNodeId } from '../ids.ts'
+import { asAnchorId } from '../storage/anchors.ts'
+import { asNodeId } from '../storage/nodes.ts'
 import type { WorktreeManager } from '../models/worktrees.ts'
 
 /** What the command needs from the plugin. */

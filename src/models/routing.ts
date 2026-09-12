@@ -19,8 +19,8 @@
 
 import { posix } from 'node:path'
 import type { AnchorRoute } from '../storage/anchors.ts'
-import { asNodeId } from '../ids.ts'
-import type { NodeId } from '../ids.ts'
+import { asNodeId } from '../storage/nodes.ts'
+import type { NodeId } from '../storage/nodes.ts'
 
 /** Where one path resolves to. */
 export type Route =

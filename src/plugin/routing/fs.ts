@@ -22,8 +22,8 @@ import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandb
 import { TARGET_KEY_PREFIX, isFsErrorCode } from '../../remote/protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../../remote/client.ts'
 import { NodeRequestError } from '../../remote/client.ts'
-import { asNodeId } from '../../ids.ts'
-import type { NodeId } from '../../ids.ts'
+import { asNodeId } from '../../storage/nodes.ts'
+import type { NodeId } from '../../storage/nodes.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
 import { classifyPath, isWithin } from '../../models/routing.ts'
 

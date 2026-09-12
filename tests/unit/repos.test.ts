@@ -11,7 +11,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRepoStore, defaultRepoName } from '../../src/storage/repos.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 let dir: string
 

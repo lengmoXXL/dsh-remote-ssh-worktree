@@ -64,9 +64,9 @@ English | [中文](README.zh.md)
 ```
 
 `remote/` turns a machine's daemon into an SDK; `storage/` keeps what has to survive a restart; `models/` is the business
-semantics built on both; `plugin/` is the only layer that knows DSH. Imports only ever point downward, `src/index.ts` is
-the one file that assembles the layers, and `ids.ts` is the one vocabulary they all share. The settings section is the
-other half — it runs in the browser and reaches the host through its management API.
+semantics built on both; `plugin/` is the only layer that knows DSH. Imports only ever point downward, and `src/index.ts`
+is the one file that assembles the layers. The settings section is the other half — it runs in the browser and reaches
+the host through its management API.
 
 ## Install
 

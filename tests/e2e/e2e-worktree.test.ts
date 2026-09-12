@@ -25,8 +25,8 @@ import { connectNode } from '../../src/remote/client.ts'
 import type { ConnectedNode } from '../../src/remote/client.ts'
 import { createWorktreeManager } from '../../src/models/worktrees.ts'
 import type { WorktreeManager } from '../../src/models/worktrees.ts'
-import { asNodeId } from '../../src/ids.ts'
-import type { AnchorId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
+import type { AnchorId } from '../../src/storage/anchors.ts'
 
 const run = promisify(execFile)
 const TOKEN = 'worktree-token-0123456789'

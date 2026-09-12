@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { classifyPath, isWithin, toAbsolute } from '../../src/models/routing.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 const anchorA: AnchorRoute = {
   nodeId: asNodeId('a'),

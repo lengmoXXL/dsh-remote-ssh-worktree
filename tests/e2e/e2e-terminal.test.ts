@@ -20,7 +20,7 @@ import { connectNode } from '../../src/remote/client.ts'
 import type { ConnectedNode } from '../../src/remote/client.ts'
 import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 const TOKEN = 'terminal-token-0123456789'
 

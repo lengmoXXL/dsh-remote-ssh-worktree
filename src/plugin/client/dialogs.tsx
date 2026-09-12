@@ -19,8 +19,7 @@ import {
   Input,
   Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { NodeId, RepoId } from '../../ids.ts'
-import type { DirListing, RepoRecord, T } from './Section.tsx'
+import type { DirListing, NodeId, RepoId, RepoRecord, T } from './Section.tsx'
 import css from './Section.module.css'
 
 /** The message a failure carries, or a readable fallback. */

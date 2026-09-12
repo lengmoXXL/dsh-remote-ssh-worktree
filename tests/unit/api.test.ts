@@ -22,7 +22,8 @@ import { createWorktreeManager } from '../../src/models/worktrees.ts'
 import type { WireMethods } from '../../src/remote/protocol.ts'
 import type { ApiRequest } from '../../src/plugin/api.ts'
 import { handleNodeApi } from '../../src/plugin/api.ts'
-import { asNodeId, asRepoId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
+import { asRepoId } from '../../src/storage/repos.ts'
 
 let dir: string
 

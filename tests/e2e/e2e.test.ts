@@ -21,7 +21,7 @@ import type { ConnectedNode } from '../../src/remote/client.ts'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingFileSystem } from '../../src/plugin/routing/fs.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 const TOKEN = 'test-token-0123456789'
 

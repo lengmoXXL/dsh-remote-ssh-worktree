@@ -36,7 +36,8 @@ import type { AnchorRecord, AnchorStore, DirectoryAnchor, WorktreeAnchor } from 
 import type { RepoStore } from '../storage/repos.ts'
 import type { ChannelLookup, NodeChannel } from '../remote/client.ts'
 import { NodeRequestError } from '../remote/client.ts'
-import type { AnchorId, NodeId } from '../ids.ts'
+import type { AnchorId } from '../storage/anchors.ts'
+import type { NodeId } from '../storage/nodes.ts'
 import type { RepoRef } from '../storage/repos.ts'
 
 /** Directory, relative to the repository, that holds every managed checkout. */

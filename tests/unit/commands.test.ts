@@ -18,7 +18,7 @@ import type { NodeRecord, NodeRegistry } from '../../src/storage/nodes.ts'
 import { createWorktreeManager } from '../../src/models/worktrees.ts'
 import { runWorktreeCommand } from '../../src/plugin/commands.ts'
 import type { WorktreeCommandDeps } from '../../src/plugin/commands.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 let root: string
 let anchors: AnchorStore

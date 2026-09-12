@@ -24,7 +24,7 @@ import { Socket } from 'node:net'
 import { ResponseError, StreamMessageReader, StreamMessageWriter, createMessageConnection } from 'vscode-jsonrpc/node.js'
 import type { NodeInfo, SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from './protocol.ts'
 import { PROTOCOL_VERSION, SP_PIPE_NOTIFICATION } from './protocol.ts'
-import type { NodeId } from '../ids.ts'
+import type { NodeId } from '../storage/nodes.ts'
 
 /** One live connection to a node's daemon. */
 export interface NodeChannel {

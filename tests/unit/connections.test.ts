@@ -11,7 +11,7 @@ import type { ConnectedNode } from '../../src/remote/client.ts'
 import type { NodeInfo } from '../../src/remote/protocol.ts'
 import { createNodeConnections } from '../../src/models/machines.ts'
 import type { NodeRecord } from '../../src/storage/nodes.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 const info: NodeInfo = {
   protocol: 1,

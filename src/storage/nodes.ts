@@ -10,9 +10,8 @@
  * @module dsh-remote-ssh-worktree/storage/nodes
  */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import { randomUUID } from 'node:crypto'
-import type { NodeId } from '../ids.ts'
 import type { DocumentSpec } from './document.ts'
 import { readDocument, writeDocument } from './document.ts'
 
@@ -58,6 +57,28 @@ export type NodeTransport =
     /** TCP port the daemon is reachable at. */
     readonly port: number
   }
+
+/**
+ * One configured remote machine.
+ *
+ * Branded so a repository or anchor id cannot be passed where a machine is
+ * expected: all three are generated strings that render identically in a log
+ * or a URL, and the brand is the only thing that tells them apart. It lives in
+ * the type system alone.
+ */
+export type NodeId = Branded<'NodeId'>
+
+/**
+ * Admit a string as a machine id.
+ *
+ * Called only where an untrusted string first becomes one: a parsed document,
+ * a route segment, or a tool argument. Every later hop carries the type.
+ * @param value - the string the parser produced.
+ * @returns the same string, branded.
+ */
+export function asNodeId(value: string): NodeId {
+  return brandString<NodeId>(value)
+}
 
 /** One configured remote machine. */
 export interface NodeRecord {

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createNodeRegistry, toNodeView } from '../../src/storage/nodes.ts'
 import type { NodeTransport } from '../../src/storage/nodes.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 let dir: string
 

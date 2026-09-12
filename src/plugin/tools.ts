@@ -13,7 +13,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { asAnchorId, asNodeId } from '../ids.ts'
+import { asAnchorId } from '../storage/anchors.ts'
+import { asNodeId } from '../storage/nodes.ts'
 import type { NodeRegistry } from '../storage/nodes.ts'
 import type { WorktreeManager } from '../models/worktrees.ts'
 

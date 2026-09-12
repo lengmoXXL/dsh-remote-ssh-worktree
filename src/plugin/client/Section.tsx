@@ -30,7 +30,6 @@ import {
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { AnchorId, NodeId, RepoId } from '../../ids.ts'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { NS } from './locales.ts'
 import { AddMachineDialog, AddRepoDialog, NewWorktreeDialog, reasonOf } from './dialogs.tsx'
@@ -77,7 +76,20 @@ interface NodeStatus {
   readonly error?: string
 }
 
-/** One registered repository. */
+/**
+ * The ids as they arrive from the host.
+ *
+ * Branded on the host, where they are minted and checked; over the wire they
+ * are plain strings, so this half declares them the way it declares every other
+ * record shape — it cannot share the host's modules, which import node builtins.
+ */
+export type NodeId = string
+/** @see NodeId */
+export type RepoId = string
+/** @see NodeId */
+export type AnchorId = string
+
+/** One repository as the host records it. */
 export interface RepoRecord {
   readonly repoId: RepoId
   readonly nodeId: NodeId

@@ -15,15 +15,37 @@
  * @module dsh-remote-ssh-worktree/storage/repos
  */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import { posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { NodeId, RepoId } from '../ids.ts'
+import type { NodeId } from './nodes.ts'
 import type { DocumentSpec } from './document.ts'
 import { readDocument, writeDocument } from './document.ts'
 
 /** Document revision; a field change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1
+
+/**
+ * One registered repository.
+ *
+ * Branded so a machine or anchor id cannot be passed where a repository is
+ * expected: all three are generated strings that render identically in a log
+ * or a URL, and the brand is the only thing that tells them apart. It lives in
+ * the type system alone.
+ */
+export type RepoId = Branded<'RepoId'>
+
+/**
+ * Admit a string as a repository id.
+ *
+ * Called only where an untrusted string first becomes one: a parsed document,
+ * a route segment, or a tool argument. Every later hop carries the type.
+ * @param value - the string the parser produced.
+ * @returns the same string, branded.
+ */
+export function asRepoId(value: string): RepoId {
+  return brandString<RepoId>(value)
+}
 
 /** One registered repository. */
 export interface RepoRecord {

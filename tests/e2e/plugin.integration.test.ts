@@ -28,7 +28,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as remoteWorktree from '../../src/index.ts'
-import { asAnchorId, asNodeId } from '../../src/ids.ts'
+import { asAnchorId } from '../../src/storage/anchors.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 /** The remote root the seeded anchor claims. It must not overlap the local fixture. */
 const REMOTE_ROOT = '/srv/remote-app/.dsh-worktrees/worktree/login'

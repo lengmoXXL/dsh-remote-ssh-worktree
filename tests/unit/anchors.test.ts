@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AnchorDraft } from '../../src/storage/anchors.ts'
 import { ANCHOR_FILE, createAnchorStore } from '../../src/storage/anchors.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 let root: string
 

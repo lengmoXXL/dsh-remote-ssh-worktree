@@ -19,8 +19,8 @@ import type { NodeChannel } from '../../src/remote/client.ts'
 import { NodeRequestError } from '../../src/remote/client.ts'
 import { createWorktreeManager } from '../../src/models/worktrees.ts'
 import type { WorktreeManager } from '../../src/models/worktrees.ts'
-import { asNodeId } from '../../src/ids.ts'
-import { asAnchorId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
+import { asAnchorId } from '../../src/storage/anchors.ts'
 
 let root: string
 let anchors: AnchorStore

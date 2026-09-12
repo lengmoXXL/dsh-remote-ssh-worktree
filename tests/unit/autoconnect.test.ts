@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import type { NodeConnections } from '../../src/models/machines.ts'
 import type { NodeRecord } from '../../src/storage/nodes.ts'
 import { autoconnect } from '../../src/models/autoconnect.ts'
-import { asNodeId } from '../../src/ids.ts'
+import { asNodeId } from '../../src/storage/nodes.ts'
 
 /** A machine record, as the registry would hand one over. */
 function record(nodeId: string): NodeRecord {

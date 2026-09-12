@@ -28,13 +28,13 @@
  * @module dsh-remote-ssh-worktree/storage/anchors
  */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { Dirent } from 'node:fs'
 import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { AnchorId, NodeId } from '../ids.ts'
+import type { NodeId } from './nodes.ts'
 
 /** Metadata file name inside every anchor directory. */
 export const ANCHOR_FILE = '.dsh-remote-worktree.json'
@@ -44,6 +44,28 @@ const DOCUMENT_VERSION = 1
 
 /** Segment a directory anchor lives at, beside the worktrees of its repository. */
 const DIRECTORY_SEGMENT = '.self'
+
+/**
+ * One anchor.
+ *
+ * Branded so a machine or repository id cannot be passed where an anchor is
+ * expected: all three are generated strings that render identically in a log
+ * or a URL, and the brand is the only thing that tells them apart. It lives in
+ * the type system alone.
+ */
+export type AnchorId = Branded<'AnchorId'>
+
+/**
+ * Admit a string as an anchor id.
+ *
+ * Called only where an untrusted string first becomes one: a parsed document,
+ * a route segment, or a tool argument. Every later hop carries the type.
+ * @param value - the string the parser produced.
+ * @returns the same string, branded.
+ */
+export function asAnchorId(value: string): AnchorId {
+  return brandString<AnchorId>(value)
+}
 
 /** What one anchor maps. */
 export type AnchorKind = 'worktree' | 'directory'
