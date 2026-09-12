@@ -14,14 +14,14 @@
  */
 
 import type { NodeChannel } from '../channel.ts'
-import type { ConnectOptions, ConnectedNode } from '../nodes/client.ts'
-import { connectNode } from '../nodes/client.ts'
+import type { ConnectOptions, ConnectedNode } from '../remote/client.ts'
+import { connectNode } from '../remote/client.ts'
 import type { NodeInfo } from '../protocol.ts'
 import type { NodeRecord } from '../storage/nodes.ts'
 import type { NodeId } from '../ids.ts'
-import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../nodes/ssh.ts'
-import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from '../nodes/agent/install.ts'
-import { AGENT_VERSION, ensureAgent } from '../nodes/agent/install.ts'
+import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../remote/ssh.ts'
+import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from '../remote/agent/install.ts'
+import { AGENT_VERSION, ensureAgent } from '../remote/agent/install.ts'
 
 /** Where one node's connection stands. */
 export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'

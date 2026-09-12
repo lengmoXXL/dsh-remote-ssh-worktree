@@ -8,7 +8,7 @@
  * `direct` record — is the caller's business, which is what lets one client
  * serve both.
  *
- * @module dsh-remote-ssh-worktree/nodes/client
+ * @module dsh-remote-ssh-worktree/remote/client
  */
 
 import { Socket } from 'node:net'

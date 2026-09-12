@@ -12,9 +12,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
-import type { SshCommandResult, SshTarget } from '../../src/nodes/ssh.ts'
-import type { AgentCommandRunner, AgentProgress } from '../../src/nodes/agent/install.ts'
-import { AGENT_VERSION, ensureAgent } from '../../src/nodes/agent/install.ts'
+import type { SshCommandResult, SshTarget } from '../../src/remote/ssh.ts'
+import type { AgentCommandRunner, AgentProgress } from '../../src/remote/agent/install.ts'
+import { AGENT_VERSION, ensureAgent } from '../../src/remote/agent/install.ts'
 
 const SSH: SshTarget = { target: 'me@build-01' }
 const DIR = '$HOME/.dsh/remote-agent'
