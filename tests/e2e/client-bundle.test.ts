@@ -245,11 +245,17 @@ test('the bundle carries its stylesheet inlined under hashed local names', async
   // Local names, so nothing this section renders can collide with the shell or
   // another plugin: `drw-section` must not survive into the artifact.
   assert.equal(source.includes('drw-section'), false)
-  // The hash is derived from the stylesheet's path as well as its content, so
-  // the pattern pins its shape and not its length.
-  assert.match(source, /\.[A-Za-z0-9_]{5,}_section\s*\{/)
-  // The component resolves those names through the compiled map, not a literal.
-  assert.match(source, /"section":\s*"[A-Za-z0-9_]{5,}_section"/)
+  // The compiled name is `<hash>_section`, and the hash is derived from the
+  // stylesheet's absolute path, so its spelling belongs to the machine that
+  // built this artifact. Both the rule and the class map must carry the same
+  // one, which is what this pins.
+  const hashed = /\.([A-Za-z0-9_-]{1,16})_section\s*\{/.exec(source)
+  assert.notEqual(hashed, null, 'the stylesheet reached the artifact as a hashed class')
+  const name = `${String(hashed?.[1])}_section`
+  assert.ok(
+    source.replace(/\s+/g, '').includes(`"section":"${name}"`),
+    `the class map points at ${name}`,
+  )
 })
 
 test('the bundle inlines every dependency the shell does not provide', async () => {
