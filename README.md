@@ -5,11 +5,11 @@ machine.
 
 English | [中文](README.zh.md)
 
-![A connected machine, its repository, and a worktree cut from it](docs/screenshots/en/06-worktree-created.png)
+![A session in a remote worktree, running tools on that machine](docs/screenshots/en/08-session.png)
 
-| Machines | Connected |
-| --- | --- |
-| ![The machine list](docs/screenshots/en/01-section.png) | ![A connected machine and its repository](docs/screenshots/en/03-connected.png) |
+| Machines | Connected | A worktree |
+| --- | --- | --- |
+| ![The machine list](docs/screenshots/en/01-section.png) | ![A connected machine and its repository](docs/screenshots/en/03-connected.png) | ![A created worktree](docs/screenshots/en/06-worktree-created.png) |
 
 ## What it does
 

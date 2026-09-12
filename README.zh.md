@@ -4,11 +4,11 @@
 
 [English](README.md) | 中文
 
-![已连接的机器、它的仓库，以及切出的 worktree](docs/screenshots/zh/06-worktree-created.png)
+![在远端 worktree 的会话里执行工具](docs/screenshots/zh/08-session.png)
 
-| 机器列表 | 已连接 |
-| --- | --- |
-| ![机器列表](docs/screenshots/zh/01-section.png) | ![已连接的机器与仓库](docs/screenshots/zh/03-connected.png) |
+| 机器列表 | 已连接 | 切出的 worktree |
+| --- | --- | --- |
+| ![机器列表](docs/screenshots/zh/01-section.png) | ![已连接的机器与仓库](docs/screenshots/zh/03-connected.png) | ![已创建的 worktree](docs/screenshots/zh/06-worktree-created.png) |
 
 ## 能做什么
 
