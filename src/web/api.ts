@@ -10,7 +10,7 @@
  * A node's token never appears in a response. {@link toNodeView} is the only
  * projection used here.
  *
- * @module dsh-remote-worktree/web/api
+ * @module dsh-remote-ssh-worktree/web/api
  */
 
 import type { NodeConnections, NodeStatus } from '../nodes/connections.ts'

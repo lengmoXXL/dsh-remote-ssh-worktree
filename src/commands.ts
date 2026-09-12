@@ -7,7 +7,7 @@
  * finishes the job, because the two halves — a checkout on the node and an
  * anchor here — are cleaned up by different operations.
  *
- * @module dsh-remote-worktree/commands
+ * @module dsh-remote-ssh-worktree/commands
  */
 
 import type { Context } from '@deepseek-ai/cordis'

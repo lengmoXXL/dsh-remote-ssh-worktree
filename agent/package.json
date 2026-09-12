@@ -1,7 +1,7 @@
 {
-  "name": "dsh-remote-worktree-agent",
+  "name": "dsh-remote-ssh-worktree-agent",
   "version": "0.0.1",
-  "description": "The remote daemon of dsh-remote-worktree: serves one machine's filesystem, processes, git worktrees, and terminals to a DeepSeek Harness plugin over a token-authenticated connection.",
+  "description": "The remote daemon of dsh-remote-ssh-worktree: serves one machine's filesystem, processes, git worktrees, and terminals to a DeepSeek Harness plugin over a token-authenticated connection.",
   "type": "module",
   "bin": {
     "dsh-remote-agent": "./lib/main.mjs"

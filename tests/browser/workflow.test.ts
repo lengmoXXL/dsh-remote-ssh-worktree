@@ -30,7 +30,7 @@
  * different harness checkout, and `RWT_FIREFOX_BIN` at a different browser
  * binary.
  *
- * @module dsh-remote-worktree/tests/browser/workflow
+ * @module dsh-remote-ssh-worktree/tests/browser/workflow
  */
 
 import assert from 'node:assert/strict'

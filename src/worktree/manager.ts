@@ -11,7 +11,7 @@
  * worktree is gone either way, and the operator needs to know the branch
  * outlived it.
  *
- * @module dsh-remote-worktree/worktree/manager
+ * @module dsh-remote-ssh-worktree/worktree/manager
  */
 
 import { posix } from 'node:path'

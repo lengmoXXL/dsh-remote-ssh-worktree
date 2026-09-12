@@ -5,7 +5,7 @@
  * of the socket, so this module only establishes the connection, performs the
  * handshake, and translates a daemon failure into {@link NodeRequestError}.
  *
- * @module dsh-remote-worktree/transport/client
+ * @module dsh-remote-ssh-worktree/transport/client
  */
 
 import { Socket } from 'node:net'

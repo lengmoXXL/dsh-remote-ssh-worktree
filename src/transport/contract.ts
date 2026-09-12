@@ -5,7 +5,7 @@
  * on a concrete client, so a test can drive them with a stub and the transport
  * stays replaceable.
  *
- * @module dsh-remote-worktree/transport/contract
+ * @module dsh-remote-ssh-worktree/transport/contract
  */
 
 import type { NodeId } from '../ids.ts'

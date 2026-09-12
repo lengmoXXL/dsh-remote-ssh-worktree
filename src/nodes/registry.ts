@@ -7,7 +7,7 @@
  * leaves this module drops it, and {@link toNodeView} is the only supported way
  * to produce one.
  *
- * @module dsh-remote-worktree/nodes/registry
+ * @module dsh-remote-ssh-worktree/nodes/registry
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'

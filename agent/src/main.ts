@@ -1,5 +1,5 @@
 /**
- * Command-line entry point for `dsh-remote-worktree-agent`.
+ * Command-line entry point for `dsh-remote-ssh-worktree-agent`.
  *
  * The daemon binds a loopback address by default and refuses any other
  * interface unless the operator passes `--allow-remote`; confidentiality and

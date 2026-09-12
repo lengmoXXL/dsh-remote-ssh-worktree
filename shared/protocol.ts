@@ -1,6 +1,6 @@
 /**
- * The wire contract between the local `dsh-remote-worktree` plugin and the
- * `dsh-remote-worktree-agent` daemon running on a remote machine.
+ * The wire contract between the local `dsh-remote-ssh-worktree` plugin and the
+ * `dsh-remote-ssh-worktree-agent` daemon running on a remote machine.
  *
  * This module has no imports on purpose: the daemon is a plain Node program
  * that depends on neither Cordis nor any `@deepseek-ai/dsh-*` package, so both
@@ -15,7 +15,7 @@
  * own opaque key from the node id plus that path, so containment, process
  * paths, and file URLs are derived locally without another round trip.
  *
- * @module dsh-remote-worktree/protocol
+ * @module dsh-remote-ssh-worktree/protocol
  */
 
 /**

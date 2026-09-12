@@ -8,7 +8,7 @@
  * revision gate, the write lock, the atomic publication, and the diagnostics
  * that name a document this build cannot read.
  *
- * @module dsh-remote-worktree/storage
+ * @module dsh-remote-ssh-worktree/storage
  */
 
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'

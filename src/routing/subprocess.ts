@@ -21,7 +21,7 @@
  * `'pipe'` output is refused for a remote cwd rather than silently collected:
  * a consumer that asked for a live stream must learn it cannot have one.
  *
- * @module dsh-remote-worktree/routing/subprocess
+ * @module dsh-remote-ssh-worktree/routing/subprocess
  */
 
 import { PassThrough } from 'node:stream'

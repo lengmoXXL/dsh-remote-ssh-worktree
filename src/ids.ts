@@ -11,7 +11,7 @@
  * first becomes one of these — the durable documents, the management routes,
  * and the tool arguments — and every later hop trusts the type.
  *
- * @module dsh-remote-worktree/ids
+ * @module dsh-remote-ssh-worktree/ids
  */
 
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'

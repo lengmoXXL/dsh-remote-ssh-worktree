@@ -143,7 +143,7 @@ function stubContext(): {
 
 test('the built bundle registers itself under the plugin id', async () => {
   const entry = await loadBundle()
-  assert.equal(entry.id, 'dsh-remote-worktree')
+  assert.equal(entry.id, 'dsh-remote-ssh-worktree')
 })
 
 test('the loaded module exposes exactly the plugin surface', async () => {

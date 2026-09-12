@@ -1,5 +1,5 @@
 {
-  "name": "dsh-remote-worktree",
+  "name": "dsh-remote-ssh-worktree",
   "version": "0.0.1",
   "private": true,
   "description": "Remote execution worlds for DeepSeek Harness: create a git worktree on a remote machine over a self-hosted node daemon, and run the stock read / write / edit / bash / grep tools inside it.",

@@ -7,7 +7,7 @@
  * result names the machine and the local path, because the model has to be able
  * to say where its work actually lives.
  *
- * @module dsh-remote-worktree/tools
+ * @module dsh-remote-ssh-worktree/tools
  */
 
 import type { Context } from '@deepseek-ai/cordis'

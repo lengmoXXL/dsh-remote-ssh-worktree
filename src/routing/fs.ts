@@ -13,7 +13,7 @@
  * remote branch forwards to the node's daemon and maps its answers back onto
  * the same seam vocabulary.
  *
- * @module dsh-remote-worktree/routing/fs
+ * @module dsh-remote-ssh-worktree/routing/fs
  */
 
 import type { FileSystem, FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'

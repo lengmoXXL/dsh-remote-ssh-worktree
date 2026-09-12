@@ -11,7 +11,7 @@
  * search box instead of the open form. `role="dialog"` is the primitives'
  * modal contract, and the most recently appended one is the open form.
  *
- * @module dsh-remote-worktree/tests/browser/dom
+ * @module dsh-remote-ssh-worktree/tests/browser/dom
  */
 
 import type { FirefoxPage } from './firefox.ts'

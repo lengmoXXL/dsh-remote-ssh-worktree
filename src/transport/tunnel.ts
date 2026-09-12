@@ -12,7 +12,7 @@
  * fails the forward with a diagnostic naming the command that would accept it,
  * because this forward grants shell access as the remote user.
  *
- * @module dsh-remote-worktree/transport/tunnel
+ * @module dsh-remote-ssh-worktree/transport/tunnel
  */
 
 import { spawn } from 'node:child_process'

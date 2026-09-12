@@ -12,7 +12,7 @@
  * replaced atomically under a cross-process lock, so two harness processes
  * never interleave a read-render-commit cycle.
  *
- * @module dsh-remote-worktree/repos/store
+ * @module dsh-remote-ssh-worktree/repos/store
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'

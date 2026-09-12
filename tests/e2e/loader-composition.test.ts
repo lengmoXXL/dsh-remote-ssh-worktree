@@ -116,8 +116,8 @@ async function compose(): Promise<Composition> {
     '  name: "@deepseek-ai/dsh-sandbox"',
     '- id: web-server',
     '  name: test-web-server',
-    '- id: dsh-remote-worktree',
-    '  name: dsh-remote-worktree',
+    '- id: dsh-remote-ssh-worktree',
+    '  name: dsh-remote-ssh-worktree',
     '  config:',
     `    dataDir: ${JSON.stringify(dataDir)}`,
     '',
@@ -132,7 +132,7 @@ async function compose(): Promise<Composition> {
     ['test-sandbox-policy', policyProvider('workspace-write')],
     ['@deepseek-ai/dsh-sandbox', sandbox],
     ['test-web-server', webServerProvider(routes)],
-    ['dsh-remote-worktree', plugin],
+    ['dsh-remote-ssh-worktree', plugin],
   ])
   ctx.loader.internal = {
     version: 'v2',
@@ -218,7 +218,7 @@ test('the mounted filesystem delegates its sandbox mode', async () => {
 test('a machine added through the management route lands in the configured data directory', async () => {
   const { dataDir, request } = await compose()
 
-  const created = await request('POST', '/dsh-remote-worktree/nodes', {
+  const created = await request('POST', '/dsh-remote-ssh-worktree/nodes', {
     ssh: { target: 'user@build-01' },
     remotePort: 7801,
     token: 'secret-token',
@@ -233,7 +233,7 @@ test('a machine added through the management route lands in the configured data 
   assert.equal(written.nodes.length, 1)
   assert.equal(written.nodes[0]?.transport.target, 'user@build-01')
 
-  const listed = await request('GET', '/dsh-remote-worktree/nodes')
+  const listed = await request('GET', '/dsh-remote-ssh-worktree/nodes')
   assert.equal(listed.status, 200)
   assert.equal(JSON.parse(listed.payload).nodes.length, 1)
   // The secret never leaves the host, whatever surface asked.

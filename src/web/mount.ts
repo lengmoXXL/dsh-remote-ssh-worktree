@@ -9,7 +9,7 @@
  * injected dependency, because a non-Web profile (headless, SDK) has no HTTP
  * server and the plugin must still load there.
  *
- * @module dsh-remote-worktree/web/mount
+ * @module dsh-remote-ssh-worktree/web/mount
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -18,7 +18,7 @@ import type { ApiResponse, ManagementApiDeps } from './api.ts'
 import { handleNodeApi } from './api.ts'
 
 /** The path prefix this plugin owns. */
-const API_PREFIX = '/dsh-remote-worktree'
+const API_PREFIX = '/dsh-remote-ssh-worktree'
 
 /** Bound on one management request body. */
 const MAX_BODY_BYTES = 1 << 20

@@ -10,7 +10,7 @@
  * itself lives in local state, every mutation arrives as an injected callback,
  * every string comes from the locale seat, and no value reaches for `ctx`.
  *
- * @module dsh-remote-worktree/client/Section
+ * @module dsh-remote-ssh-worktree/client/Section
  */
 
 import { useCallback, useEffect, useState } from 'react'

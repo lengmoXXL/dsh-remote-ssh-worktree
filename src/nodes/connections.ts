@@ -10,7 +10,7 @@
  * remote identity alone cannot reconstruct pending calls, output cursors, or
  * process state.
  *
- * @module dsh-remote-worktree/nodes/connections
+ * @module dsh-remote-ssh-worktree/nodes/connections
  */
 
 import type { NodeChannel } from '../transport/contract.ts'
