@@ -36,7 +36,6 @@ import { registerNodeApi } from './plugin/api.ts'
 import { createRoutingFileSystem } from './plugin/routing/fs.ts'
 import { createRoutingShellExecutor } from './plugin/routing/shell.ts'
 import { createRoutingSubprocessRuntime } from './plugin/routing/subprocess.ts'
-import { registerWorktreeTools } from './plugin/tools.ts'
 import { AGENT_VERSION } from './remote/agent/install.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS } from './remote/ssh.ts'
 import { createAnchorStore } from './storage/anchors.ts'
@@ -159,7 +158,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   })
 
   registerNodeApi(ctx, { registry, repos, connections, worktrees })
-  registerWorktreeTools(ctx, { registry, worktrees })
 
   const subprocessScope = ctx.isolate('subprocess')
   subprocessScope.plugin(LocalSubprocessRuntime)

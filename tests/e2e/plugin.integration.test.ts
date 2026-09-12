@@ -25,8 +25,6 @@ import { Context } from '@deepseek-ai/cordis'
 import SandboxLocalPlugin from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicyPlugin from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import ToolRegistry from '@deepseek-ai/dsh-tools'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as remoteWorktree from '../../src/index.ts'
 import { asAnchorId } from '../../src/storage/anchors.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
@@ -70,10 +68,6 @@ before(async () => {
   // The local shell delegate is the sandboxed executor, so the deployment's
   // sandbox provider must be present exactly as it is in the shipped profile.
   await ctx.plugin(SandboxLocalPlugin)
-  // The tool registry needs prompt assembly, and mounting both is what lets the
-  // model-facing surface be checked here rather than only typechecked.
-  await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRegistry)
   await ctx.plugin(remoteWorktree, { dataDir: join(dir, 'state') })
 })
 
@@ -153,19 +147,6 @@ test('a remote spawn is refused before any process starts when the node is offli
     }),
     /not connected/,
   )
-})
-
-test('the model-facing tools are registered, not merely exported', async () => {
-  // `ctx.inject` mounts a child fiber, so registration lands a tick after the
-  // plugin activates. The deployment composes its registries before its plugin
-  // rows, which is why the shipped plugins use the same non-blocking form.
-  const tools = (ctx as unknown as { tools: { get: (name: string) => unknown } }).tools
-  const names = ['rw_list', 'rw_create', 'rw_remove']
-  const deadline = Date.now() + 5_000
-  while (names.some(name => tools.get(name) === undefined)) {
-    assert.ok(Date.now() < deadline, `tools never registered: ${names.filter(n => tools.get(n) === undefined).join(', ')}`)
-    await new Promise(resolve => setTimeout(resolve, 20))
-  }
 })
 
 test('the routers report the confinement they actually apply', () => {

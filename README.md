@@ -38,15 +38,8 @@ shared secret. The plugin connects on load and retries a few times per machine; 
 failed, with a Connect button to try again.
 
 A repository is any directory on the machine. Each row opens, closes, or removes what it holds, and a directory that is
-not a git repository yet can still be opened as a workspace.
-
-**From a session**, the model drives the same operations as tools, so asking for one in prose is the whole interface:
-
-| | |
-| --- | --- |
-| `rw_list` | the worktrees, and each machine's state |
-| `rw_create` | cut a worktree, from a revision when one is named |
-| `rw_remove` | drop the checkout; the branch stays unless asked |
+not a git repository yet can still be opened as a workspace. That section is the whole interface: cutting a worktree is
+setup, so it happens here, and the session that follows just works in it.
 
 ## How it works
 
@@ -67,7 +60,7 @@ not a git repository yet can still be opened as a workspace.
 └──────────────────────────────┬─────────────────────────────┘
                                │ management API over HTTP
 ┌─ plugin/   the DSH surfaces ─▼─────────────────────────────┐
-│  api · tools                  over the models              │
+│  api                          over the models              │
 │  routing/  fs · subprocess · shell seams → the SDK         │
 └──────────────────────────────┬─────────────────────────────┘
                                │

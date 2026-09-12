@@ -8,13 +8,10 @@
  *
  * No model is involved anywhere: the deployment carries no credentials, and
  * every surface reached here — the settings section, the management routes, and
- * the daemon — answers without an LLM call. One surface stays out of reach by
- * construction: the `rw_*` tools, which only a model can call. They are covered
- * by the host suites that call them directly. Every step is asserted twice
- * where it matters — once from the page and once from the state it was supposed
- * to change (the management API, the anchor directory on disk, the git
- * repository on the machine) — so a UI that renders without acting fails the
- * test.
+ * the daemon — answers without an LLM call. Every step is asserted twice where
+ * it matters — once from the page and once from the state it was supposed to
+ * change (the management API, the anchor directory on disk, the git repository
+ * on the machine) — so a UI that renders without acting fails the test.
  *
  * Screenshots land in the instance's artifact directory and their paths are
  * printed when the run ends.
