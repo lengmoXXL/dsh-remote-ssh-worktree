@@ -13,10 +13,10 @@
  * @module dsh-remote-ssh-worktree/models/machines
  */
 
-import type { NodeChannel } from '../channel.ts'
+import type { NodeChannel } from '../remote/client.ts'
 import type { ConnectOptions, ConnectedNode } from '../remote/client.ts'
 import { connectNode } from '../remote/client.ts'
-import type { NodeInfo } from '../protocol.ts'
+import type { NodeInfo } from '../remote/protocol.ts'
 import type { NodeRecord } from '../storage/nodes.ts'
 import type { NodeId } from '../ids.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../remote/ssh.ts'

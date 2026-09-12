@@ -24,11 +24,11 @@
  */
 
 import { posix } from 'node:path'
-import type { WireWorktree } from '../protocol.ts'
+import type { WireWorktree } from '../remote/protocol.ts'
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../storage/anchors.ts'
 import type { RepoStore } from '../storage/repos.ts'
-import type { ChannelLookup, NodeChannel } from '../channel.ts'
-import { NodeRequestError } from '../channel.ts'
+import type { ChannelLookup, NodeChannel } from '../remote/client.ts'
+import { NodeRequestError } from '../remote/client.ts'
 import type { AnchorId, NodeId } from '../ids.ts'
 import type { RepoRef } from '../storage/repos.ts'
 

@@ -1,12 +1,19 @@
 /**
- * The TCP client for one node's daemon: the implementation of {@link NodeChannel}.
+ * The node channel: what the rest of the plugin may ask one node, and the TCP
+ * client that answers it.
  *
- * `vscode-jsonrpc` owns framing, request correlation, and cancellation on top
- * of the socket, so this module only establishes the connection, performs the
- * handshake, and translates a daemon failure into {@link NodeRequestError}.
- * What supplies the socket — an SSH forward today, the recorded address for a
- * `direct` record — is the caller's business, which is what lets one client
- * serve both.
+ * {@link NodeChannel} is the narrow view every consumer holds — round-trip one
+ * protocol method, watch the pushed frames of a piped stream — so the file
+ * layer, the process layer, and the worktree lifecycle never see a socket,
+ * a handshake, or `vscode-jsonrpc`. {@link NodeRequestError} is the other half
+ * of that view: a daemon failure with the code the call sites branch on.
+ *
+ * The client below is the only implementation: `vscode-jsonrpc` owns framing,
+ * request correlation, and cancellation on top of the socket, so it only
+ * establishes the connection, performs the handshake, and translates a daemon
+ * failure into that error. What supplies the socket — an SSH forward today, the
+ * recorded address for a `direct` record — is the caller's business, which is
+ * what lets one client serve both.
  *
  * @module dsh-remote-ssh-worktree/remote/client
  */
@@ -15,10 +22,51 @@ import { Socket } from 'node:net'
 // The `.js` suffix is required: this package ships no `exports` map, so an
 // extensionless subpath is not resolvable from ESM even though the file is.
 import { ResponseError, StreamMessageReader, StreamMessageWriter, createMessageConnection } from 'vscode-jsonrpc/node.js'
-import type { NodeInfo, SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../protocol.ts'
-import { PROTOCOL_VERSION, SP_PIPE_NOTIFICATION } from '../protocol.ts'
-import type { NodeChannel } from '../channel.ts'
-import { NodeRequestError } from '../channel.ts'
+import type { NodeInfo, SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from './protocol.ts'
+import { PROTOCOL_VERSION, SP_PIPE_NOTIFICATION } from './protocol.ts'
+import type { NodeId } from '../ids.ts'
+
+/** One live connection to a node's daemon. */
+export interface NodeChannel {
+  /**
+   * Round-trip one protocol method.
+   * @param method - the wire method name.
+   * @param params - that method's parameters.
+   * @returns the method result.
+   * @throws NodeRequestError when the daemon answers with a typed wire failure,
+   *   and a transport error when the connection drops.
+   */
+  request<M extends WireMethod>(method: M, params: WireParams<M>): Promise<WireResult<M>>
+  /**
+   * Observe the raw chunks the daemon pushes for `'pipe'` streams.
+   *
+   * A raw piped stream is pushed, not retained, so a consumer that misses a
+   * frame has lost those bytes; a caller registers before it spawns the process
+   * it cares about. One handler is active at a time, matching the connection's
+   * own single notification slot.
+   * @param handler - invoked per pushed chunk.
+   * @returns a disposer that removes the handler.
+   */
+  onPipeFrame(handler: (frame: SpPipeFrame) => void): () => void
+}
+
+/** A typed failure the daemon reported, carrying the seam's own error code. */
+export class NodeRequestError extends Error {
+  /** The daemon's structured payload, verbatim. */
+  readonly data: WireErrorData
+
+  /**
+   * @param data - the daemon's structured error payload.
+   */
+  constructor(data: WireErrorData) {
+    super(`${data.message} (${data.code})`)
+    this.name = 'NodeRequestError'
+    this.data = data
+  }
+}
+
+/** Resolves the live channel for one node, or undefined when it is not connected. */
+export type ChannelLookup = (nodeId: NodeId) => NodeChannel | undefined
 
 /** How to reach one daemon. */
 export interface ConnectOptions {

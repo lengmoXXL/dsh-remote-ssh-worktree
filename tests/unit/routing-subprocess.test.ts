@@ -9,13 +9,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { SubprocessHandle, SubprocessRuntime, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
-import type { SpPipeFrame } from '../../src/protocol.ts'
-import type { NodeChannel } from '../../src/channel.ts'
-import { NodeRequestError } from '../../src/channel.ts'
+import type { SpPipeFrame } from '../../src/remote/protocol.ts'
+import type { NodeChannel } from '../../src/remote/client.ts'
+import { NodeRequestError } from '../../src/remote/client.ts'
 import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
 import { asNodeId } from '../../src/ids.ts'
-import { asProcId } from '../../src/protocol.ts'
+import { asProcId } from '../../src/remote/protocol.ts'
 
 const anchors: AnchorRoute[] = [
   { nodeId: asNodeId('n1'), anchorPath: '/local/anchors/n1/app/login', remoteRoot: '/srv/app/login' },

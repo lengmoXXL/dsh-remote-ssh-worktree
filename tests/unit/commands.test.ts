@@ -147,7 +147,7 @@ test('create against an unknown machine refuses before any connection', async ()
 })
 
 test('a refused create reports the git failure verbatim', async () => {
-  const { NodeRequestError } = await import('../../src/channel.ts')
+  const { NodeRequestError } = await import('../../src/remote/client.ts')
   const deps = depsWith({
     'git.worktreeAdd': new NodeRequestError({ code: 'GIT_BRANCH_EXISTS', message: 'branch already exists' }),
   })
@@ -197,7 +197,7 @@ test('remove --delete-branch takes the branch with the checkout', async () => {
 })
 
 test('remove --delete-branch says so when the branch refuses to go', async () => {
-  const { NodeRequestError } = await import('../../src/channel.ts')
+  const { NodeRequestError } = await import('../../src/remote/client.ts')
   const deps = depsWith({
     'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': {},

@@ -23,9 +23,9 @@ import { startAgent } from './harness.ts'
 import type { TestAgent } from './harness.ts'
 import { connectNode } from '../../src/remote/client.ts'
 import type { ConnectedNode } from '../../src/remote/client.ts'
-import { NodeRequestError } from '../../src/channel.ts'
-import type { SpPipeFrame, WireMethod, WireParams, WireResult } from '../../src/protocol.ts'
-import { asProcId } from '../../src/protocol.ts'
+import { NodeRequestError } from '../../src/remote/client.ts'
+import type { SpPipeFrame, WireMethod, WireParams, WireResult } from '../../src/remote/protocol.ts'
+import { asProcId } from '../../src/remote/protocol.ts'
 
 const run = promisify(execFile)
 const TOKEN = 'protocol-token-0123456789'
