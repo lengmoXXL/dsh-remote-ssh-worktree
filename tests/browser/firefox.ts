@@ -56,6 +56,16 @@ export interface LaunchOptions {
 export async function launchFirefox(options: LaunchOptions = {}): Promise<FirefoxPage> {
   const binary = process.env['RWT_FIREFOX_BIN'] ?? DEFAULT_FIREFOX
   const profile = await mkdtemp(join(tmpdir(), 'rwt-firefox-'))
+  // The shell picks its locale from the browser's language list, so a run that
+  // wants the other language's screenshots sets it here rather than in the
+  // deployment.
+  const languages = process.env['RWT_ACCEPT_LANGUAGES']
+  if (languages !== undefined) {
+    await writeFile(
+      join(profile, 'user.js'),
+      `user_pref("intl.accept_languages", ${JSON.stringify(languages)});\n`,
+    )
+  }
   const port = await freePort()
   const browser = spawn(binary, [
     ...(options.headed === true ? [] : ['--headless']),

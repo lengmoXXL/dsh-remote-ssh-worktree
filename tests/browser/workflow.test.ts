@@ -185,11 +185,13 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await shot('01-section')
 
     // Add a machine through the form; the host stores it under its own id.
+    // The form asks for the SSH destination, two optional SSH fields, the
+    // token, and an optional title — there is no port, because the agent
+    // publishes the one it bound.
     await clickByText(page, exact('addMachine'))
     await waitForForm(page, exact('addMachine'), 'the add-machine form')
     await fillDialogInput(page, 0, 'e2e@127.0.0.1')
-    await fillDialogInput(page, 3, '7801')
-    await fillDialogInput(page, 4, 'unused-token')
+    await fillDialogInput(page, 3, 'unused-token')
     await waitForEnabled(page, exact('create'), 'the form to accept a submission')
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('addMachine'), 'the add-machine form to close')
