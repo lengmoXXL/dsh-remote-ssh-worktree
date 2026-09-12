@@ -1,6 +1,6 @@
 //! The daemon's side of the wire contract.
 //!
-//! One method table maps a `shared/protocol.ts` method onto a backend call, and
+//! One method table maps a plugin method onto a backend call, and
 //! the readers beside it turn unvalidated JSON into the parameters that table
 //! passes on: a request that does not match its method's parameters fails as
 //! `InvalidParams` before any backend sees it.

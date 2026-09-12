@@ -4,7 +4,7 @@
 //! that socket: a wrong protocol revision, a wrong token, or any other method
 //! arriving first is answered with an error and the socket is closed. After a
 //! successful handshake the connection serves the `fs.*`, `git.*`, `sp.*`, and
-//! `term.*` methods of `shared/protocol.ts`.
+//! `term.*` methods of the plugin's `src/protocol.ts`.
 //!
 //! Requests are served concurrently, because one of them (`sp.waitForExit`) is
 //! allowed to block for as long as the process runs while the same connection

@@ -1,6 +1,10 @@
 //! The parameter and result shapes of the wire contract.
 //!
-//! These mirror `shared/protocol.ts`, which both sides inline at build time.
+//! These mirror the plugin's `src/protocol.ts`, which is the same contract
+//! written for the TypeScript half; the two are maintained by hand, so a
+//! change on one side is a change on the other. The plugin's e2e suite calls
+//! every method against this binary, which is what makes a hand-maintained
+//! copy safe.
 //! Only the shapes a backend needs as typed Rust values live here; everything
 //! else travels as `serde_json::Value`.
 //!

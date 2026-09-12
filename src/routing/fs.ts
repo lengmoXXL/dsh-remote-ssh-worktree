@@ -19,7 +19,7 @@
 import type { FileSystem, FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { TARGET_KEY_PREFIX, isFsErrorCode } from '../../shared/protocol.ts'
+import { TARGET_KEY_PREFIX, isFsErrorCode } from '../protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../transport/contract.ts'
 import { NodeRequestError } from '../transport/contract.ts'
 import { asNodeId } from '../ids.ts'

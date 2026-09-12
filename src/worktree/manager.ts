@@ -15,7 +15,7 @@
  */
 
 import { posix } from 'node:path'
-import type { WireMergeOutcome, WireRepoState, WireWorktree } from '../../shared/protocol.ts'
+import type { WireMergeOutcome, WireRepoState, WireWorktree } from '../protocol.ts'
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../anchors/store.ts'
 import type { ChannelLookup, NodeChannel } from '../transport/contract.ts'
 import { NodeRequestError } from '../transport/contract.ts'

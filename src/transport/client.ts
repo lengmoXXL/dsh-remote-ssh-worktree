@@ -12,8 +12,8 @@ import { Socket } from 'node:net'
 // The `.js` suffix is required: this package ships no `exports` map, so an
 // extensionless subpath is not resolvable from ESM even though the file is.
 import { ResponseError, StreamMessageReader, StreamMessageWriter, createMessageConnection } from 'vscode-jsonrpc/node.js'
-import type { NodeInfo, SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../../shared/protocol.ts'
-import { PROTOCOL_VERSION, SP_PIPE_NOTIFICATION } from '../../shared/protocol.ts'
+import type { NodeInfo, SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../protocol.ts'
+import { PROTOCOL_VERSION, SP_PIPE_NOTIFICATION } from '../protocol.ts'
 import type { NodeChannel } from './contract.ts'
 import { NodeRequestError } from './contract.ts'
 

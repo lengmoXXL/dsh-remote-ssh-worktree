@@ -16,7 +16,7 @@
 import type { NodeChannel } from '../transport/contract.ts'
 import type { ConnectOptions, ConnectedNode } from '../transport/client.ts'
 import { connectNode } from '../transport/client.ts'
-import type { NodeInfo } from '../../shared/protocol.ts'
+import type { NodeInfo } from '../protocol.ts'
 import type { NodeRecord } from './registry.ts'
 import type { NodeId } from '../ids.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../transport/tunnel.ts'

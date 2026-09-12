@@ -1,13 +1,18 @@
 /**
- * The wire contract between the local `dsh-remote-ssh-worktree` plugin and the
- * `dsh-remote-ssh-worktree-agent` daemon running on a remote machine.
+ * The wire contract between this plugin and the `dsh-remote-agent` daemon
+ * running on a remote machine.
  *
- * This module has no imports on purpose: the daemon is a plain Node program
- * that depends on neither Cordis nor any `@deepseek-ai/dsh-*` package, so both
- * sides inline these declarations at build time.
+ * This is the plugin's half of the contract, and the half its own code is
+ * typed against. The daemon is a Rust program with its own copy of the same
+ * shapes (`agent/src/protocol.rs` and `agent/src/wire.rs`); the two are
+ * maintained by hand, so a change here is a change there. What holds them
+ * together is behavioural rather than structural: `tests/e2e/protocol.test.ts`
+ * calls every method below against the shipped binary and fails when one of
+ * them moves.
  *
- * Transport is JSON-RPC 2.0 over a line-delimited byte stream. Binary payloads
- * travel base64-encoded; every other field is plain JSON.
+ * Transport is JSON-RPC 2.0 over a byte stream framed with a `Content-Length`
+ * header block. Binary payloads travel base64-encoded; every other field is
+ * plain JSON.
  *
  * **Target identity is the canonical absolute path.** Every mutating and
  * reading method addresses a file by the `canonicalPath` a previous call

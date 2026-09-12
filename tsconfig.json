@@ -6,6 +6,6 @@
     "types": ["node"],
     "noPropertyAccessFromIndexSignature": true
   },
-  "include": ["src/**/*.ts", "shared/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["src/client/**"]
 }

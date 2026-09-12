@@ -9,7 +9,7 @@
  */
 
 import type { NodeId } from '../ids.ts'
-import type { SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../../shared/protocol.ts'
+import type { SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../protocol.ts'
 
 /** One live connection to a node's daemon. */
 export interface NodeChannel {
