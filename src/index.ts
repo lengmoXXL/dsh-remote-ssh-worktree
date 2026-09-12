@@ -31,6 +31,7 @@ import z from '@deepseek-ai/schemastery'
 import { join } from 'node:path'
 import { createAnchorStore } from './plugin/anchors.ts'
 import { AGENT_VERSION } from './nodes/agent/install.ts'
+import { autoconnect } from './nodes/autoconnect.ts'
 import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './nodes/connections.ts'
 import { createNodeRegistry, defaultNodeTitle } from './nodes/registry.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS } from './nodes/ssh.ts'
@@ -115,8 +116,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     sshForwardTimeoutMs: config.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS,
     daemonHandshakeTimeoutMs: config.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS,
   })
-  ctx.effect(() => () => {
-    connections.dispose()
+  // A deployment that just loaded should not need a person to click Connect per
+  // machine, and a restored session should find its workspace reachable. The
+  // pass gives up quietly, so its failures are read from the section.
+  ctx.effect(() => {
+    const stop = autoconnect({ records: () => registry.list(), connections })
+    return () => {
+      stop()
+      connections.dispose()
+    }
   })
 
   const worktrees = createWorktreeManager({
@@ -148,7 +156,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   })
 
   registerNodeApi(ctx, { registry, repos, connections, worktrees })
-  registerWorktreeTools(ctx, { registry, connections, worktrees })
+  registerWorktreeTools(ctx, { registry, worktrees })
   registerWorktreeCommand(ctx, { registry, connections, worktrees })
 
   const subprocessScope = ctx.isolate('subprocess')

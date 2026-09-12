@@ -14,7 +14,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { asAnchorId, asNodeId } from '../ids.ts'
-import type { NodeConnections } from '../nodes/connections.ts'
 import type { NodeRegistry } from '../nodes/registry.ts'
 import type { WorktreeManager } from '../worktree/manager.ts'
 
@@ -24,8 +23,6 @@ export interface WorktreeToolDeps {
   readonly worktrees: WorktreeManager
   /** Durable node records. */
   readonly registry: NodeRegistry
-  /** Live connections. */
-  readonly connections: NodeConnections
 }
 
 /** The text one tool result carries. */
@@ -107,7 +104,6 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
         const record = deps.registry.get(asNodeId(args.nodeId))
         if (record === undefined) return { text: `Error: no machine "${args.nodeId}"`, anchorId: '', localPath: '', branch: '' }
         try {
-          if (deps.connections.channel(asNodeId(args.nodeId)) === undefined) await deps.connections.connect(record)
           const anchor = await deps.worktrees.create({
             nodeId: asNodeId(args.nodeId),
             repoPath: args.repoPath,

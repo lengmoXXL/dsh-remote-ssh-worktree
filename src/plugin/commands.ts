@@ -93,7 +93,6 @@ export async function runWorktreeCommand(
     const record = deps.registry.get(asNodeId(nodeId))
     if (record === undefined) return { kind: 'error', text: `no node "${nodeId}"` }
     try {
-      if (deps.connections.channel(asNodeId(nodeId)) === undefined) await deps.connections.connect(record)
       const anchor = await deps.worktrees.create({
         nodeId: asNodeId(nodeId),
         repoPath,

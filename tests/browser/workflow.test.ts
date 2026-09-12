@@ -228,12 +228,13 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     )
     await shot('02-machine-added')
 
-    // Connect the seeded machine, whose record reaches the daemon directly.
-    await clickByText(page, /e2e daemon/)
-    await waitForEnabled(page, exact('connect'), 'the connect control to settle')
-    await clickByText(page, exact('connect'))
+    // The seeded machine connects itself: the plugin brings every configured
+    // machine up once it loads, so the section shows a live one with no click.
+    // Opening the row is still what reveals the repository controls.
     await waitForState(instance, 'ready')
+    await clickByText(page, /e2e daemon/)
     await waitFor(page, present('status.ready'), 'the machine to report itself connected')
+    await waitForEnabled(page, exact('addRepository'), 'the repository control to settle')
     await shot('03-connected')
 
     // Register the fixture repository; the daemon proves it is a git checkout.
