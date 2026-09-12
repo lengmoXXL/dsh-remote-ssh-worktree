@@ -149,7 +149,7 @@ test('the built bundle registers itself under the plugin id', async () => {
 test('the loaded module exposes exactly the plugin surface', async () => {
   const { exports } = await loadBundle()
   assert.deepEqual(Object.keys(exports).sort(), ['apply', 'inject', 'name'])
-  assert.equal(exports['name'], 'remote-worktrees-ui')
+  assert.equal(exports['name'], 'remote-ssh-worktree-ui')
   assert.deepEqual(exports['inject'], ['slots', 'locale'])
 })
 

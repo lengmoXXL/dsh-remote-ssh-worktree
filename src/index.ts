@@ -45,7 +45,7 @@ import { createNodeRegistry, defaultNodeTitle } from './storage/nodes.ts'
 import { createRepoStore } from './storage/repos.ts'
 
 /** Plugin name used by the Loader and by diagnostics. */
-export const name = 'remote-worktree'
+export const name = 'remote-ssh-worktree'
 
 /**
  * Services this plugin needs before it activates. `sandboxPolicy` is required

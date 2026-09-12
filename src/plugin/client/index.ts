@@ -1,11 +1,11 @@
 /**
- * The browser half of dsh-remote-ssh-worktree.
+ * The client half of dsh-remote-ssh-worktree.
  *
  * It owns exactly one surface: a settings section that manages the machines
  * this deployment can reach, the repositories registered on them, and the
  * remote worktrees cut from those repositories. Everything it renders comes
  * from the host's management routes under `/dsh-remote-ssh-worktree`, which the
- * host half registers; the browser side has no privileged access and no other
+ * host half registers; the client has no privileged access and no other
  * way in.
  *
  * The module is the plugin body: it registers the locale dictionaries and
@@ -186,13 +186,13 @@ function sectionFace(t: Translate): RemoteWorktreesFace {
 }
 
 /** Plugin name used by the client loader and by diagnostics. */
-export const name = 'remote-worktrees-ui'
+export const name = 'remote-ssh-worktree-ui'
 
 /** Client services this plugin needs before it activates. */
 export const inject = ['slots', 'locale']
 
 /**
- * Mount the browser half.
+ * Mount the client half.
  * @param ctx - the client context this plugin was mounted on.
  */
 export function apply(ctx: Context): void {

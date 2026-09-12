@@ -1,12 +1,12 @@
 /**
- * Build configuration for both faces of the package.
+ * Build configuration for both halves of the package.
  *
- * The host face is one Node program the Harness Loader mounts by package name,
+ * The host half is one Node program the Harness Loader mounts by package name,
  * so the shared wire contract is inlined and every Harness package stays
  * external — the profile already has exactly one copy of each, and a second
- * would break service identity. The browser face is the bundle below. They are
+ * would break service identity. The client half is the bundle below. They are
  * one tsdown invocation because they write the same output directory, and only
- * the host face cleans it.
+ * the host half cleans it.
  *
  * The web shell loads a plugin's client bundle through a module loader it
  * installs on `window`, so the artifact must be one CommonJS factory call
@@ -99,8 +99,8 @@ const host = defineConfig({
   // `package.json` names `lib/index.d.ts`, so the declaration must exist.
   dts: true,
   sourcemap: true,
-  // The host face owns `clean` for the shared output directory; the browser
-  // face below must not wipe what this one wrote.
+  // The host half owns `clean` for the shared output directory; the client
+  // half below must not wipe what this one wrote.
   clean: true,
   // `package.json` names `lib/index.js`, which is the convention a profile
   // install expects; the package is `type: module`, so `.js` is already ESM.
