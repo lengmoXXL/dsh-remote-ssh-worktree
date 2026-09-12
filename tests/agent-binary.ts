@@ -19,8 +19,8 @@ function candidates(): readonly string[] {
   const override = process.env['DSH_REMOTE_AGENT_BIN']
   return [
     ...override === undefined || override === '' ? [] : [override],
-    join(here, '..', 'target', 'release', 'dsh-remote-agent'),
-    join(here, '..', 'target', 'debug', 'dsh-remote-agent'),
+    join(here, '..', 'agent', 'target', 'release', 'dsh-remote-agent'),
+    join(here, '..', 'agent', 'target', 'debug', 'dsh-remote-agent'),
   ]
 }
 

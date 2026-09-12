@@ -141,7 +141,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "build": "tsdown",
-    "build:agent": "cargo build --release -p dsh-remote-agent",
+    "build:agent": "cargo build --release --manifest-path agent/Cargo.toml",
     "pretest": "npm run build",
     "test": "node --test --experimental-strip-types tests/unit/*.test.ts tests/e2e/*.test.ts",
     "test:browser": "npm run build && node --test --experimental-strip-types tests/browser/workflow.test.ts"

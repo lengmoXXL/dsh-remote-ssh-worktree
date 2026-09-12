@@ -58,21 +58,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          workspaces: agent
       # cross supplies the musl toolchain and links statically by default.
       - if: matrix.builder == 'cross'
         uses: taiki-e/install-action@v2
         with:
           tool: cross
-      - run: ${{ matrix.builder }} build --release -p dsh-remote-agent --target ${{ matrix.target }}
+      # Built from inside the crate: there is no root manifest, and cross mounts
+      # the directory it runs in as the workspace.
+      - name: Build
+        working-directory: agent
+        run: ${{ matrix.builder }} build --release --target ${{ matrix.target }}
       # One Linux binary must run everywhere, so a dynamic build is a failure.
       - name: Verify static linking
         if: contains(matrix.target, 'musl')
         run: |
-          bin=target/${{ matrix.target }}/release/dsh-remote-agent
+          bin=agent/target/${{ matrix.target }}/release/dsh-remote-agent
           file "$bin"
           # musl may be plain static or static-pie; dynamic is the failure.
           file "$bin" | grep -Eq 'statically linked|static-pie linked'
-      - run: cp target/${{ matrix.target }}/release/dsh-remote-agent ${{ matrix.asset }}
+      - run: cp agent/target/${{ matrix.target }}/release/dsh-remote-agent ${{ matrix.asset }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
