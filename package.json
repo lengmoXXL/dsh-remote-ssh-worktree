@@ -146,6 +146,7 @@
     "build": "tsdown && tsdown -c tsdown.agent.config.ts",
     "pretest": "npm run build",
     "test": "node --test --experimental-strip-types tests/unit/*.test.ts tests/e2e/*.test.ts",
+    "test:browser": "npm run build && node --test --experimental-strip-types tests/browser/workflow.test.ts",
     "test:agent": "node --test --experimental-strip-types agent/tests/*.test.ts",
     "test:all": "npm run test && npm run test:agent"
   },

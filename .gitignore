@@ -9,3 +9,6 @@ agent/lib/
 # Local noise
 *.log
 .DS_Store
+
+# Browser test screenshots
+.artifacts/
