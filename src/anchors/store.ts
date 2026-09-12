@@ -28,7 +28,6 @@ import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AnchorId, NodeId } from '../ids.ts'
-import type { AnchorRoute } from '../routing/classify.ts'
 
 /** Metadata file name inside every anchor directory. */
 export const ANCHOR_FILE = '.dsh-remote-worktree.json'
@@ -60,6 +59,19 @@ export interface AnchorRecord {
   readonly branch: string
   /** ISO-8601 creation instant. */
   readonly createdAt: string
+}
+
+/**
+ * The anchor facts a router routes by: which node, which local directory, and
+ * which remote root — without the identity or branch the lifecycle needs.
+ */
+export interface AnchorRoute {
+  /** The node the anchor's remote root lives on. */
+  readonly nodeId: NodeId
+  /** Absolute local directory used as the session cwd and workspace path. */
+  readonly anchorPath: string
+  /** Absolute POSIX root the anchor maps onto. */
+  readonly remoteRoot: string
 }
 
 /** Fields a caller supplies when creating an anchor. */

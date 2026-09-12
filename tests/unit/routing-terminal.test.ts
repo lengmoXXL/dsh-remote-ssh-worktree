@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { SubprocessRuntime, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { NodeChannel } from '../../src/transport/contract.ts'
-import type { AnchorRoute } from '../../src/routing/classify.ts'
+import type { AnchorRoute } from '../../src/anchors/store.ts'
 import { createRoutingSubprocessRuntime } from '../../src/routing/subprocess.ts'
 import { asNodeId } from '../../src/ids.ts'
 

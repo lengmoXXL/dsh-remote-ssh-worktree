@@ -19,13 +19,24 @@
  * on a process meant to outlive it; and `setsid`/`nohup` detach that process
  * from a session that is about to end.
  *
- * @module dsh-remote-ssh-worktree/agent/install
+ * @module dsh-remote-ssh-worktree/nodes/agent/install
  */
 
 import { agentAssetName, resolveAgentBinary } from './release.ts'
 import type { AgentBinaryOptions } from './release.ts'
-import type { SshCommandResult, SshTarget } from '../transport/ssh.ts'
-import { runSsh, sshFailure } from '../transport/ssh.ts'
+import type { SshCommandResult, SshTarget } from '../../transport/ssh.ts'
+import { runSsh, sshFailure } from '../../transport/ssh.ts'
+
+/**
+ * Agent build this plugin installs on every machine it reaches.
+ *
+ * A single constant, not a config knob: the plugin and the release it
+ * downloads are one artifact, and a plugin that let a deployment name a
+ * different build would be describing a wire contract it cannot check. Bump
+ * this together with the release tag and `agent/Cargo.toml`, which a unit test
+ * keeps in step.
+ */
+export const AGENT_VERSION = '0.0.1'
 
 /** A started agent, and where a forward can reach it. */
 export interface AgentEndpoint {

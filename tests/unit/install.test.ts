@@ -3,14 +3,18 @@
  * are about what it must not do: reinstall a machine that is already running
  * the expected build, put a secret into a command string where `ps` can read
  * it, or report success for an agent that never published a port. Every remote
- * command is scripted, so none of this opens an SSH connection.
+ * command is scripted, so none of this opens an SSH connection. The build it
+ * names is pinned to the crate manifest here too, because a plugin that
+ * expected a build the release does not carry would fail on every machine at
+ * once.
  */
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { readFile } from 'node:fs/promises'
 import type { SshCommandResult, SshTarget } from '../../src/transport/ssh.ts'
-import type { AgentCommandRunner, AgentProgress } from '../../src/agent/install.ts'
-import { ensureAgent } from '../../src/agent/install.ts'
+import type { AgentCommandRunner, AgentProgress } from '../../src/nodes/agent/install.ts'
+import { AGENT_VERSION, ensureAgent } from '../../src/nodes/agent/install.ts'
 
 const SSH: SshTarget = { target: 'me@build-01' }
 const DIR = '$HOME/.dsh/remote-agent'
@@ -368,4 +372,12 @@ test('a setup command that fails reports the shared ssh diagnostic', async () =>
     }),
     /"me@build-01" rejected the key or agent; check the SSH key and ssh-agent: mkdir: Permission denied/,
   )
+})
+
+test('the crate version matches the agent build the plugin installs', async () => {
+  // Read the manifest rather than trusting a build step to have copied it.
+  const manifest = await readFile(new URL('../../agent/Cargo.toml', import.meta.url), 'utf8')
+  const match = /^version = "(.+)"$/m.exec(manifest)
+  assert.notEqual(match, null)
+  assert.equal(match?.[1], AGENT_VERSION)
 })

@@ -18,18 +18,9 @@
  */
 
 import { posix } from 'node:path'
+import type { AnchorRoute } from '../anchors/store.ts'
 import { asNodeId } from '../ids.ts'
 import type { NodeId } from '../ids.ts'
-
-/** One remote worktree this plugin currently owns. */
-export interface AnchorRoute {
-  /** The node the anchor's remote root lives on. */
-  readonly nodeId: NodeId
-  /** Absolute local directory used as the session cwd and workspace path. */
-  readonly anchorPath: string
-  /** Absolute POSIX root the anchor maps onto. */
-  readonly remoteRoot: string
-}
 
 /** Where one path resolves to. */
 export type Route =

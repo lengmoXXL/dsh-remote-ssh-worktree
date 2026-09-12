@@ -19,10 +19,9 @@ import { connectNode } from '../transport/client.ts'
 import type { NodeInfo } from '../protocol.ts'
 import type { NodeRecord } from './registry.ts'
 import type { NodeId } from '../ids.ts'
-import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../transport/tunnel.ts'
-import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from '../agent/install.ts'
-import { ensureAgent } from '../agent/install.ts'
-import { AGENT_VERSION } from '../agent/version.ts'
+import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../transport/ssh.ts'
+import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from './agent/install.ts'
+import { AGENT_VERSION, ensureAgent } from './agent/install.ts'
 
 /** Where one node's connection stands. */
 export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'

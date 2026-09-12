@@ -20,7 +20,7 @@
  * cached: the bytes are executed on a remote machine, so a truncated or
  * substituted asset must fail here rather than at exec time there.
  *
- * @module dsh-remote-ssh-worktree/agent/release
+ * @module dsh-remote-ssh-worktree/nodes/agent/release
  */
 
 import { createHash, randomUUID } from 'node:crypto'
