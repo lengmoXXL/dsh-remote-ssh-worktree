@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { ConnectedNode } from '../../src/transport/client.ts'
+import type { ConnectedNode } from '../../src/nodes/client.ts'
 import type { NodeInfo } from '../../src/protocol.ts'
 import { createNodeConnections } from '../../src/nodes/connections.ts'
 import type { NodeRecord } from '../../src/nodes/registry.ts'

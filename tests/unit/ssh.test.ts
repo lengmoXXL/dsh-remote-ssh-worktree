@@ -17,7 +17,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
-import type { SshProcess, TunnelProcess } from '../../src/transport/ssh.ts'
+import type { SshProcess, TunnelProcess } from '../../src/nodes/ssh.ts'
 import {
   allocateLocalPort,
   openTunnel,
@@ -26,7 +26,7 @@ import {
   sshFailure,
   tunnelArgs,
   tunnelFailure,
-} from '../../src/transport/ssh.ts'
+} from '../../src/nodes/ssh.ts'
 
 /** A process stub whose exit this test controls. */
 function stubProcess(exit: number, stdout = '', stderr = ''): SshProcess {

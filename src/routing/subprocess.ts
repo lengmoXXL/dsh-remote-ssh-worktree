@@ -41,7 +41,7 @@ import type {
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import type { ProcId, SpPipeFrame } from '../protocol.ts'
-import type { ChannelLookup, NodeChannel } from '../transport/contract.ts'
+import type { ChannelLookup, NodeChannel } from '../channel.ts'
 import type { AnchorRoute } from '../anchors/store.ts'
 import { classifyPath } from './classify.ts'
 

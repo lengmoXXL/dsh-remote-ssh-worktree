@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
-import type { SshCommandResult, SshTarget } from '../../src/transport/ssh.ts'
+import type { SshCommandResult, SshTarget } from '../../src/nodes/ssh.ts'
 import type { AgentCommandRunner, AgentProgress } from '../../src/nodes/agent/install.ts'
 import { AGENT_VERSION, ensureAgent } from '../../src/nodes/agent/install.ts'
 

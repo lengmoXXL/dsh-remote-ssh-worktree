@@ -24,8 +24,8 @@
 
 import { agentAssetName, resolveAgentBinary } from './release.ts'
 import type { AgentBinaryOptions } from './release.ts'
-import type { SshCommandResult, SshTarget } from '../../transport/ssh.ts'
-import { runSsh, sshFailure } from '../../transport/ssh.ts'
+import type { SshCommandResult, SshTarget } from '../ssh.ts'
+import { runSsh, sshFailure } from '../ssh.ts'
 
 /**
  * Agent build this plugin installs on every machine it reaches.

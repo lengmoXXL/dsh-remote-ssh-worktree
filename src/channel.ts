@@ -1,15 +1,21 @@
 /**
- * The plugin's view of one node connection.
+ * What the rest of the plugin may ask a node, and the failure a node answers
+ * with.
  *
- * The filesystem and subprocess routers depend on this interface rather than
- * on a concrete client, so a test can drive them with a stub and the transport
- * stays replaceable.
+ * This is the port, not a way of reaching a machine. The filesystem and
+ * subprocess routers, and the worktree lifecycle, depend on this interface
+ * rather than on a concrete client, so a test can drive them with a stub and
+ * the thing that actually carries the bytes stays replaceable.
  *
- * @module dsh-remote-ssh-worktree/transport/contract
+ * It sits at the root beside `protocol.ts` because its dependents are not
+ * transport code: the domain layer asks a node for work without knowing
+ * whether an SSH forward, a direct socket, or something else is underneath.
+ *
+ * @module dsh-remote-ssh-worktree/channel
  */
 
-import type { NodeId } from '../ids.ts'
-import type { SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../protocol.ts'
+import type { NodeId } from './ids.ts'
+import type { SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from './protocol.ts'
 
 /** One live connection to a node's daemon. */
 export interface NodeChannel {

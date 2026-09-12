@@ -1,11 +1,14 @@
 /**
- * The TCP transport to one node's daemon.
+ * The TCP client for one node's daemon: the implementation of {@link NodeChannel}.
  *
  * `vscode-jsonrpc` owns framing, request correlation, and cancellation on top
  * of the socket, so this module only establishes the connection, performs the
  * handshake, and translates a daemon failure into {@link NodeRequestError}.
+ * What supplies the socket — an SSH forward today, the recorded address for a
+ * `direct` record — is the caller's business, which is what lets one client
+ * serve both.
  *
- * @module dsh-remote-ssh-worktree/transport/client
+ * @module dsh-remote-ssh-worktree/nodes/client
  */
 
 import { Socket } from 'node:net'
@@ -14,8 +17,8 @@ import { Socket } from 'node:net'
 import { ResponseError, StreamMessageReader, StreamMessageWriter, createMessageConnection } from 'vscode-jsonrpc/node.js'
 import type { NodeInfo, SpPipeFrame, WireErrorData, WireMethod, WireParams, WireResult } from '../protocol.ts'
 import { PROTOCOL_VERSION, SP_PIPE_NOTIFICATION } from '../protocol.ts'
-import type { NodeChannel } from './contract.ts'
-import { NodeRequestError } from './contract.ts'
+import type { NodeChannel } from '../channel.ts'
+import { NodeRequestError } from '../channel.ts'
 
 /** How to reach one daemon. */
 export interface ConnectOptions {

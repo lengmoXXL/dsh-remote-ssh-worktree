@@ -21,8 +21,8 @@
 import { posix } from 'node:path'
 import type { WireWorktree } from '../protocol.ts'
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../anchors/store.ts'
-import type { ChannelLookup, NodeChannel } from '../transport/contract.ts'
-import { NodeRequestError } from '../transport/contract.ts'
+import type { ChannelLookup, NodeChannel } from '../channel.ts'
+import { NodeRequestError } from '../channel.ts'
 import type { AnchorId, NodeId } from '../ids.ts'
 import type { RepoRef } from '../repos/store.ts'
 
