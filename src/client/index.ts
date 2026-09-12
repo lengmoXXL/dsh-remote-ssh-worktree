@@ -62,6 +62,13 @@ interface NodeStatus {
   readonly state: NodeState
   /** The local port carrying this machine's traffic, once a forward is up. */
   readonly localPort?: number
+  /** The step in flight, while a connection attempt is still running. */
+  readonly progress?: {
+    readonly phase: 'checking' | 'reusing' | 'fetching' | 'uploading' | 'starting'
+    readonly version: string
+    readonly asset?: string
+    readonly source?: 'cache' | 'network'
+  }
   readonly error?: string
 }
 

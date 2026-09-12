@@ -174,6 +174,54 @@ test('an ssh record is dialled through the forward it opens', async () => {
   assert.equal(connections.status(asNodeId('n1')).localPort, 52096)
 })
 
+test('an install in flight is published on the status and cleared once ready', async () => {
+  let phaseDuringOpen: string | undefined
+  let sourceDuringHandshake: string | undefined
+  const connections = createNodeConnections({
+    openTransport: (_record, report) => {
+      report({ phase: 'fetching', version: '0.0.1', asset: 'dsh-remote-agent-linux-x86_64', source: 'network' })
+      phaseDuringOpen = connections.status(asNodeId('n1')).progress?.phase
+      return Promise.resolve({ host: '127.0.0.1', port: 1, close: () => {} })
+    },
+    connect: () => {
+      sourceDuringHandshake = connections.status(asNodeId('n1')).progress?.source
+      return Promise.resolve(stubNode())
+    },
+  })
+
+  await connections.connect(sshRecord())
+
+  assert.equal(phaseDuringOpen, 'fetching')
+  assert.equal(sourceDuringHandshake, 'network')
+  assert.equal(connections.status(asNodeId('n1')).progress, undefined)
+})
+
+test('a failed install settles the machine and leaves it retryable', async () => {
+  let attempts = 0
+  const connections = createNodeConnections({
+    openTransport: (_record, report) => {
+      attempts += 1
+      report({ phase: 'uploading', version: '0.0.1' })
+      // A download or upload that fails is an opener failure, not a handshake
+      // one, and it must not strand the machine in `connecting`.
+      if (attempts === 1) return Promise.reject(new Error('scp died'))
+      return Promise.resolve({ host: '127.0.0.1', port: 1, close: () => {} })
+    },
+    connect: () => Promise.resolve(stubNode()),
+  })
+
+  await assert.rejects(() => connections.connect(sshRecord()), /scp died/)
+  const failed = connections.status(asNodeId('n1'))
+  assert.equal(failed.state, 'failed')
+  assert.equal(failed.error, 'scp died')
+  assert.equal(failed.progress, undefined)
+
+  // The next attempt runs the opener again instead of replaying the rejection.
+  await connections.connect(sshRecord())
+  assert.equal(connections.status(asNodeId('n1')).state, 'ready')
+  assert.equal(attempts, 2)
+})
+
 test('a direct record is dialled at its recorded address and reports no forward', async () => {
   const seen: { host: string; port: number }[] = []
   const connections = createNodeConnections({

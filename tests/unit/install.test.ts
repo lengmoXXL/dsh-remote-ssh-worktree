@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { SshCommandResult, SshTarget } from '../../src/transport/ssh.ts'
-import type { AgentCommandRunner } from '../../src/agent/install.ts'
+import type { AgentCommandRunner, AgentProgress } from '../../src/agent/install.ts'
 import { ensureAgent } from '../../src/agent/install.ts'
 
 const SSH: SshTarget = { target: 'me@build-01' }
@@ -158,6 +158,56 @@ test('a missing agent is installed from the resolved binary and started', async 
   assert.deepEqual(host.inputs[uploadIndex(host)], binary)
   assert.equal(host.commands.every(command => !command.includes('ELF-ish')), true)
   assert.equal(host.installed, JSON.stringify({ version: '0.7.0' }))
+})
+
+test('reports each install step as it starts, with the build it concerns', async () => {
+  const host = machine()
+  host.onStart = () => {
+    host.alive.add(8181)
+    host.state = stateFile('0.7.0', 8181, 46_000)
+  }
+  const seen: AgentProgress[] = []
+
+  await ensureAgent({
+    ssh: SSH,
+    token: 't',
+    version: '0.7.0',
+    cacheDir: '/unused',
+    run: runnerFor(host),
+    resolveBinary: (options) => {
+      // The real resolver reports where the bytes came from; the stub stands in.
+      options.onSource?.('network')
+      return Promise.resolve(Buffer.from('binary'))
+    },
+    onProgress: (progress) => { seen.push(progress) },
+    pollMs: 1,
+  })
+
+  assert.deepEqual(seen.map(progress => progress.phase), [
+    'checking', 'fetching', 'fetching', 'uploading', 'starting',
+  ])
+  assert.equal(seen[0]?.version, '0.7.0')
+  assert.equal(seen[1]?.asset, 'dsh-remote-agent-linux-x86_64')
+  assert.equal(seen[2]?.source, 'network')
+})
+
+test('reports reuse without pretending to fetch anything', async () => {
+  const host = machine()
+  host.alive.add(4242)
+  host.state = stateFile('0.0.1', 4242, 41_234)
+  const seen: AgentProgress[] = []
+
+  await ensureAgent({
+    ssh: SSH,
+    token: 't',
+    version: '0.0.1',
+    cacheDir: '/unused',
+    run: runnerFor(host),
+    resolveBinary: () => Promise.resolve(Buffer.from('binary')),
+    onProgress: (progress) => { seen.push(progress) },
+  })
+
+  assert.deepEqual(seen.map(progress => progress.phase), ['checking', 'reusing'])
 })
 
 test('the token is written over stdin and never appears in a command', async () => {

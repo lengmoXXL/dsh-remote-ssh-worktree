@@ -20,7 +20,7 @@ import type { NodeInfo } from '../../shared/protocol.ts'
 import type { NodeRecord } from './registry.ts'
 import type { NodeId } from '../ids.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../transport/tunnel.ts'
-import type { AgentEndpoint, EnsureAgentOptions } from '../agent/install.ts'
+import type { AgentEndpoint, AgentProgress, EnsureAgentOptions } from '../agent/install.ts'
 import { ensureAgent } from '../agent/install.ts'
 import { AGENT_VERSION } from '../agent/version.ts'
 
@@ -38,6 +38,12 @@ export interface NodeStatus {
    * for a direct address, which needs no forward.
    */
   readonly localPort?: number
+  /**
+   * What the attempt is doing while it is not yet ready — installing or
+   * updating the agent is slow enough that a surface should say so. Absent
+   * once the node is ready or the attempt has ended.
+   */
+  readonly progress?: AgentProgress
   /** The failure message after a failed attempt or a dropped transport. */
   readonly error?: string
 }
@@ -70,7 +76,10 @@ export interface NodeConnectionsDeps {
    * SSH forward for an `ssh` record and the recorded address for a `direct`
    * one; injectable so tests need neither a network nor an `ssh` binary.
    */
-  readonly openTransport?: (record: NodeRecord) => Promise<ResolvedTransport>
+  readonly openTransport?: (
+    record: NodeRecord,
+    report: (progress: AgentProgress) => void,
+  ) => Promise<ResolvedTransport>
   /**
    * Deadline for the daemon handshake once a transport is up. Defaults to
    * {@link DEFAULT_HANDSHAKE_TIMEOUT_MS}; without one an unreachable daemon
@@ -155,8 +164,8 @@ interface OpenTransportDeps {
  */
 function defaultOpenTransport(
   deps: OpenTransportDeps,
-): (record: NodeRecord) => Promise<ResolvedTransport> {
-  return async (record) => {
+): (record: NodeRecord, report: (progress: AgentProgress) => void) => Promise<ResolvedTransport> {
+  return async (record, report) => {
     if (record.transport.kind === 'direct') {
       return {
         host: record.transport.host,
@@ -172,6 +181,7 @@ function defaultOpenTransport(
       token: record.token,
       version: deps.agentVersion,
       cacheDir: deps.cacheDir,
+      onProgress: report,
     })
     const tunnel = await openTunnel(
       { ssh: record.transport, remotePort: endpoint.port },
@@ -227,6 +237,7 @@ interface Entry {
   pending: Promise<NodeInfo> | undefined
   transport: ResolvedTransport | undefined
   localPort: number | undefined
+  progress: AgentProgress | undefined
 }
 
 /**
@@ -256,6 +267,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
       pending: undefined,
       transport: undefined,
       localPort: undefined,
+      progress: undefined,
     }
     entries.set(nodeId, created)
     return created
@@ -272,6 +284,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     entry.transport?.close()
     entry.transport = undefined
     entry.localPort = undefined
+    entry.progress = undefined
     entry.state = 'failed'
     entry.error = error instanceof Error ? error.message : String(error)
   }
@@ -289,6 +302,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
         state: entry.state,
         ...entry.info === undefined ? {} : { info: entry.info },
         ...entry.localPort === undefined ? {} : { localPort: entry.localPort },
+        ...entry.progress === undefined ? {} : { progress: entry.progress },
         ...entry.error === undefined ? {} : { error: entry.error },
       }
     },
@@ -299,6 +313,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
         state: entry.state,
         ...entry.info === undefined ? {} : { info: entry.info },
         ...entry.localPort === undefined ? {} : { localPort: entry.localPort },
+        ...entry.progress === undefined ? {} : { progress: entry.progress },
         ...entry.error === undefined ? {} : { error: entry.error },
       }))
     },
@@ -310,32 +325,40 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
 
       entry.state = 'connecting'
       entry.error = undefined
+      entry.progress = undefined
       const attempt = (async (): Promise<NodeInfo> => {
-        // The forward comes first: without it there is no address to dial, and
-        // its own failure is more specific than a refused connection would be.
-        const transport = await openTransport(record)
-        entry.transport = transport
         try {
+          // The forward comes first: without it there is no address to dial, and
+          // its own failure is more specific than a refused connection would be.
+          // Installing or updating the agent happens inside it, so its steps are
+          // published as they start.
+          const opened = await openTransport(record, (progress) => { entry.progress = progress })
+          entry.transport = opened
           const live = await connect({
-            host: transport.host,
-            port: transport.port,
+            host: opened.host,
+            port: opened.port,
             token: record.token,
             timeoutMs: handshakeTimeoutMs,
           })
           entry.live = live
           entry.info = live.info
-          entry.localPort = record.transport.kind === 'ssh' ? transport.port : undefined
+          entry.localPort = record.transport.kind === 'ssh' ? opened.port : undefined
           entry.pending = undefined
+          entry.progress = undefined
           entry.state = 'ready'
           // A forward can die while the socket it carried stays open long
           // enough to look healthy. Publish the loss rather than leaving a
           // `ready` node whose every call hangs.
-          void transport.exited?.then(() => {
-            if (entry.transport !== transport) return
+          void opened.exited?.then(() => {
+            if (entry.transport !== opened) return
             fail(entry, new Error(`the SSH forward to "${record.title}" closed`))
           })
           return live.info
         } catch (error) {
+          // Every failure settles the entry, including one from the opener: an
+          // install that could not fetch or upload the agent must leave a
+          // failed machine that can be retried, not one stuck in `connecting`
+          // whose next attempt re-throws this same rejection.
           const reported = describeFailure(record, error)
           fail(entry, reported)
           throw reported
@@ -355,6 +378,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
       entry.transport?.close()
       entry.transport = undefined
       entry.localPort = undefined
+      entry.progress = undefined
       entry.error = undefined
       entry.state = 'disconnected'
     },
@@ -368,6 +392,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
         entry.transport?.close()
         entry.transport = undefined
         entry.localPort = undefined
+        entry.progress = undefined
         entry.state = 'disconnected'
       }
       entries.clear()

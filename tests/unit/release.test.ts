@@ -168,6 +168,34 @@ test('a release that carries no such asset is refused before anything is downloa
   }
 })
 
+test('reports whether the bytes come from the cache or the network', async () => {
+  const dir = await cacheDir()
+  try {
+    const sources: string[] = []
+    const { fetch } = scriptedFetch({ [ASSET]: BINARY, SHA256SUMS: sumsFor(ASSET, binaryDigest()) })
+    await resolveAgentBinary({
+      version: VERSION,
+      assetName: ASSET,
+      cacheDir: dir,
+      fetch,
+      onSource: source => { sources.push(source) },
+    })
+    // The second call is answered from the cache, so it must not reach the
+    // network at all — which is exactly what a caller showing progress wants
+    // to be able to say.
+    await resolveAgentBinary({
+      version: VERSION,
+      assetName: ASSET,
+      cacheDir: dir,
+      fetch: () => Promise.reject(new Error('the cache must short-circuit the download')),
+      onSource: source => { sources.push(source) },
+    })
+    assert.deepEqual(sources, ['network', 'cache'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('a checksum mismatch refuses the bytes and names the download', async () => {
   const dir = await cacheDir()
   try {

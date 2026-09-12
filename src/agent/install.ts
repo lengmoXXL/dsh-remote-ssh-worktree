@@ -37,6 +37,25 @@ export interface AgentEndpoint {
   readonly reused: boolean
 }
 
+/**
+ * What an install or update is doing, for a surface that can show it.
+ *
+ * The plugin runs this while the user waits on a connection, so the phase is
+ * what a status line reports. `source` separates a cached fetch from a network
+ * one because the two look identical from the outside and take very different
+ * amounts of time.
+ */
+export interface AgentProgress {
+  /** The step in flight. */
+  readonly phase: 'checking' | 'reusing' | 'fetching' | 'uploading' | 'starting'
+  /** Agent build the step concerns. */
+  readonly version: string
+  /** Release asset being fetched; present while `phase` is `fetching`. */
+  readonly asset?: string
+  /** Where the bytes came from, once the cache has been consulted. */
+  readonly source?: 'cache' | 'network'
+}
+
 /** Runs one remote command; injectable so tests need no `ssh` process. */
 export type AgentCommandRunner = (
   ssh: SshTarget,
@@ -58,8 +77,8 @@ export interface EnsureAgentOptions {
   readonly run?: AgentCommandRunner
   /** Binary resolver; defaults to {@link resolveAgentBinary}. */
   readonly resolveBinary?: (options: AgentBinaryOptions) => Promise<Buffer>
-  /** Receives progress lines; omitted stays silent. */
-  readonly log?: (message: string) => void
+  /** Receives each step as it starts; omitted stays silent. */
+  readonly onProgress?: (progress: AgentProgress) => void
   /** Budget for a fresh agent to publish its state, in milliseconds. */
   readonly startTimeoutMs?: number
   /** Gap between state-file polls, in milliseconds. */
@@ -213,10 +232,11 @@ async function isAlive(
 export async function ensureAgent(options: EnsureAgentOptions): Promise<AgentEndpoint> {
   const run = options.run ?? runSsh
   const resolveBinary = options.resolveBinary ?? resolveAgentBinary
-  const log = options.log ?? (() => {})
   const startTimeoutMs = options.startTimeoutMs ?? DEFAULT_AGENT_START_TIMEOUT_MS
   const pollMs = options.pollMs ?? START_POLL_MS
   const { ssh, token, version, cacheDir } = options
+  const report = options.onProgress ?? (() => {})
+  report({ phase: 'checking', version })
 
   // The platform is read once per call: every branch below either returns or
   // installs, so a second round trip would buy nothing.
@@ -234,15 +254,23 @@ export async function ensureAgent(options: EnsureAgentOptions): Promise<AgentEnd
   // agent; a pid that does is a process the install below must replace.
   const stalePid = state !== undefined && await isAlive(run, ssh, state.pid) ? state.pid : undefined
   if (state !== undefined && stalePid === state.pid && state.version === version) {
-    log(`reusing dsh-remote-agent ${version} on ${ssh.target} at 127.0.0.1:${String(state.port)}`)
+    report({ phase: 'reusing', version })
     return { port: state.port, version, reused: true }
   }
 
   await runChecked(run, ssh, ENSURE_DIR, `could not create ~/.dsh/remote-agent on "${ssh.target}"`)
 
   if (await installedVersion(run, ssh) !== version) {
-    log(`installing dsh-remote-agent ${version} on ${ssh.target} (${assetName})`)
-    const binary = await resolveBinary({ version, assetName, cacheDir })
+    report({ phase: 'fetching', version, asset: assetName })
+    const binary = await resolveBinary({
+      version,
+      assetName,
+      cacheDir,
+      // The cache check is immediate, so this replaces the phase above with
+      // one that says whether the wait will be a download or a local read.
+      onSource: source => { report({ phase: 'fetching', version, asset: assetName, source }) },
+    })
+    report({ phase: 'uploading', version })
     await runChecked(
       run,
       ssh,
@@ -269,13 +297,13 @@ export async function ensureAgent(options: EnsureAgentOptions): Promise<AgentEnd
     await run(ssh, `kill ${String(stalePid)}`).catch(() => {})
   }
 
+  report({ phase: 'starting', version })
   await runChecked(run, ssh, START_AGENT, `could not start the agent on "${ssh.target}"`)
 
   const deadline = Date.now() + startTimeoutMs
   for (;;) {
     const published = await readState(run, ssh).catch(() => undefined)
     if (published !== undefined && published.version === version && published.port > 0) {
-      log(`started dsh-remote-agent ${version} on ${ssh.target} at 127.0.0.1:${String(published.port)}`)
       return { port: published.port, version, reused: false }
     }
     if (Date.now() >= deadline) {

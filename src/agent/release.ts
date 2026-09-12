@@ -72,6 +72,14 @@ export interface AgentBinaryOptions {
   readonly cacheDir: string
   /** Downloads one URL; injectable so tests need no network. */
   readonly fetch?: AgentFetcher
+  /**
+   * Reports where the bytes come from, before any network read.
+   *
+   * A cache hit and a download look identical from the outside and take very
+   * different amounts of time, so a caller that shows progress needs to tell
+   * them apart.
+   */
+  readonly onSource?: (source: 'cache' | 'network') => void
 }
 
 /** One asset of a release, as much of it as this module uses. */
@@ -210,11 +218,14 @@ export async function resolveAgentBinary(options: AgentBinaryOptions): Promise<B
   const fetcher = options.fetch ?? fetchOverHttps
   const cached = join(options.cacheDir, options.version, options.assetName)
   try {
-    return await readFile(cached)
+    const bytes = await readFile(cached)
+    options.onSource?.('cache')
+    return bytes
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
 
+  options.onSource?.('network')
   const releaseUrl = agentReleaseApi(options.version)
   const release = await download(fetcher, releaseUrl, RELEASE_MEDIA_TYPE)
   const binaryAsset = requireAsset(release, releaseUrl, options.assetName)

@@ -58,12 +58,22 @@ interface NodeView {
 /** The connection states a machine can report. */
 type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'
 
+/** What the attempt is doing while it is not yet ready. */
+interface AgentProgress {
+  readonly phase: 'checking' | 'reusing' | 'fetching' | 'uploading' | 'starting'
+  readonly version: string
+  readonly asset?: string
+  readonly source?: 'cache' | 'network'
+}
+
 /** One machine's connection state. */
 interface NodeStatus {
   readonly nodeId: NodeId
   readonly state: NodeState
   /** The local port carrying this machine's traffic, once a forward is up. */
   readonly localPort?: number
+  /** The step in flight, while the attempt is still running. */
+  readonly progress?: AgentProgress
   readonly error?: string
 }
 
@@ -189,6 +199,45 @@ function statusOf(state: NodeState): {
   return { dot: 'idle', key: 'status.idle' }
 }
 
+/**
+ * What a step in flight reads as.
+ *
+ * Installing or updating the agent is the slow part of a connection and the
+ * only part with anything to say, so a machine that is mid-install reports the
+ * step rather than a bare "connecting".
+ * @param progress - the step the host published.
+ * @returns the locale key and its parameters.
+ */
+function progressText(progress: AgentProgress): {
+  key: RemoteWorktreesKey
+  params?: Record<string, unknown>
+} {
+  if (progress.phase === 'reusing') {
+    return { key: 'progress.reusing', params: { version: progress.version } }
+  }
+  if (progress.phase === 'fetching') {
+    if (progress.source === 'cache') {
+      return { key: 'progress.cached', params: { version: progress.version } }
+    }
+    if (progress.source === 'network') {
+      return { key: 'progress.downloading', params: { asset: progress.asset ?? progress.version } }
+    }
+    return { key: 'progress.fetching', params: { version: progress.version } }
+  }
+  if (progress.phase === 'uploading') return { key: 'progress.uploading' }
+  if (progress.phase === 'starting') return { key: 'progress.starting' }
+  return { key: 'progress.checking' }
+}
+
+/**
+ * How often a running mutation re-reads the host, in milliseconds.
+ *
+ * A step can last one SSH round trip — the cache check, the upload of a small
+ * binary — so the interval is short enough to catch most of them without
+ * turning one connect into a request storm.
+ */
+const PROGRESS_POLL_MS = 250
+
 
 
 
@@ -291,9 +340,16 @@ export function RemoteWorktreesSection(props: SectionProps) {
     void refresh()
   }, [refresh])
 
-  /** Run one mutation, then re-read; a failure lands in the banner. */
+  /**
+   * Run one mutation, then re-read; a failure lands in the banner.
+   *
+   * A connect spends its time installing or updating the agent on the machine,
+   * so the host is re-read while the request runs — otherwise the row would
+   * show whatever it showed before the click for the whole download.
+   */
   const mutate = useCallback(async (action: () => Promise<void>) => {
     setBusy(true)
+    const poll = setInterval(() => { void refresh() }, PROGRESS_POLL_MS)
     try {
       await action()
       setError(undefined)
@@ -301,6 +357,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
     } catch (failure) {
       setError(reasonOf(failure))
     } finally {
+      clearInterval(poll)
       setBusy(false)
     }
   }, [refresh])
@@ -374,6 +431,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
             const status = statusFor(node.nodeId)
             const state = status?.state ?? 'idle'
             const badge = statusOf(state)
+            const step = status?.progress === undefined ? undefined : progressText(status.progress)
             const machineOpen = openMachines.includes(node.nodeId)
             const repos = reposOf(node.nodeId)
             return (
@@ -396,7 +454,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
                         : <Tag tone="neutral">{t('forwarding', { port: status.localPort })}</Tag>}
                       {node.hasToken ? null : <Tag tone="warning">{t('noToken')}</Tag>}
                       <StateDot state={badge.dot} />
-                      <span className={css.meta}>{t(badge.key)}</span>
+                      <span className={css.meta}>
+                        {step === undefined ? t(badge.key) : t(step.key, step.params)}
+                      </span>
                     </span>
                   )}
                 >
