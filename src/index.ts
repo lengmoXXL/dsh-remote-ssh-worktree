@@ -33,7 +33,6 @@ import { autoconnect } from './models/autoconnect.ts'
 import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './models/machines.ts'
 import { createWorktreeManager, workspaceLabel } from './models/worktrees.ts'
 import { registerNodeApi } from './plugin/api.ts'
-import { registerWorktreeCommand } from './plugin/commands.ts'
 import { createRoutingFileSystem } from './plugin/routing/fs.ts'
 import { createRoutingShellExecutor } from './plugin/routing/shell.ts'
 import { createRoutingSubprocessRuntime } from './plugin/routing/subprocess.ts'
@@ -161,7 +160,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   registerNodeApi(ctx, { registry, repos, connections, worktrees })
   registerWorktreeTools(ctx, { registry, worktrees })
-  registerWorktreeCommand(ctx, { registry, connections, worktrees })
 
   const subprocessScope = ctx.isolate('subprocess')
   subprocessScope.plugin(LocalSubprocessRuntime)

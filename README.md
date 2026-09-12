@@ -40,14 +40,13 @@ failed, with a Connect button to try again.
 A repository is any directory on the machine. Each row opens, closes, or removes what it holds, and a directory that is
 not a git repository yet can still be opened as a workspace.
 
-**From a session**, a person types `/rwt` and the model calls the same operations as tools:
+**From a session**, the model drives the same operations as tools, so asking for one in prose is the whole interface:
 
 | | |
 | --- | --- |
-| `/rwt list` · `/rwt nodes` | the worktrees, and each machine's state |
-| `/rwt create <nodeId> <repoPath> <name> [baseRef]` | cut a worktree |
-| `/rwt remove <anchorId> [--force] [--delete-branch]` | drop the checkout; the branch stays unless asked |
-| `rw_list` · `rw_create` · `rw_remove` | the same three for the model |
+| `rw_list` | the worktrees, and each machine's state |
+| `rw_create` | cut a worktree, from a revision when one is named |
+| `rw_remove` | drop the checkout; the branch stays unless asked |
 
 ## How it works
 
@@ -68,7 +67,7 @@ not a git repository yet can still be opened as a workspace.
 └──────────────────────────────┬─────────────────────────────┘
                                │ management API over HTTP
 ┌─ plugin/   the DSH surfaces ─▼─────────────────────────────┐
-│  api · tools · commands       over the models              │
+│  api · tools                  over the models              │
 │  routing/  fs · subprocess · shell seams → the SDK         │
 └──────────────────────────────┬─────────────────────────────┘
                                │

@@ -37,14 +37,13 @@ dsh --profile web
 
 仓库就是机器上的任意目录。每一行可以打开、关闭或移除它所持有的东西；还不是 git 仓库的目录也可以先当工作区打开。
 
-**在会话里**，人敲 `/rwt`，模型调用同一批操作的工具：
+**在会话里**，模型用工具做同样这几件事，直接说就行：
 
 | | |
 | --- | --- |
-| `/rwt list` · `/rwt nodes` | 有哪些 worktree，以及每台机器的状态 |
-| `/rwt create <nodeId> <repoPath> <name> [baseRef]` | 切一个 worktree |
-| `/rwt remove <anchorId> [--force] [--delete-branch]` | 删掉 checkout；分支默认保留 |
-| `rw_list` · `rw_create` · `rw_remove` | 同样三件事的模型工具 |
+| `rw_list` | 有哪些 worktree，以及每台机器的状态 |
+| `rw_create` | 切一个 worktree，可以指定从哪个 revision 切 |
+| `rw_remove` | 删掉 checkout；分支默认保留 |
 
 ## 怎么实现的
 
@@ -64,7 +63,7 @@ dsh --profile web
 └──────────────────────────────┬─────────────────────────────┘
                                │ 管理 API（HTTP）
 ┌─ plugin/   DSH 表面 ─────────▼─────────────────────────────┐
-│  api · tools · commands        经 models                   │
+│  api · tools                   经 models                    │
 │  routing/  fs · subprocess · shell 三个 seam → SDK         │
 └──────────────────────────────┬─────────────────────────────┘
                                │
