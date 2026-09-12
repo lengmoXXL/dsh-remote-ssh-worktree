@@ -29,6 +29,6 @@ jobs:
         run: |
           test -f lib/index.js
           test -f lib/index.d.ts
-          test -f client/client.cjs
+          test -f lib/client.js
           test -f agent/lib/main.mjs
       - run: npm run test:all

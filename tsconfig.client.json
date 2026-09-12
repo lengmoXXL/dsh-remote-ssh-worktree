@@ -6,5 +6,5 @@
     "jsx": "react-jsx",
     "types": []
   },
-  "include": ["client/**/*.ts", "client/**/*.tsx"]
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/css-modules.d.ts"]
 }

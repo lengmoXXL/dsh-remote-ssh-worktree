@@ -7,14 +7,20 @@
  * daemon keeps no per-connection target state, so two connections naming the
  * same file agree on its path and on its version token.
  *
- * Guarded writes compare a version token and then publish separately; see
- * {@link ./version.ts} for the window that leaves open and why it is accepted.
+ * Guarded writes compare a version token and then publish separately. That
+ * check-then-write window is not atomic, and a per-target in-process lock would
+ * only serialize this daemon's own connections, not the editors, build tools,
+ * and shells that share the machine. The window is accepted because the token
+ * is advisory: losing the race costs one rejected write and a re-read, never
+ * silent corruption, since every write still publishes one complete file
+ * through a single rename.
  *
  * @module dsh-remote-agent/fs
  */
 
 import { constants as bufferConstants } from 'node:buffer'
-import { lstat, open, readdir, realpath, stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { link, lstat, mkdir, open, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { BigIntStats, Dirent } from 'node:fs'
 import { isAbsolute, basename, dirname, join, resolve } from 'node:path'
@@ -34,8 +40,6 @@ import type {
   WireWriteIntent,
   WireWriteOutcome,
 } from '../../shared/protocol.ts'
-import { publishText } from './atomic.ts'
-import { versionOf, missingVersion } from './version.ts'
 
 /** Exclusive byte limit on the pre-write diff basis; larger files report `before: null`. */
 const DIFF_BASIS_MAX_BYTES = 10 * 1024 * 1024
@@ -442,6 +446,26 @@ function modeOf(info: BigIntStats | null): number | undefined {
 }
 
 /**
+ * Derive a target's freshness token from its metadata.
+ * @param info - bigint metadata read with `stat` or `lstat`.
+ * @returns an opaque `mtimeMs:size:ino` token, comparable only for equality.
+ */
+function versionOf(info: BigIntStats): string {
+  return `${info.mtimeMs}:${info.size}:${info.ino}`
+}
+
+/**
+ * Token for a target that disappeared between publication and the post-write
+ * probe. It compares equal to no live target's {@link versionOf} result, so a
+ * consumer holding it fails its next guarded write as stale.
+ * @param path - the canonical path that is no longer present.
+ * @returns the substitute token.
+ */
+function missingVersion(path: string): string {
+  return `missing:${path}`
+}
+
+/**
  * Reject a guarded write whose precondition no longer holds.
  * @param verb - the operation named in the failure.
  * @param target - the canonical destination.
@@ -467,6 +491,71 @@ function guardWrite(
       'FS_NOT_OBSERVED',
       `cannot overwrite existing "${target}" without reading it first`,
     )
+  }
+}
+
+/** How a staged file is published, and with which permissions. */
+interface PublishOptions {
+  /**
+   * Publish through a hard link so an existing destination is preserved and
+   * this call rejects with `EEXIST` instead of overwriting it.
+   */
+  readonly createIfAbsent: boolean
+  /**
+   * POSIX mode to apply to the published file before publication, or
+   * `undefined` to keep the process default (umask applied). Callers pass the
+   * replaced file's mode so a write does not narrow its permissions.
+   */
+  readonly mode: number | undefined
+}
+
+/**
+ * Publish `content` at `targetPath` in one atomic step.
+ *
+ * The complete new content is staged in a uniquely named sibling and published
+ * with a single filesystem operation, so a reader never observes a partial file
+ * and a failed write leaves the previous content in place. Missing parent
+ * directories are created. The staged file is removed on every outcome.
+ * `createIfAbsent` publishes through `link(2)`, so a concurrent creator keeps
+ * its file and this call fails with `EEXIST`; otherwise `rename(2)` replaces the
+ * destination. A symlink at `targetPath` is replaced rather than followed, which
+ * is why callers pass canonical paths.
+ *
+ * @param targetPath - absolute destination path.
+ * @param content - complete UTF-8 text to publish.
+ * @param options - publication mode and the destination mode to preserve.
+ * @throws NodeJS.ErrnoException from the underlying filesystem call; `EEXIST`
+ *   means `createIfAbsent` found the destination present.
+ */
+async function publishText(
+  targetPath: string,
+  content: string,
+  options: PublishOptions,
+): Promise<void> {
+  const directory = dirname(targetPath)
+  await mkdir(directory, { recursive: true })
+  const stagingPath = join(directory, `.${basename(targetPath)}.${process.pid}.${randomUUID()}.tmp`)
+  try {
+    const handle = await open(stagingPath, 'wx', 0o666)
+    try {
+      await handle.writeFile(content, 'utf8')
+      await handle.sync()
+      if (options.mode !== undefined) await handle.chmod(options.mode)
+    } finally {
+      await handle.close()
+    }
+    if (options.createIfAbsent) {
+      await link(stagingPath, targetPath)
+    } else {
+      await rename(stagingPath, targetPath)
+    }
+  } finally {
+    try {
+      await rm(stagingPath, { force: true })
+    } catch {
+      // A leftover staging file is the lesser failure: the primary error is
+      // already unwinding, the name is unique per call, and the file is inert.
+    }
   }
 }
 

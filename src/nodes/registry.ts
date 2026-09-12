@@ -11,20 +11,16 @@
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { mkdir, readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-import type { NodeId } from '../ids.ts'
 import { randomUUID } from 'node:crypto'
+import type { NodeId } from '../ids.ts'
+import type { DocumentSpec } from '../storage.ts'
+import { readDocument, writeDocument } from '../storage.ts'
 
 /**
  * Document revision. Revision 1 stored `host`/`port` on the record; revision 2
  * stores a transport that says how the host reaches the daemon.
  */
 const DOCUMENT_VERSION = 2
-
-/** Owner-only permissions: the document holds a secret per node. */
-const FILE_MODE = 0o600
 
 /** Port a daemon listens on when a caller names none. */
 const DEFAULT_REMOTE_PORT = 7801
@@ -149,12 +145,6 @@ export interface NodeRegistry {
   remove(nodeId: NodeId): Promise<boolean>
 }
 
-/** The on-disk document. */
-interface NodeDocument {
-  readonly version: number
-  readonly nodes: readonly NodeRecord[]
-}
-
 /** Whether an unknown parsed value is a transport this build understands. */
 function isTransport(value: unknown): value is NodeTransport {
   if (typeof value !== 'object' || value === null) return false
@@ -220,41 +210,6 @@ function migrateV1(value: unknown, index: number): NodeRecord {
 }
 
 /**
- * Parse a document, refusing anything this module did not write.
- * @param text - the file content.
- * @param file - the path, used only to name the failure.
- * @returns the parsed nodes.
- * @throws when the JSON is malformed, the version is unsupported, or a record
- *   does not match the stored fields.
- */
-function parseDocument(text: string, file: string): readonly NodeRecord[] {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (error) {
-    throw new Error(`${file} is not valid JSON`, { cause: error })
-  }
-  const document = parsed as Partial<NodeDocument>
-  const nodes = document.nodes
-  if (!Array.isArray(nodes)) throw new Error(`${file} carries no node list`)
-  if (document.version === 1) return nodes.map(migrateV1)
-  if (document.version !== DOCUMENT_VERSION) {
-    throw new Error(
-      `${file} has document version ${String(document.version)}; this build reads ${String(DOCUMENT_VERSION)}`,
-    )
-  }
-  if (!nodes.every(isNodeRecord)) {
-    throw new Error(`${file} carries a node entry this build does not understand`)
-  }
-  return nodes
-}
-
-/** Serialize the document with a trailing newline. */
-function serialize(nodes: readonly NodeRecord[]): string {
-  return `${JSON.stringify({ version: DOCUMENT_VERSION, nodes } satisfies NodeDocument, null, 2)}\n`
-}
-
-/**
  * Project a record for a caller that may render it.
  * @param record - the stored record.
  * @returns the record without its secret, plus the presence flag a form needs.
@@ -281,27 +236,18 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
   let nodes: NodeRecord[] = []
   let loaded = false
 
-  // Serialize the candidate, not the live list: a failed commit must leave
-  // `nodes` untouched, or the next successful write commits an unreported
-  // mutation whose caller already saw an error.
-  const persist = async (next: readonly NodeRecord[]): Promise<void> => {
-    const content = serialize(next)
-    // The lock is a `wx` create beside the document and never creates its
-    // directory, so the first write into a fresh harness home must seed it.
-    await mkdir(dirname(deps.file), { recursive: true, mode: 0o700 })
-    await withFileLock(deps.file, async () => {
-      await writeFileAtomic(deps.file, content, { mode: FILE_MODE })
-    })
+  const document: DocumentSpec<NodeRecord> = {
+    file: deps.file,
+    version: DOCUMENT_VERSION,
+    key: 'nodes',
+    label: 'node',
+    isRecord: isNodeRecord,
+    migrate: migrateV1,
   }
 
   return {
     async load() {
-      try {
-        nodes = [...parseDocument(await readFile(deps.file, 'utf8'), deps.file)]
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-        nodes = []
-      }
+      nodes = [...await readDocument(document)]
       loaded = true
       return nodes
     },
@@ -334,7 +280,7 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
       const next = existing === undefined
         ? [...nodes, record]
         : nodes.map(node => (node.nodeId === record.nodeId ? record : node))
-      await persist(next)
+      await writeDocument(document, next)
       nodes = next
       return record
     },
@@ -343,7 +289,7 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
       if (!loaded) throw new Error('node registry written before load()')
       const next = nodes.filter(node => node.nodeId !== nodeId)
       if (next.length === nodes.length) return false
-      await persist(next)
+      await writeDocument(document, next)
       nodes = next
       return true
     },

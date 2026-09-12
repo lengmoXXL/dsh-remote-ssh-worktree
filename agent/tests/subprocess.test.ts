@@ -16,7 +16,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import type { SpPipeFrame, WireOutcome, WireSpawnSpec } from '../../shared/protocol.ts'
 import type { SubprocessBackend } from '../src/subprocess.ts'
-import { MAX_PIPE_BACKLOG_FRAMES, SubprocessFailure, createSubprocessBackend } from '../src/subprocess.ts'
+import { SubprocessFailure } from '../src/execution.ts'
+import { MAX_PIPE_BACKLOG_FRAMES, createSubprocessBackend } from '../src/subprocess.ts'
 
 /** Poll interval while waiting for a fixture to reach a state. */
 const POLL_MS = 20

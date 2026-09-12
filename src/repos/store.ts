@@ -16,17 +16,14 @@
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { mkdir, readFile } from 'node:fs/promises'
-import { dirname, posix } from 'node:path'
+import { posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { NodeId, RepoId } from '../ids.ts'
+import type { DocumentSpec } from '../storage.ts'
+import { readDocument, writeDocument } from '../storage.ts'
 
 /** Document revision; a field change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1
-
-/** Owner-only permissions: the document names paths on other machines. */
-const FILE_MODE = 0o600
 
 /** One registered repository. */
 export interface RepoRecord {
@@ -108,12 +105,6 @@ export interface RepoStoreDeps {
   readonly now?: () => Date
 }
 
-/** The on-disk document. */
-interface RepoDocument {
-  readonly version: number
-  readonly repos: readonly RepoRecord[]
-}
-
 /** Whether an unknown parsed value is a record this module wrote. */
 function isRepoRecord(value: unknown): value is RepoRecord {
   if (typeof value !== 'object' || value === null) return false
@@ -123,41 +114,6 @@ function isRepoRecord(value: unknown): value is RepoRecord {
     && typeof record.repoPath === 'string'
     && typeof record.name === 'string'
     && typeof record.createdAt === 'string'
-}
-
-/**
- * Parse a document, refusing anything this module did not write.
- * @param text - the file content.
- * @param file - the path, for the diagnostic.
- * @returns the stored records.
- * @throws when the JSON, the version, or a record is not readable.
- */
-function parseDocument(text: string, file: string): readonly RepoRecord[] {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (error) {
-    throw new Error(`${file} is not valid JSON`, { cause: error })
-  }
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error(`${file} is not a repository document`)
-  }
-  const document = parsed as Partial<RepoDocument>
-  if (document.version !== DOCUMENT_VERSION) {
-    throw new Error(
-      `${file} carries version ${String(document.version)}; this build reads ${String(DOCUMENT_VERSION)}`,
-    )
-  }
-  const repos = document.repos
-  if (!Array.isArray(repos) || !repos.every(isRepoRecord)) {
-    throw new Error(`${file} carries a repository entry this build does not understand`)
-  }
-  return repos
-}
-
-/** Serialize the document with a trailing newline. */
-function serialize(repos: readonly RepoRecord[]): string {
-  return `${JSON.stringify({ version: DOCUMENT_VERSION, repos } satisfies RepoDocument, null, 2)}\n`
 }
 
 /**
@@ -184,27 +140,17 @@ export function createRepoStore(deps: RepoStoreDeps): RepoStore {
     if (!loaded) throw new Error('repository store read before load()')
   }
 
-  // Serialize the candidate, not the live list: a failed commit must leave
-  // `repos` untouched, or the next successful write commits an unreported
-  // mutation whose caller already saw an error.
-  const persist = async (next: readonly RepoRecord[]): Promise<void> => {
-    const content = serialize(next)
-    // The lock is a `wx` create beside the document and never creates its
-    // directory, so the first write into a fresh harness home must seed it.
-    await mkdir(dirname(deps.file), { recursive: true, mode: 0o700 })
-    await withFileLock(deps.file, async () => {
-      await writeFileAtomic(deps.file, content, { mode: FILE_MODE })
-    })
+  const document: DocumentSpec<RepoRecord> = {
+    file: deps.file,
+    version: DOCUMENT_VERSION,
+    key: 'repos',
+    label: 'repository',
+    isRecord: isRepoRecord,
   }
 
   return {
     async load() {
-      try {
-        repos = [...parseDocument(await readFile(deps.file, 'utf8'), deps.file)]
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-        repos = []
-      }
+      repos = [...await readDocument(document)]
       loaded = true
       return repos
     },
@@ -241,7 +187,7 @@ export function createRepoStore(deps: RepoStoreDeps): RepoStore {
       const next = existing === undefined
         ? [...repos, record]
         : repos.map(repo => (repo.repoId === record.repoId ? record : repo))
-      await persist(next)
+      await writeDocument(document, next)
       repos = next
       return record
     },
@@ -250,7 +196,7 @@ export function createRepoStore(deps: RepoStoreDeps): RepoStore {
       requireLoaded()
       const next = repos.filter(repo => repo.repoId !== repoId)
       if (next.length === repos.length) return false
-      await persist(next)
+      await writeDocument(document, next)
       repos = next
       return true
     },
@@ -260,7 +206,7 @@ export function createRepoStore(deps: RepoStoreDeps): RepoStore {
       const next = repos.filter(repo => repo.nodeId !== nodeId)
       const removed = repos.length - next.length
       if (removed === 0) return 0
-      await persist(next)
+      await writeDocument(document, next)
       repos = next
       return removed
     },

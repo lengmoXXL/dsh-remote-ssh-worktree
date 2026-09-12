@@ -18,7 +18,7 @@ import type { ApiResponse, ManagementApiDeps } from './api.ts'
 import { handleNodeApi } from './api.ts'
 
 /** The path prefix this plugin owns. */
-export const API_PREFIX = '/dsh-remote-worktree'
+const API_PREFIX = '/dsh-remote-worktree'
 
 /** Bound on one management request body. */
 const MAX_BODY_BYTES = 1 << 20

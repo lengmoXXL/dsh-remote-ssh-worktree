@@ -13,13 +13,13 @@
  * @module dsh-remote-worktree/nodes/connections
  */
 
-import type { NodeChannel } from '../node/channel.ts'
-import type { ConnectOptions, ConnectedNode } from '../node/client.ts'
-import { connectNode } from '../node/client.ts'
+import type { NodeChannel } from '../transport/contract.ts'
+import type { ConnectOptions, ConnectedNode } from '../transport/client.ts'
+import { connectNode } from '../transport/client.ts'
 import type { NodeInfo } from '../../shared/protocol.ts'
 import type { NodeRecord } from './registry.ts'
 import type { NodeId } from '../ids.ts'
-import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../ssh/tunnel.ts'
+import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../transport/tunnel.ts'
 
 /** Where one node's connection stands. */
 export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'

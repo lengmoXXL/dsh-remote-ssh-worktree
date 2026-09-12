@@ -27,7 +27,7 @@ const USAGE = `usage: dsh-remote-agent --listen <host:port> --token-file <path> 
 `
 
 /** A fully parsed command line. */
-export interface AgentConfig {
+interface AgentConfig {
   /** Interface to bind. */
   readonly host: string
   /** TCP port to bind; 0 asks the kernel for a free one. */
@@ -46,7 +46,7 @@ export interface AgentConfig {
  * @returns the parsed configuration.
  * @throws Error naming the offending argument when the command line is malformed.
  */
-export function parseArgs(argv: readonly string[]): AgentConfig {
+function parseArgs(argv: readonly string[]): AgentConfig {
   let listen: string | undefined
   let tokenFile: string | undefined
   let root: string | undefined
@@ -80,7 +80,7 @@ export function parseArgs(argv: readonly string[]): AgentConfig {
  * @returns the host and port.
  * @throws Error when the address or port is malformed.
  */
-export function parseListen(value: string): { readonly host: string; readonly port: number } {
+function parseListen(value: string): { readonly host: string; readonly port: number } {
   let host: string
   let portText: string
   if (value.startsWith('[')) {
@@ -106,7 +106,7 @@ export function parseListen(value: string): { readonly host: string; readonly po
  * @param host - the host half of `--listen`.
  * @returns true for `localhost`, `127.0.0.0/8`, and `::1`.
  */
-export function isLoopbackHost(host: string): boolean {
+function isLoopbackHost(host: string): boolean {
   if (host === 'localhost') return true
   if (isIP(host) === 4) return host.startsWith('127.')
   return isIP(host) === 6 && host === '::1'

@@ -1,5 +1,12 @@
 /**
- * Build configuration for the browser half.
+ * Build configuration for both faces of the package.
+ *
+ * The host face is one Node program the Harness Loader mounts by package name,
+ * so the shared wire contract is inlined and every Harness package stays
+ * external — the profile already has exactly one copy of each, and a second
+ * would break service identity. The browser face is the bundle below. They are
+ * one tsdown invocation because they write the same output directory, and only
+ * the host face cleans it.
  *
  * The web shell loads a plugin's client bundle through a module loader it
  * installs on `window`, so the artifact must be one CommonJS factory call
@@ -83,15 +90,39 @@ function cssModulesInline() {
   }
 }
 
-export default defineConfig({
-  entry: { client: 'client/client.ts' },
-  outDir: 'client',
+const host = defineConfig({
+  entry: { index: 'src/index.ts' },
+  outDir: 'lib',
+  format: 'esm',
+  platform: 'node',
+  target: 'node22',
+  // `package.json` names `lib/index.d.ts`, so the declaration must exist.
+  dts: true,
+  sourcemap: true,
+  // The host face owns `clean` for the shared output directory; the browser
+  // face below must not wipe what this one wrote.
+  clean: true,
+  // `package.json` names `lib/index.js`, which is the convention a profile
+  // install expects; the package is `type: module`, so `.js` is already ESM.
+  outExtensions: () => ({ js: '.js' }),
+  external: [/^@deepseek-ai\//],
+  outputOptions: {
+    banner: '// dsh-remote-worktree host half',
+  },
+})
+
+const client = defineConfig({
+  entry: { client: 'src/client/index.ts' },
+  outDir: 'lib',
   format: 'cjs',
   platform: 'browser',
   target: 'es2022',
   dts: false,
   sourcemap: true,
   clean: false,
+  // The web shell fetches this artifact by the `exports["./client"]` path, so
+  // it keeps the `.js` spelling the profile manifest names.
+  outExtensions: () => ({ js: '.js' }),
   // React and the client stack are the shell's, not ours: a second copy would
   // break hooks and duplicate the renderer.
   external: [/^react($|\/)/, /^@deepseek-ai\//],
@@ -101,3 +132,5 @@ export default defineConfig({
     footer: 'return module.exports; } });',
   },
 })
+
+export default [host, client]

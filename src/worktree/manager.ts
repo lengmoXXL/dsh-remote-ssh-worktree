@@ -17,19 +17,19 @@
 import { posix } from 'node:path'
 import type { WireMergeOutcome, WireRepoState, WireWorktree } from '../../shared/protocol.ts'
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../anchors/store.ts'
-import type { ChannelLookup, NodeChannel } from '../node/channel.ts'
-import { NodeRequestError } from '../node/channel.ts'
+import type { ChannelLookup, NodeChannel } from '../transport/contract.ts'
+import { NodeRequestError } from '../transport/contract.ts'
 import type { AnchorId, NodeId } from '../ids.ts'
 import type { RepoRef } from '../repos/store.ts'
 
 /** Directory, relative to the repository, that holds every managed checkout. */
-export const WORKTREE_ROOT = '.dsh-worktrees'
+const WORKTREE_ROOT = '.dsh-worktrees'
 
 /** Directory holding the checkouts themselves. */
-export const WORKTREE_DIR = `${WORKTREE_ROOT}/worktree`
+const WORKTREE_DIR = `${WORKTREE_ROOT}/worktree`
 
 /** Prefix every managed branch carries. */
-export const BRANCH_PREFIX = 'worktree/'
+const BRANCH_PREFIX = 'worktree/'
 
 /** What a caller supplies to cut a new worktree. */
 export interface WorktreeDraft {
@@ -305,4 +305,38 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       })
     },
   }
+}
+
+/** What a worktree label is composed from. */
+export interface WorktreeLabelParts {
+  /** The machine's display title, falling back to its host. */
+  readonly machine: string
+  /** Absolute POSIX path of the repository on that machine. */
+  readonly repoPath: string
+  /** The repository's display name, when a record supplies one. */
+  readonly repoName?: string | undefined
+  /** The worktree name. */
+  readonly name: string
+}
+
+/** Separator between the three parts. */
+const SEPARATOR = ' · '
+
+/**
+ * Build the display title a remote worktree gets as a local workspace.
+ *
+ * A workspace title is read by a person scanning a sidebar, so it names the
+ * three things that distinguish one remote worktree from another — which
+ * machine, which repository on it, and which checkout — and never the opaque
+ * ids this plugin routes by. An unnamed repository falls back to its last path
+ * segment, which is what a user would have called it; a path with no segment at
+ * all falls back to the whole path so the label is never blank.
+ * @param parts - the machine, repository, and worktree names.
+ * @returns the composed title.
+ */
+export function worktreeLabel(parts: WorktreeLabelParts): string {
+  const base = posix.basename(parts.repoPath)
+  const repo = parts.repoName?.trim()
+    || (base === '' || base === '/' ? parts.repoPath : base)
+  return [parts.machine, repo, parts.name].join(SEPARATOR)
 }

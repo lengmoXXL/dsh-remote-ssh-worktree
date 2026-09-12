@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, before, beforeEach, describe, it } from 'node:test'
 import type { WireTerminalSpawnSpec } from '../../shared/protocol.ts'
-import { SubprocessFailure } from '../src/subprocess.ts'
+import { SubprocessFailure } from '../src/execution.ts'
 import type { TerminalBackend } from '../src/terminal.ts'
 import { createTerminalBackend } from '../src/terminal.ts'
 

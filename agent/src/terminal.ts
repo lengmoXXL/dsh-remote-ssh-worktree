@@ -29,7 +29,7 @@ import type {
   WireTerminalSignal,
   WireTerminalSpawnSpec,
 } from '../../shared/protocol.ts'
-import { StreamBuffer, SubprocessFailure, scrubbedEnvironment, usableDirectory } from './subprocess.ts'
+import { StreamBuffer, SubprocessFailure, scrubbedEnvironment, usableDirectory } from './execution.ts'
 
 /**
  * Bytes of terminal output the daemon retains for `term.read`.
