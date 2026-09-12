@@ -41,7 +41,7 @@ import { registerWorktreeTools } from './plugin/tools.ts'
 import { AGENT_VERSION } from './remote/agent/install.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS } from './remote/ssh.ts'
 import { createAnchorStore } from './storage/anchors.ts'
-import { createNodeRegistry, defaultNodeTitle } from './storage/nodes.ts'
+import { createNodeRegistry } from './storage/nodes.ts'
 import { createRepoStore } from './storage/repos.ts'
 
 /** Plugin name used by the Loader and by diagnostics. */
@@ -134,11 +134,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     workspace: {
       async register(anchor) {
         // The title is what a person reads in the workspace list, so it names
-        // the machine, the repository, and the checkout — never the opaque ids
-        // this plugin routes by.
+        // the checkout, the repository, and the machine — never the opaque ids
+        // this plugin routes by. A machine whose record is gone leaves its id
+        // as the last word on the title.
         const node = registry.get(anchor.nodeId)
         await workspaceRegistry(ctx)?.create(anchor.anchorPath, workspaceLabel({
-          machine: node?.title ?? (node === undefined ? anchor.nodeId : defaultNodeTitle(node.transport)),
+          machine: node?.title ?? anchor.nodeId,
           repoPath: anchor.repoPath,
           repoName: repos.find({ nodeId: anchor.nodeId, repoPath: anchor.repoPath })?.name,
           // A directory opened as itself names no checkout; the repository is

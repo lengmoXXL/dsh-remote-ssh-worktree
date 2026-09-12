@@ -1,52 +1,52 @@
 /**
  * A workspace title is read by a person scanning a list, so its contract is
- * that it names the distinguishing facts — machine, repository, and the
- * checkout when there is one — and never an opaque id. These cases pin the
- * fallbacks that keep a title readable when a record is missing or a path has
- * no last segment.
+ * that it names the distinguishing facts — the checkout when there is one,
+ * then the repository, then the machine — and never an opaque id. These cases
+ * pin the fallbacks that keep a title readable when a record is missing or a
+ * path has no last segment.
  */
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { workspaceLabel } from '../../src/models/worktrees.ts'
 
-test('a title names machine, repository, and checkout in that order', () => {
+test('a title names checkout, repository, and machine in that order', () => {
   assert.equal(
     workspaceLabel({ machine: 'vm149', repoPath: '/workspace/ACM-notes', name: 'web-verify' }),
-    'vm149 · ACM-notes · web-verify',
+    'web-verify · ACM-notes · vm149',
   )
 })
 
 test('a path with no segment is not blank', () => {
-  assert.equal(workspaceLabel({ machine: 'box', repoPath: '/', name: 'x' }), 'box · / · x')
-  assert.equal(workspaceLabel({ machine: 'box', repoPath: '', name: 'x' }), 'box ·  · x')
+  assert.equal(workspaceLabel({ machine: 'box', repoPath: '/', name: 'x' }), 'x · / · box')
+  assert.equal(workspaceLabel({ machine: 'box', repoPath: '', name: 'x' }), 'x ·  · box')
 })
 
 test('a trailing separator does not produce an empty segment', () => {
   assert.equal(
     workspaceLabel({ machine: 'box', repoPath: '/srv/app/', name: 'x' }),
-    'box · app · x',
+    'x · app · box',
   )
 })
 
 test('a registered repository name wins over the derived one', () => {
   assert.equal(
     workspaceLabel({ machine: 'box', repoPath: '/srv/app', repoName: 'api', name: 'x' }),
-    'box · api · x',
+    'x · api · box',
   )
 })
 
 test('a blank registered name falls back to the path segment', () => {
   assert.equal(
     workspaceLabel({ machine: 'box', repoPath: '/srv/app', repoName: '   ', name: 'x' }),
-    'box · app · x',
+    'x · app · box',
   )
 })
 
-test('a directory opened as itself stops at the repository', () => {
+test('a directory opened as itself begins at the repository', () => {
   assert.equal(
     workspaceLabel({ machine: 'vm149', repoPath: '/srv/notes', repoName: 'notes' }),
-    'vm149 · notes',
+    'notes · vm149',
   )
 })
 
@@ -58,5 +58,5 @@ test('no title part is an id the caller did not ask for', () => {
   })
   // The machine segment is whatever the caller passed; this pins only that the
   // builder adds nothing of its own.
-  assert.equal(title, '378d3d80-6fc7-45a7-9893-4174cb582d06 · app · x')
+  assert.equal(title, 'x · app · 378d3d80-6fc7-45a7-9893-4174cb582d06')
 })
