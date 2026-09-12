@@ -3,9 +3,10 @@
  *
  * These are deliberately a small, separate vocabulary: the file and shell
  * tools already work inside a worktree once it exists, so the model only needs
- * to create one, look at what exists, merge it back, or take it down. Every
- * result names the machine and the local path, because the model has to be able
- * to say where its work actually lives.
+ * to create one, look at what exists, or take it down — merging a branch is
+ * ordinary git, which the shell tool already runs on the machine. Every result
+ * names the machine and the local path, because the model has to be able to say
+ * where its work actually lives.
  *
  * @module dsh-remote-ssh-worktree/tools
  */
@@ -66,13 +67,14 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
           }
         }
         return {
-          text: statuses.map(({ anchor, repo, error }) => [
+          text: statuses.map(({ anchor, open, error }) => [
             `id: ${anchor.anchorId}`,
             `machine: ${anchor.nodeId}`,
             `branch: ${anchor.branch}`,
             `remote: ${anchor.remoteRoot}`,
             `local: ${anchor.anchorPath}`,
-            `state: ${error ?? (repo?.clean === true ? `clean on ${repo.branch ?? '?'}` : 'dirty')}`,
+            `workspace: ${open ? 'open' : 'closed'}`,
+            ...error === undefined ? [] : [`error: ${error}`],
           ].join('\n')).join('\n\n'),
         }
       },
@@ -116,7 +118,7 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
             text: `Created ${anchor.branch} on ${anchor.nodeId}.\n`
               + `Work in this local path; the file and shell tools route it to the machine:\n${anchor.anchorPath}\n`
               + `The checkout on the machine is ${anchor.remoteRoot}.\n`
-              + `When the work is done, call rw_bring_back to merge it, or rw_remove to discard it.`,
+              + `When the work is done, call rw_remove to drop the checkout; the branch stays for you to merge.`,
             anchorId: anchor.anchorId,
             localPath: anchor.anchorPath,
             branch: anchor.branch,
@@ -128,45 +130,14 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
     }))
 
     toolCtx.tools.register(defineTool({
-      name: 'rw_bring_back',
-      description: 'Merge a remote worktree branch into its repository\'s current branch on the machine. '
-        + 'A conflicted merge is aborted by the machine and reported; the repository is never left mid-merge.',
-      parameters: {
-        anchorId: { type: 'string', required: true, description: 'Worktree id from rw_list.' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            text: { type: 'string', required: true },
-            alreadyMerged: { type: 'boolean', required: true },
-          },
-        },
-        render: (_args, value: ToolText) => [{ type: 'text', text: value.text }],
-      },
-      async execute(args: { anchorId: string }) {
-        try {
-          const merge = await deps.worktrees.bringBack(asAnchorId(args.anchorId))
-          return {
-            text: merge.alreadyMerged
-              ? 'Already merged; the repository is unchanged.'
-              : `Merged into the repository's current branch at ${merge.head}.`,
-            alreadyMerged: merge.alreadyMerged,
-          }
-        } catch (error) {
-          return { text: failure(error), alreadyMerged: false }
-        }
-      },
-    }))
-
-    toolCtx.tools.register(defineTool({
       name: 'rw_remove',
       description: 'Remove a remote worktree: the checkout on the machine, then its local workspace. '
-        + 'Without force, uncommitted changes refuse the removal.',
+        + 'Without force, uncommitted changes refuse the removal. The branch survives unless '
+        + 'deleteBranch is set, so work that was not merged is not lost silently.',
       parameters: {
         anchorId: { type: 'string', required: true, description: 'Worktree id from rw_list.' },
         force: { type: 'boolean', description: 'Discard uncommitted changes instead of refusing.' },
+        deleteBranch: { type: 'boolean', description: 'Delete the worktree branch as well; unmerged commits are lost.' },
       },
       output: {
         schema: {
@@ -176,15 +147,17 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
         },
         render: (_args, value: ToolText) => [{ type: 'text', text: value.text }],
       },
-      async execute(args: { anchorId: string; force?: boolean }) {
+      async execute(args: { anchorId: string; force?: boolean; deleteBranch?: boolean }) {
         try {
           const removal = await deps.worktrees.remove(asAnchorId(args.anchorId), {
             force: args.force === true,
-            deleteBranch: true,
+            deleteBranch: args.deleteBranch === true,
           })
           return {
-            text: `Removed ${removal.anchor.branch}${removal.branchDeleted ? ' and its branch' : ''}.`
-              + (removal.branchError === undefined ? '' : `\nThe branch survives: ${removal.branchError}`),
+            text: removal.branchDeleted
+              ? `Removed ${removal.anchor.branch} and its branch.`
+              : `Removed ${removal.anchor.branch}; the branch is still there.`
+              + (removal.branchError === undefined ? '' : `\nThe branch could not be deleted: ${removal.branchError}`),
           }
         } catch (error) {
           return { text: failure(error) }

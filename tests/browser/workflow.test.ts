@@ -151,6 +151,27 @@ async function gitWorktrees(repoPath: string): Promise<string> {
   return stdout
 }
 
+/** List the branches git knows in a repository, by name. */
+async function gitBranches(repoPath: string, pattern: string): Promise<string> {
+  const { stdout } = await run('git', ['-C', repoPath, 'branch', '--list', '--format=%(refname:short)', pattern])
+  return stdout.trim()
+}
+
+/**
+ * Wait for a branch to disappear.
+ *
+ * The anchor is dropped before the optional branch delete runs, so a removal
+ * that also takes the branch reports its end earlier than git does.
+ */
+async function waitForBranchGone(repoPath: string, branch: string): Promise<void> {
+  const deadline = Date.now() + 20_000
+  for (;;) {
+    if (await gitBranches(repoPath, branch) === '') return
+    if (Date.now() > deadline) throw new Error(`branch ${branch} was never deleted`)
+    await delay(200)
+  }
+}
+
 /** The shell's own onboarding and notice buttons, which trap focus while open. */
 const SKIP_SHELL_DIALOG = /^(?:稍后配置|Configure later|继续|Continue)$/i
 
@@ -166,6 +187,10 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     deployment = instance
     browser = page
     const shot = async (name: string): Promise<void> => {
+      // The shell can raise its own onboarding late enough to land on top of a
+      // picture, so every capture starts by clearing it. Only the shell's own
+      // buttons match, so this plugin's open forms are left alone.
+      await clearShellDialogs(page)
       await page.screenshot(join(instance.artifacts, `${name}.png`))
     }
 
@@ -259,20 +284,49 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     )
     await shot('06-worktree-created')
 
-    // Remove it again, through the confirmation the operator sees.
+    // Remove it again, through the confirmation the operator sees. The branch
+    // option stays off, so the checkout goes and the branch stays put.
     await waitForEnabled(page, exact('removeWorktree'), 'the worktree remove control to settle')
     await clickByText(page, exact('removeWorktree'))
     await waitForForm(page, anyOf('removeWorktreeTitle'), 'the confirmation')
     await clickInDialog(page, exact('remove'))
     await waitForPath(metadata, 'absent')
     assert.ok(!(await gitWorktrees(instance.repoPath)).includes('worktree/verify'), 'the checkout is gone')
-    const branches = await run('git', ['-C', instance.repoPath, 'branch', '--list', 'worktree/verify'])
-    assert.equal(branches.stdout.trim(), '', 'the branch is gone too')
+    assert.equal(
+      await gitBranches(instance.repoPath, 'worktree/verify'),
+      'worktree/verify',
+      'the branch outlives the checkout by default',
+    )
     assert.equal(
       (await api<{ worktrees: readonly unknown[] }>(instance, '/worktrees')).worktrees.length, 0,
       'the anchor store is empty again',
     )
+    // The workspace entry goes with the anchor, so the sidebar cannot keep a
+    // dead row pointing at a checkout that is no longer on the machine.
+    await waitFor(page, `!document.body.innerText.includes('verify')`, 'the sidebar to drop the workspace')
     await shot('07-worktree-removed')
+
+    // The same control, with the option switched on, takes the branch too.
+    await waitForEnabled(page, exact('newWorktree'), 'the worktree control to settle again')
+    await clickByText(page, exact('newWorktree'))
+    await waitForForm(page, exact('newWorktree'), 'the second new-worktree form')
+    await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderWorktreeName)), 'scratch')
+    await waitForEnabled(page, exact('create'), 'the form to accept the second worktree')
+    await clickInDialog(page, exact('create'))
+    await waitForFormGone(page, exact('newWorktree'), 'the second new-worktree form to close')
+    const scratch = join(
+      instance.home, 'remote-worktrees', 'anchors', instance.nodeId, 'demo-repo', 'scratch',
+    )
+    await waitForPath(join(scratch, '.dsh-remote-worktree.json'), 'present')
+
+    await waitForEnabled(page, exact('removeWorktree'), 'the second remove control to settle')
+    await clickByText(page, exact('removeWorktree'))
+    await waitForForm(page, anyOf('removeWorktreeTitle'), 'the second confirmation')
+    await clickInDialog(page, anyOf('removeWorktreeBranch'))
+    await clickInDialog(page, exact('remove'))
+    await waitForPath(join(scratch, '.dsh-remote-worktree.json'), 'absent')
+    await waitForBranchGone(instance.repoPath, 'worktree/scratch')
+    await waitFor(page, `!document.body.innerText.includes('scratch')`, 'the sidebar to drop the second workspace')
   } catch (error) {
     failure = error
     if (browser !== undefined && deployment !== undefined) {

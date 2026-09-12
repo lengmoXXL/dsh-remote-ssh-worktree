@@ -14,11 +14,11 @@ English | [中文](README.zh.md)
 ## What it does
 
 - Reaches a machine over SSH — `user@host` or a `~/.ssh/config` alias. Nothing to install there by hand.
-- Cuts `worktree/<name>` from any git repository on the machine and registers the checkout as a DSH workspace.
+- Cuts `worktree/<name>` from any git repository on the machine and registers the checkout as a DSH workspace; one row
+  opens, closes, or removes each worktree.
 - Read, write, edit, bash, grep, and terminal tools then run on that machine, unchanged. The model never sees
   that the files are remote.
-- Merges the worktree branch back into the repository's branch, aborting a conflicted merge instead of leaving
-  the repository mid-merge.
+- Removing one takes the checkout and leaves the branch, so an unmerged commit is never lost silently.
 
 ## How it works
 

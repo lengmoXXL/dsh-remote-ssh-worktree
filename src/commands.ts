@@ -30,7 +30,7 @@ export interface WorktreeCommandDeps {
 
 /** The usage line shown when the arguments do not parse. */
 const USAGE = 'usage: /rwt list | nodes | create <nodeId> <repoPath> <name> [baseRef] '
-  + '| remove <anchorId> [--force] | bring-back <anchorId>'
+  + '| remove <anchorId> [--force] [--delete-branch]'
 
 /** Split a raw invocation into whitespace-separated arguments. */
 function args(rawInput: string): string[] {
@@ -63,13 +63,11 @@ export async function runWorktreeCommand(
     }
     return {
       kind: 'success',
-      text: statuses.map(({ anchor, repo, error }) => {
-        const branch = repo?.branch ?? '?'
-        const state = error !== undefined
-          ? `offline (${error})`
-          : `${repo?.clean === true ? 'clean' : 'dirty'} on ${branch}`
-        return `${anchor.anchorId}  ${anchor.nodeId}:${anchor.branch}  ${state}\n  node:   ${anchor.remoteRoot}\n  local:  ${anchor.anchorPath}`
-      }).join('\n\n'),
+      text: statuses.map(({ anchor, open, error }) =>
+        `${anchor.anchorId}  ${anchor.nodeId}:${anchor.branch}  ${open ? 'open' : 'closed'}`
+        + (error === undefined ? '' : `  offline (${error})`)
+        + `\n  node:   ${anchor.remoteRoot}\n  local:  ${anchor.anchorPath}`,
+      ).join('\n\n'),
     }
   }
 
@@ -106,7 +104,7 @@ export async function runWorktreeCommand(
         kind: 'success',
         text: `Created ${anchor.branch} on ${nodeId}.\n  node:   ${anchor.remoteRoot}\n  local:  ${anchor.anchorPath}\n`
           + `Work in the local path; the file and shell tools route it to the machine.\n`
-          + `Finish with \`/rwt bring-back ${anchor.anchorId}\` or \`/rwt remove ${anchor.anchorId} --force\`.`,
+          + `Finish with \`/rwt remove ${anchor.anchorId}\` when the checkout is done with; its branch stays.`,
       }
     } catch (error) {
       return failure(error)
@@ -119,28 +117,15 @@ export async function runWorktreeCommand(
     try {
       const removal = await deps.worktrees.remove(asAnchorId(anchorId), {
         force: flags.includes('--force'),
-        deleteBranch: !flags.includes('--keep-branch'),
+        // Deleting the branch is an explicit ask: this plugin owns worktrees.
+        deleteBranch: flags.includes('--delete-branch'),
       })
       return {
         kind: 'success',
-        text: `Removed ${removal.anchor.branch}${removal.branchDeleted ? ' and its branch' : ''}.`
-          + (removal.branchError === undefined ? '' : `\nThe branch survives: ${removal.branchError}`),
-      }
-    } catch (error) {
-      return failure(error)
-    }
-  }
-
-  if (subcommand === 'bring-back') {
-    const [anchorId] = rest
-    if (anchorId === undefined) return { kind: 'error', text: USAGE }
-    try {
-      const merge = await deps.worktrees.bringBack(asAnchorId(anchorId))
-      return {
-        kind: 'success',
-        text: merge.alreadyMerged
-          ? 'Already merged; nothing changed.'
-          : `Merged into the repository's current branch at ${merge.head}.`,
+        text: removal.branchDeleted
+          ? `Removed ${removal.anchor.branch} and its branch.`
+          : `Removed ${removal.anchor.branch}; the branch is still there.`
+          + (removal.branchError === undefined ? '' : `\nThe branch could not be deleted: ${removal.branchError}`),
       }
     } catch (error) {
       return failure(error)
@@ -160,7 +145,7 @@ export function registerWorktreeCommand(ctx: Context, deps: WorktreeCommandDeps)
     commandCtx.commands.register({
       name: 'rwt',
       description: 'Manage remote worktrees on the machines this deployment has configured',
-      input: { hint: 'list | nodes | create <nodeId> <repoPath> <name> | remove <id> [--force] | bring-back <id>' },
+      input: { hint: 'list | nodes | create <nodeId> <repoPath> <name> | remove <id> [--force] [--delete-branch]' },
       handler: (invocation: CommandInvocation) => runWorktreeCommand(invocation.rawInput, deps),
     })
   })

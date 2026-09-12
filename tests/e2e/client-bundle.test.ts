@@ -218,7 +218,8 @@ test('the section renders its frame with the injected face threaded through', as
     listDirs: () => Promise.resolve({ path: '/', entries: [] }),
     createWorktree: () => Promise.resolve(),
     removeWorktree: () => Promise.resolve(),
-    bringBack: () => Promise.resolve(),
+    openWorktree: () => Promise.resolve(),
+    closeWorktree: () => Promise.resolve(),
   }
   // React's server renderer runs the component body without a DOM, which is
   // exactly enough to prove the seats are wired. Effects do not run, so the

@@ -22,11 +22,11 @@ import {
   IconGlobeOutline14,
   IconPlusOutline16,
   IconRefreshOutline16,
-  IconRightUpOutline16,
   IconTrashOutline16,
   IconWarningOutline16,
   Modal,
   StateDot,
+  Switch,
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -85,17 +85,9 @@ export interface RepoRecord {
   readonly name: string
 }
 
-/** Live state of a checkout. */
-interface RepoState {
-  readonly branch: string | null
-  readonly clean: boolean
-}
-
-/** One repository with the live state read from its machine. */
+/** One repository as the host reports it. */
 interface RepoReport {
   readonly repo: RepoRecord
-  readonly state?: RepoState
-  readonly error?: string
 }
 
 /** One local anchor. */
@@ -109,10 +101,12 @@ interface AnchorRecord {
   readonly remoteRoot: string
 }
 
-/** One worktree joined with its repository's live state. */
+/** One worktree, with whether it is currently openable. */
 interface WorktreeStatus {
   readonly anchor: AnchorRecord
-  readonly repo?: RepoState
+  /** Whether the anchor holds a workspace registration right now. */
+  readonly open: boolean
+  /** Why the host could not read the machine, when it could not. */
   readonly error?: string
 }
 
@@ -161,10 +155,12 @@ export interface RemoteWorktreesFace {
   listDirs(nodeId: NodeId, path: string): Promise<DirListing>
   /** Cut a worktree from a registered repository. */
   createWorktree(draft: { repoId: RepoId; name: string }): Promise<void>
-  /** Remove a worktree and its branch. */
-  removeWorktree(anchorId: AnchorId): Promise<void>
-  /** Merge a worktree's branch back into its repository. */
-  bringBack(anchorId: AnchorId): Promise<void>
+  /** Remove a worktree; `deleteBranch` also drops the branch it was cut on. */
+  removeWorktree(anchorId: AnchorId, deleteBranch: boolean): Promise<void>
+  /** Register a worktree as a workspace, so a session can open on it. */
+  openWorktree(anchorId: AnchorId): Promise<void>
+  /** Drop a worktree's workspace registration, leaving the machine untouched. */
+  closeWorktree(anchorId: AnchorId): Promise<void>
 }
 
 /** Props the shell composes for this section. */
@@ -177,7 +173,9 @@ type SectionProps =
 interface Confirmation {
   readonly titleKey: RemoteWorktreesKey
   readonly bodyKey: RemoteWorktreesKey
-  readonly run: () => Promise<void>
+  /** Label of an opt-in the dialog offers, when the action has one. */
+  readonly optionKey?: RemoteWorktreesKey
+  readonly run: (option: boolean) => Promise<void>
 }
 
 /** Which dialog is open, if any. */
@@ -238,48 +236,23 @@ function progressText(progress: AgentProgress): {
  */
 const PROGRESS_POLL_MS = 250
 
-
-
-
-/** The live branch and cleanliness of one repository. */
-function RepoFacts({ state, error, t }: {
-  state: RepoState | undefined
-  error: string | undefined
-  t: T
-}) {
-  if (state === undefined) {
-    return <span className={css.dim}>{error ?? '—'}</span>
-  }
-  return (
-    <>
-      <Tag tone="quiet">{state.branch ?? t('detached')}</Tag>
-      <Tag tone={state.clean ? 'success' : 'warning'}>{state.clean ? t('clean') : t('dirty')}</Tag>
-    </>
-  )
-}
-
-
-
-
-/** Cut a worktree from a registered repository. */
-
 /**
  * One worktree row inside an expanded repository.
  *
- * The row names the checkout and the branch it is on. It deliberately does not
- * repeat the repository's branch and cleanliness from the row above: that state
- * belongs to the main checkout, not to this worktree, so showing it here would
- * duplicate a fact and misattribute it.
+ * The row names the checkout and whether it is open as a workspace. The branch
+ * the checkout sits on belongs to the worktree, so nothing here repeats the
+ * repository's own state from the row above.
  *
- * The two actions are icon-only because the settings column is narrow and a
- * labelled pair wraps in it; each keeps its name for assistive technology and
- * for hover.
+ * Opening and closing share one seat, named for what a click does, so the row
+ * reads as a state rather than as a pair of verbs. Removing is icon-only
+ * because the settings column is narrow; it keeps its name for assistive
+ * technology and for hover.
  */
-function WorktreeRow({ entry, busy, onRemove, onBringBack, t }: {
+function WorktreeRow({ entry, busy, onRemove, onToggleOpen, t }: {
   entry: WorktreeStatus
   busy: boolean
   onRemove: () => void
-  onBringBack: () => void
+  onToggleOpen: () => void
   t: T
 }) {
   return (
@@ -287,18 +260,18 @@ function WorktreeRow({ entry, busy, onRemove, onBringBack, t }: {
       <IconBranchOutline16 />
       <span className={css.worktreeMain}>
         <span className={css.worktreeName}>{entry.anchor.name}</span>
-        <span className={css.meta}>{entry.anchor.branch}</span>
         {entry.error === undefined ? null : <span className={css.dim}>{entry.error}</span>}
       </span>
       <span className={css.trailing}>
         <Button
           size="sm"
-          icon={<IconRightUpOutline16 />}
           disabled={busy}
-          aria-label={t('bringBack')}
-          title={t('bringBack')}
-          onClick={onBringBack}
-        />
+          aria-label={entry.open ? t('closeWorktree') : t('openWorktree')}
+          title={entry.open ? t('closeWorktree') : t('openWorktree')}
+          onClick={onToggleOpen}
+        >
+          {entry.open ? t('closeWorktree') : t('openWorktree')}
+        </Button>
         <Button
           size="sm"
           icon={<IconTrashOutline16 />}
@@ -324,6 +297,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(undefined)
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>(undefined)
+  const [confirmedOption, setConfirmedOption] = useState(false)
   const [openMachines, setOpenMachines] = useState<readonly string[]>([])
   const [openRepos, setOpenRepos] = useState<readonly string[]>([])
 
@@ -389,7 +363,10 @@ export function RemoteWorktreesSection(props: SectionProps) {
     (snapshot?.worktrees ?? []).filter(entry =>
       entry.anchor.nodeId === repo.nodeId && entry.anchor.repoPath === repo.repoPath)
 
-  const confirm = (next: Confirmation): void => setConfirmation(next)
+  const confirm = (next: Confirmation): void => {
+    setConfirmedOption(false)
+    setConfirmation(next)
+  }
 
   const nodes = snapshot?.nodes ?? []
 
@@ -520,11 +497,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               rowClassName={css.row}
                               leadingClassName={css.leading}
                               onToggle={() => toggle(openRepos, setOpenRepos, repo.repoId)}
-                              collapsedContent={(
-                                <span className={css.trailing}>
-                                  <RepoFacts state={entry.state} error={entry.error} t={t} />
-                                </span>
-                              )}
+                              collapsedContent={null}
                             >
                               <div className={css.actions}>
                                 <Button
@@ -557,11 +530,16 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                       entry={item}
                                       busy={busy}
                                       t={t}
-                                      onBringBack={() => void mutate(() => props.bringBack(item.anchor.anchorId))}
+                                      onToggleOpen={() => void mutate(() => (
+                                        item.open
+                                          ? props.closeWorktree(item.anchor.anchorId)
+                                          : props.openWorktree(item.anchor.anchorId)
+                                      ))}
                                       onRemove={() => confirm({
                                         titleKey: 'removeWorktreeTitle',
                                         bodyKey: 'removeWorktreeBody',
-                                        run: () => props.removeWorktree(item.anchor.anchorId),
+                                        optionKey: 'removeWorktreeBranch',
+                                        run: deleteBranch => props.removeWorktree(item.anchor.anchorId, deleteBranch),
                                       })}
                                     />
                                   ))}
@@ -619,8 +597,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
               disabled={busy}
               onClick={() => {
                 const pending = confirmation
+                const option = confirmedOption
                 setConfirmation(undefined)
-                if (pending !== undefined) void mutate(pending.run)
+                if (pending !== undefined) void mutate(() => pending.run(option))
               }}
             >
               {t('remove')}
@@ -632,6 +611,14 @@ export function RemoteWorktreesSection(props: SectionProps) {
           <p className={css.subtitle}>
             {confirmation === undefined ? null : t(confirmation.bodyKey)}
           </p>
+          {confirmation?.optionKey === undefined ? null : (
+            <Switch
+              checked={confirmedOption}
+              onChange={setConfirmedOption}
+              label={t(confirmation.optionKey)}
+              disabled={busy}
+            />
+          )}
         </div>
       </Modal>
     </div>

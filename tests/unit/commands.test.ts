@@ -124,7 +124,7 @@ test('a created worktree is reported with both paths and the cleanup commands', 
   assert.equal(result.kind, 'success')
   assert.match(String(result.text), /Created worktree\/login on n1/)
   assert.match(String(result.text), /\/srv\/app\/\.dsh-worktrees\/worktree\/login/)
-  assert.match(String(result.text), /\/rwt bring-back /)
+  assert.match(String(result.text), /\/rwt remove /)
 })
 
 test('create with too few arguments refuses instead of guessing', async () => {
@@ -152,19 +152,31 @@ test('a refused create reports the git failure verbatim', async () => {
   assert.deepEqual(anchors.list(), [])
 })
 
-test('the worktree list shows each anchor, its machine, and its state', async () => {
+test('the worktree list shows each anchor, its machine, and whether it is open', async () => {
   const deps = depsWith({
     'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
-    'git.repoState': { branch: 'main', clean: true },
   })
   await runWorktreeCommand('create n1 /srv/app login', deps)
   const result = await runWorktreeCommand('list', deps)
 
-  assert.match(String(result.text), /n1:worktree\/login\s+clean on main/)
+  assert.match(String(result.text), /n1:worktree\/login\s+closed/)
   assert.match(String(result.text), /node:\s+\/srv\/app\/\.dsh-worktrees\/worktree\/login/)
 })
 
-test('remove reports that the branch followed the checkout', async () => {
+test('remove leaves the branch behind unless the caller asks for it', async () => {
+  const deps = depsWith({
+    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeRemove': {},
+  })
+  await runWorktreeCommand('create n1 /srv/app login', deps)
+  const anchorId = anchors.list()[0]!.anchorId
+
+  const result = await runWorktreeCommand(`remove ${anchorId}`, deps)
+  assert.equal(result.kind, 'success')
+  assert.match(String(result.text), /Removed worktree\/login; the branch is still there/)
+})
+
+test('remove --delete-branch takes the branch with the checkout', async () => {
   const deps = depsWith({
     'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': {},
@@ -173,12 +185,12 @@ test('remove reports that the branch followed the checkout', async () => {
   await runWorktreeCommand('create n1 /srv/app login', deps)
   const anchorId = anchors.list()[0]!.anchorId
 
-  const result = await runWorktreeCommand(`remove ${anchorId}`, deps)
+  const result = await runWorktreeCommand(`remove ${anchorId} --delete-branch`, deps)
   assert.equal(result.kind, 'success')
   assert.match(String(result.text), /Removed worktree\/login and its branch/)
 })
 
-test('remove says so when the branch outlives the checkout', async () => {
+test('remove --delete-branch says so when the branch refuses to go', async () => {
   const { NodeRequestError } = await import('../../src/transport/contract.ts')
   const deps = depsWith({
     'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
@@ -188,19 +200,8 @@ test('remove says so when the branch outlives the checkout', async () => {
   await runWorktreeCommand('create n1 /srv/app login', deps)
   const anchorId = anchors.list()[0]!.anchorId
 
-  const result = await runWorktreeCommand(`remove ${anchorId}`, deps)
-  assert.match(String(result.text), /The branch survives: not fully merged/)
-})
-
-test('bring-back reports a merge and an already-merged branch differently', async () => {
-  const deps = depsWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
-    'git.mergeBranch': { head: 'def', alreadyMerged: false },
-  })
-  await runWorktreeCommand('create n1 /srv/app login', deps)
-  const anchorId = anchors.list()[0]!.anchorId
-
-  assert.match(String((await runWorktreeCommand(`bring-back ${anchorId}`, deps)).text), /at def/)
+  const result = await runWorktreeCommand(`remove ${anchorId} --delete-branch`, deps)
+  assert.match(String(result.text), /The branch could not be deleted: not fully merged/)
 })
 
 test('an unknown subcommand prints the usage line', async () => {

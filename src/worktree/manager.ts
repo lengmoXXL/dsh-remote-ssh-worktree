@@ -1,21 +1,25 @@
 /**
- * The remote worktree lifecycle.
+ * The remote worktree lifecycle: create, list, open, close, remove.
  *
  * Every operation is two-sided on purpose: git runs on the node, and the local
  * anchor is created or dropped around it. The order matters in both
  * directions — an anchor is only recorded after the checkout exists, and the
  * checkout is only removed before its anchor, so a failure never leaves a
- * local path routing into nothing.
+ * local path routing into nothing. Within teardown the workspace entry goes
+ * first, because dropping the anchor takes the directory that resolves it.
  *
- * A branch that could not be deleted is reported rather than swallowed: the
- * worktree is gone either way, and the operator needs to know the branch
- * outlived it.
+ * The branch is out of scope. Creating a worktree creates the branch it needs,
+ * that is unavoidable; deleting one leaves the branch behind unless the caller
+ * explicitly asks for it, because deleting branches belongs to whatever plugin
+ * owns branches. A branch that could not be deleted is reported rather than
+ * swallowed: the worktree is gone either way, and the operator needs to know
+ * the branch outlived it.
  *
  * @module dsh-remote-ssh-worktree/worktree/manager
  */
 
 import { posix } from 'node:path'
-import type { WireMergeOutcome, WireRepoState, WireWorktree } from '../protocol.ts'
+import type { WireWorktree } from '../protocol.ts'
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../anchors/store.ts'
 import type { ChannelLookup, NodeChannel } from '../transport/contract.ts'
 import { NodeRequestError } from '../transport/contract.ts'
@@ -53,13 +57,13 @@ export interface WorktreeRemoval {
   readonly branchError?: string
 }
 
-/** One anchor joined with the live state of the node it points at. */
+/** One anchor with what this host can say about it without asking the node. */
 export interface WorktreeStatus {
   /** The local anchor. */
   readonly anchor: AnchorRecord
-  /** The node's repository state, or undefined when the node is offline. */
-  readonly repo?: WireRepoState
-  /** Why the state is missing, when it is. */
+  /** Whether the anchor is registered as a workspace, so a session can open on it. */
+  readonly open: boolean
+  /** Why the worktree cannot be used right now, when it cannot. */
   readonly error?: string
 }
 
@@ -75,6 +79,11 @@ export interface WorkspaceHooks {
    * @param anchor - the anchor just removed.
    */
   unregister(anchor: AnchorRecord): Promise<void>
+  /**
+   * Whether the anchor currently holds a workspace registration.
+   * @param anchor - the anchor to ask about.
+   */
+  registered(anchor: AnchorRecord): Promise<boolean>
 }
 
 /** What the manager needs from its owner. */
@@ -121,13 +130,22 @@ export interface WorktreeManager {
    */
   remove(anchorId: AnchorId, options: { force: boolean; deleteBranch: boolean }): Promise<WorktreeRemoval>
   /**
-   * Merge one worktree's branch into its repository's current branch.
+   * Register the anchor as a workspace again, so it can be opened.
+   *
+   * Unlike creation, this is an explicit ask: a registry that is missing or
+   * refuses fails the call rather than being swallowed.
    * @param anchorId - the anchor handle.
-   * @returns the merge outcome.
-   * @throws the daemon's typed failure, including `GIT_DIRTY` for a conflicted
-   *   merge, which the daemon aborts before answering.
+   * @returns the anchor that is now open.
+   * @throws when no such anchor exists, or the workspace registry refuses.
    */
-  bringBack(anchorId: AnchorId): Promise<WireMergeOutcome>
+  open(anchorId: AnchorId): Promise<AnchorRecord>
+  /**
+   * Drop the anchor's workspace registration, leaving the machine untouched.
+   * @param anchorId - the anchor handle.
+   * @returns the anchor that is now closed.
+   * @throws when no such anchor exists.
+   */
+  close(anchorId: AnchorId): Promise<AnchorRecord>
 }
 
 /** The remote path a managed checkout lives at. */
@@ -171,7 +189,7 @@ async function unregisterWorkspace(deps: WorktreeManagerDeps, anchor: AnchorReco
  * Make the managed directory invisible to git.
  *
  * Without this the repository reports itself dirty the moment a worktree
- * exists, and `repoState.clean` — the fact every bring-back decision reads —
+ * exists, and `repoState.clean` — the fact the removal guard reads —
  * would be permanently false. The file is written after `git worktree add`
  * has created the parent directory, and a pre-existing file is left alone so a
  * user's own ignore rules survive.
@@ -247,16 +265,13 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
     async list() {
       const statuses: WorktreeStatus[] = []
       for (const anchor of deps.anchors.list()) {
-        const channel = deps.channel(anchor.nodeId)
-        if (channel === undefined) {
-          statuses.push({ anchor, error: `node "${anchor.nodeId}" is not connected` })
-          continue
-        }
-        try {
-          statuses.push({ anchor, repo: await channel.request('git.repoState', { repoPath: anchor.repoPath }) })
-        } catch (error) {
-          statuses.push({ anchor, error: error instanceof Error ? error.message : String(error) })
-        }
+        const open = await deps.workspace?.registered(anchor) ?? false
+        // Listing is a local read. The branch a checkout sits on and whether it
+        // is dirty belong to the machine's own git, so the only thing worth
+        // reporting here is whether the worktree can be reached at all.
+        statuses.push(deps.channel(anchor.nodeId) === undefined
+          ? { anchor, open, error: `node "${anchor.nodeId}" is not connected` }
+          : { anchor, open })
       }
       return statuses
     },
@@ -275,10 +290,11 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
         worktreePath: anchor.remoteRoot,
         force: options.force,
       })
-      // The checkout is gone, so the local handle must go with it before any
-      // optional step can fail.
-      await deps.anchors.remove(anchorId)
+      // The checkout is gone, so the local handle must go with it — but the
+      // workspace registry resolves an entry by path, which stops resolving the
+      // moment the anchor directory is removed, so that goes first.
       await unregisterWorkspace(deps, anchor)
+      await deps.anchors.remove(anchorId)
 
       if (!options.deleteBranch) return { anchor, branchDeleted: false }
       try {
@@ -297,12 +313,20 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       }
     },
 
-    async bringBack(anchorId) {
+    async open(anchorId) {
       const anchor = anchorById(anchorId)
-      return channelFor(anchor.nodeId).request('git.mergeBranch', {
-        repoPath: anchor.repoPath,
-        branch: anchor.branch,
-      })
+      const workspace = deps.workspace
+      if (workspace === undefined) {
+        throw new Error('this deployment composes no workspace registry, so a worktree cannot be opened')
+      }
+      await workspace.register(anchor)
+      return anchor
+    },
+
+    async close(anchorId) {
+      const anchor = anchorById(anchorId)
+      await deps.workspace?.unregister(anchor)
+      return anchor
     },
   }
 }

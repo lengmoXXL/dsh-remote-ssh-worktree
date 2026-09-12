@@ -1,7 +1,7 @@
 /**
  * The P3 loop against real git: a real repository on a real socket, a worktree
- * cut through the wire, a change merged back into the main branch, and the
- * whole thing removed again.
+ * cut through the wire, worked in, and removed again. The branch outlives the
+ * checkout unless the caller explicitly asks for it.
  *
  * The local anchor is asserted on disk at every step, because the anchor is
  * what makes the remote checkout addressable by the rest of the harness.
@@ -96,26 +96,20 @@ test('the worktree carries the base revision content', async () => {
   assert.equal(content, 'initial\n')
 })
 
-test('listing reports the repository state beside each anchor', async () => {
+test('listing reports each anchor and whether it is open', async () => {
   const statuses = await worktrees.list()
   assert.equal(statuses.length, 1)
-  assert.deepEqual(statuses[0]?.repo, { branch: 'main', clean: true })
+  assert.equal(statuses[0]?.anchor.branch, 'worktree/login')
+  assert.equal(statuses[0]?.open, false, 'nothing registered a workspace here')
 })
 
-test('a commit in the worktree reaches the main branch through bringBack', async () => {
+test('a commit in the worktree stays on its branch', async () => {
   const checkout = join(repoPath, '.dsh-worktrees', 'worktree', 'login')
   await writeFile(join(checkout, 'feature.txt'), 'from the worktree\n', 'utf8')
   await git(['add', '.'], checkout)
   await git(['commit', '-m', 'add feature'], checkout)
 
-  const merge = await worktrees.bringBack(anchorId)
-  assert.equal(merge.alreadyMerged, false)
-  assert.equal(await readFile(join(repoPath, 'feature.txt'), 'utf8'), 'from the worktree\n')
-})
-
-test('merging an already-merged branch changes nothing', async () => {
-  const merge = await worktrees.bringBack(anchorId)
-  assert.equal(merge.alreadyMerged, true)
+  assert.equal(existsSync(join(repoPath, 'feature.txt')), false, 'main is untouched until someone merges')
 })
 
 test('a dirty checkout refuses removal until it is forced', async () => {
@@ -129,11 +123,19 @@ test('a dirty checkout refuses removal until it is forced', async () => {
   assert.equal(anchors.list().length, 1, 'a refused removal keeps the anchor')
 })
 
-test('a forced removal drops the checkout, the branch, and the anchor', async () => {
-  const removal = await worktrees.remove(anchorId, { force: true, deleteBranch: true })
+test('a forced removal drops the checkout and the anchor but keeps the branch', async () => {
+  const removal = await worktrees.remove(anchorId, { force: true, deleteBranch: false })
 
-  assert.equal(removal.branchDeleted, true)
+  assert.equal(removal.branchDeleted, false)
   assert.equal(existsSync(join(repoPath, '.dsh-worktrees', 'worktree', 'login')), false)
   assert.deepEqual(anchors.list(), [])
-  assert.equal(await git(['branch', '--list', '--format=%(refname:short)', 'worktree/login']), '')
+  assert.equal(await git(['branch', '--list', '--format=%(refname:short)', 'worktree/login']), 'worktree/login')
+})
+
+test('remove with deleteBranch takes the branch with the checkout', async () => {
+  const anchor = await worktrees.create({ nodeId: asNodeId('n1'), repoPath, name: 'signup' })
+  const removal = await worktrees.remove(anchor.anchorId, { force: false, deleteBranch: true })
+
+  assert.equal(removal.branchDeleted, true)
+  assert.equal(await git(['branch', '--list', '--format=%(refname:short)', 'worktree/signup']), '')
 })

@@ -157,7 +157,7 @@ test('the model-facing tools are registered, not merely exported', async () => {
   // plugin activates. The deployment composes its registries before its plugin
   // rows, which is why the shipped plugins use the same non-blocking form.
   const tools = (ctx as unknown as { tools: { get: (name: string) => unknown } }).tools
-  const names = ['rw_list', 'rw_create', 'rw_bring_back', 'rw_remove']
+  const names = ['rw_list', 'rw_create', 'rw_remove']
   const deadline = Date.now() + 5_000
   while (names.some(name => tools.get(name) === undefined)) {
     assert.ok(Date.now() < deadline, `tools never registered: ${names.filter(n => tools.get(n) === undefined).join(', ')}`)

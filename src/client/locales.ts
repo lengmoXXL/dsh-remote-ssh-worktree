@@ -44,14 +44,9 @@ export const zh = {
   addRepository: '添加仓库',
   forgetRepository: '移除仓库',
   newWorktree: '新建 worktree',
-  bringBack: '合并回主干',
+  openWorktree: '打开工作区',
+  closeWorktree: '关闭工作区',
   removeWorktree: '移除',
-
-  branch: '当前分支',
-  detached: '游离 HEAD',
-  clean: '工作区干净',
-  dirty: '有未提交改动',
-  localPath: '本地锚点',
 
   fieldTarget: 'SSH 目标',
   fieldSshPort: 'SSH 端口',
@@ -89,7 +84,8 @@ export const zh = {
   removeRepositoryTitle: '移除仓库登记？',
   removeRepositoryBody: '只会删除本地记录；机器上的仓库和 worktree 都不受影响。',
   removeWorktreeTitle: '移除 worktree？',
-  removeWorktreeBody: '会删除机器上的检出目录及其分支，未提交的改动会一并丢弃。',
+  removeWorktreeBody: '会删除机器上的检出目录；勾选后分支也会被删除。未提交的改动会一并丢弃。',
+  removeWorktreeBranch: '同时删除分支',
   noToken: '未设置令牌',
 } satisfies Record<string, string>
 
@@ -129,14 +125,9 @@ export const en = {
   addRepository: 'Add repository',
   forgetRepository: 'Forget repository',
   newWorktree: 'New worktree',
-  bringBack: 'Merge back',
+  openWorktree: 'Open workspace',
+  closeWorktree: 'Close workspace',
   removeWorktree: 'Remove',
-
-  branch: 'Branch',
-  detached: 'Detached HEAD',
-  clean: 'Clean',
-  dirty: 'Uncommitted changes',
-  localPath: 'Local anchor',
 
   fieldTarget: 'SSH destination',
   fieldSshPort: 'SSH port',
@@ -174,6 +165,7 @@ export const en = {
   removeRepositoryTitle: 'Forget this repository?',
   removeRepositoryBody: 'Only the local record is deleted; the repository and its worktrees on the machine are untouched.',
   removeWorktreeTitle: 'Remove this worktree?',
-  removeWorktreeBody: 'The checkout and its branch are deleted on the machine, and uncommitted changes are discarded.',
+  removeWorktreeBody: 'The checkout is deleted on the machine; tick the option to delete its branch too. Uncommitted changes are discarded.',
+  removeWorktreeBranch: 'Also delete its branch',
   noToken: 'no token',
 } satisfies Record<RemoteWorktreesKey, string>

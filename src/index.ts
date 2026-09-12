@@ -140,6 +140,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         const record = await service?.resolveByPath(anchor.anchorPath)
         if (record !== undefined && service !== undefined) await service.delete(record.id)
       },
+      async registered(anchor) {
+        const record = await workspaceRegistry(ctx)?.resolveByPath(anchor.anchorPath)
+        return record !== undefined
+      },
     },
   })
 

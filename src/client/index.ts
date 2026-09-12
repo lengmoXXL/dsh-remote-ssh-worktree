@@ -95,7 +95,8 @@ interface WorktreeStatus {
     readonly anchorPath: string
     readonly remoteRoot: string
   }
-  readonly repo?: { readonly branch: string | null; readonly clean: boolean }
+  /** Whether the anchor holds a workspace registration right now. */
+  readonly open: boolean
   readonly error?: string
 }
 
@@ -171,11 +172,15 @@ function sectionFace(t: Translate): RemoteWorktreesFace {
     async createWorktree(draft) {
       await call(t, '/worktrees', { method: 'POST', body: JSON.stringify(draft) })
     },
-    async removeWorktree(anchorId) {
-      await call(t, `/worktrees/${encodeURIComponent(anchorId)}?force=true`, { method: 'DELETE' })
+    async removeWorktree(anchorId, deleteBranch) {
+      const query = new URLSearchParams({ force: 'true', deleteBranch: String(deleteBranch) })
+      await call(t, `/worktrees/${encodeURIComponent(anchorId)}?${query.toString()}`, { method: 'DELETE' })
     },
-    async bringBack(anchorId) {
-      await call(t, `/worktrees/${encodeURIComponent(anchorId)}/bring-back`, { method: 'POST' })
+    async openWorktree(anchorId) {
+      await call(t, `/worktrees/${encodeURIComponent(anchorId)}/open`, { method: 'POST' })
+    },
+    async closeWorktree(anchorId) {
+      await call(t, `/worktrees/${encodeURIComponent(anchorId)}/close`, { method: 'POST' })
     },
   }
 }

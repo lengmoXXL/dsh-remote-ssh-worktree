@@ -13,10 +13,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NodeChannel } from '../../src/transport/contract.ts'
 import { createAnchorStore } from '../../src/anchors/store.ts'
+import type { AnchorRecord } from '../../src/anchors/store.ts'
 import { createNodeConnections } from '../../src/nodes/connections.ts'
 import { createNodeRegistry } from '../../src/nodes/registry.ts'
 import { createRepoStore } from '../../src/repos/store.ts'
 import { createWorktreeManager } from '../../src/worktree/manager.ts'
+import type { WireMethods } from '../../src/protocol.ts'
 import type { ApiRequest } from '../../src/web/api.ts'
 import { handleNodeApi } from '../../src/web/api.ts'
 import { asNodeId, asRepoId } from '../../src/ids.ts'
@@ -49,13 +51,24 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
   })
   const anchors = createAnchorStore({ root: join(dir, 'anchors') })
   await anchors.load()
-  const worktrees = createWorktreeManager({ anchors, channel: nodeId => connections.channel(nodeId) })
+  // Workspace registration is a seam: the deployment normally supplies it, and
+  // a set is enough to tell "opened as a workspace" from "merely recorded".
+  const registered = new Set<string>()
+  const workspace = {
+    register: (anchor: AnchorRecord) => { registered.add(anchor.anchorId); return Promise.resolve() },
+    unregister: (anchor: AnchorRecord) => { registered.delete(anchor.anchorId); return Promise.resolve() },
+    registered: (anchor: AnchorRecord) => Promise.resolve(registered.has(anchor.anchorId)),
+  }
+  const worktrees = createWorktreeManager({
+    anchors, channel: nodeId => connections.channel(nodeId), workspace,
+  })
   return {
     registry,
     repos,
     connections,
     anchors,
     worktrees,
+    registered,
     deps: { registry, repos, connections, worktrees },
   }
 }
@@ -267,6 +280,78 @@ test('removing an unknown worktree is reported by the lifecycle', async () => {
   assert.equal(response.status, 502)
   assert.match(String((response.body as { error: string }).error), /no anchor/)
 })
+
+test('removing a worktree keeps its branch unless the query asks for it', async () => {
+  const { deps, anchorId, calls } = await cutWorktree({ 'git.worktreeRemove': () => ({}) })
+  calls.length = 0
+
+  const response = await handleNodeApi(request('DELETE', `/worktrees/${anchorId}`), deps)
+
+  assert.equal(response.status, 200)
+  assert.equal((response.body as { removal: { branchDeleted: boolean } }).removal.branchDeleted, false)
+  assert.equal(calls.includes('git.branchDelete'), false, 'the default never asks for the branch')
+})
+
+test('removing a worktree with deleteBranch=true takes the branch too', async () => {
+  const { deps, anchorId } = await cutWorktree({
+    'git.worktreeRemove': () => ({}),
+    'git.branchDelete': () => ({}),
+  })
+
+  const response = await handleNodeApi(
+    request('DELETE', `/worktrees/${anchorId}`, undefined, 'deleteBranch=true'), deps,
+  )
+
+  assert.equal(response.status, 200)
+  assert.equal((response.body as { removal: { branchDeleted: boolean } }).removal.branchDeleted, true)
+})
+
+test('opening and closing a worktree touch no checkout', async () => {
+  const { deps, anchorId, calls, registered } = await cutWorktree()
+  calls.length = 0
+
+  const opened = await handleNodeApi(request('POST', `/worktrees/${anchorId}/open`), deps)
+  assert.equal(registered.has(String(anchorId)), true)
+  const closed = await handleNodeApi(request('POST', `/worktrees/${anchorId}/close`), deps)
+
+  assert.equal(opened.status, 200)
+  assert.equal(closed.status, 200)
+  assert.equal(registered.has(String(anchorId)), false)
+  assert.deepEqual(calls, [], 'neither action reaches the machine')
+})
+
+test('a worktree action answers only to POST, and an unknown action deletes nothing', async () => {
+  const { deps, anchorId } = await cutWorktree()
+  assert.equal((await handleNodeApi(request('GET', `/worktrees/${anchorId}/open`), deps)).status, 405)
+  assert.equal((await handleNodeApi(request('DELETE', `/worktrees/${anchorId}/bogus`), deps)).status, 404)
+  const list = await handleNodeApi(request('GET', '/worktrees'), deps)
+  assert.equal((list.body as { worktrees: readonly unknown[] }).worktrees.length, 1, 'the checkout survived')
+})
+
+/**
+ * Cut one worktree through the API over a recording fake daemon.
+ * @param overrides - daemon methods this case needs an answer for.
+ * @returns the connected context plus the anchor id and every method asked for.
+ */
+async function cutWorktree(overrides: Readonly<Record<string, (params: never) => unknown>> = {}) {
+  const calls: string[] = []
+  const inner = daemon(overrides)
+  const channel: NodeChannel = {
+    ...inner,
+    request: ((method: keyof WireMethods, params: never) => {
+      calls.push(method)
+      return inner.request(method, params)
+    }) as NodeChannel['request'],
+  }
+  const context = await connected(channel)
+  const created = await handleNodeApi(
+    request('POST', '/worktrees', { nodeId: context.nodeId, repoPath: '/srv/app', name: 'x' }),
+    context.deps,
+  )
+  assert.equal(created.status, 201, JSON.stringify(created.body))
+  const anchorId = (created.body as { worktree: { anchorId: string } }).worktree.anchorId
+  return { ...context, anchorId, calls }
+}
 
 /** A fake daemon whose repository probe succeeds unless overridden. */
 function daemon(overrides: Readonly<Record<string, (params: never) => unknown>> = {}): NodeChannel {

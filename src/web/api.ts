@@ -327,9 +327,14 @@ async function handleWorktrees(
     throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
   }
 
-  if (action === 'bring-back') {
+  // Opening and closing are workspace registration, not git: the checkout on
+  // the machine is untouched either way.
+  if (action === 'open' || action === 'close') {
     if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
-    return { status: 200, body: { merge: await deps.worktrees.bringBack(anchorId) } }
+    const worktree = action === 'open'
+      ? await deps.worktrees.open(anchorId)
+      : await deps.worktrees.close(anchorId)
+    return { status: 200, body: { worktree } }
   }
 
   if (action === undefined && request.method === 'DELETE') {
@@ -338,7 +343,9 @@ async function handleWorktrees(
       body: {
         removal: await deps.worktrees.remove(anchorId, {
           force: request.query.get('force') === 'true',
-          deleteBranch: request.query.get('deleteBranch') !== 'false',
+          // Deleting a branch is an explicit ask: this plugin owns worktrees,
+          // not branches, so the default leaves it behind.
+          deleteBranch: request.query.get('deleteBranch') === 'true',
         }),
       },
     }
