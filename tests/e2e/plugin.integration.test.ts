@@ -18,7 +18,7 @@
 
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -39,7 +39,9 @@ let anchorPath: string
 let ctx: Context
 
 before(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'drw-plugin-'))
+  // Resolved, because the anchor store hands out canonical paths and this test
+  // routes by the path it seeded.
+  dir = await realpath(await mkdtemp(join(tmpdir(), 'drw-plugin-')))
   await writeFile(join(dir, 'hello.txt'), 'hi there\n', 'utf8')
 
   // Seed one anchor before mounting, so the store discovers it at load time.

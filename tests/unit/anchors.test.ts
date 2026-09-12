@@ -9,21 +9,46 @@
 import assert from 'node:assert/strict'
 import { after, beforeEach, test } from 'node:test'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AnchorDraft } from '../../src/storage/anchors.ts'
 import { ANCHOR_FILE, createAnchorStore } from '../../src/storage/anchors.ts'
+import { classifyPath } from '../../src/models/routing.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
 
 let root: string
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'drw-anchors-'))
+  // Resolved, because the store hands out canonical paths and the cases below
+  // compare them against paths built from this root.
+  root = await realpath(await mkdtemp(join(tmpdir(), 'drw-anchors-')))
 })
 
 after(async () => {
   await rm(root, { recursive: true, force: true })
+})
+
+test('an anchor is spelled the way the harness will spell it', async () => {
+  // The harness canonicalizes a workspace path before a session runs in it, and
+  // the router matches by prefix: a root reached through a symlink (`/var` on
+  // macOS is one) would otherwise route every remote tool call to this host.
+  const store = createAnchorStore({ root: join(root, 'through-a-link') })
+  await store.load()
+  const anchor = await store.create(draft)
+
+  assert.equal(anchor.anchorPath, await realpath(anchor.anchorPath))
+  assert.equal(classifyPath(anchor.anchorPath, undefined, store.routes()).kind, 'remote')
+
+  // A record written with the old spelling reads back canonical too.
+  const raw = join(root, 'through-a-link', 'n1', 'app', 'login', ANCHOR_FILE)
+  const written = JSON.parse(await readFile(raw, 'utf8')) as { anchor: { anchorPath: string } }
+  written.anchor.anchorPath = written.anchor.anchorPath.replace(await realpath(root), root)
+  await writeFile(raw, JSON.stringify(written), 'utf8')
+
+  const reloaded = createAnchorStore({ root: join(root, 'through-a-link') })
+  const [record] = await reloaded.load()
+  assert.equal(record?.anchorPath, await realpath(raw.replace(`/${ANCHOR_FILE}`, '')))
 })
 
 const draft: AnchorDraft = {

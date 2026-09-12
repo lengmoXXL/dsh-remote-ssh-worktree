@@ -31,8 +31,8 @@
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { Dirent } from 'node:fs'
-import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { mkdir, readFile, readdir, realpath, rm } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { NodeId } from './nodes.ts'
 
@@ -287,7 +287,10 @@ async function findMetadataFiles(dir: string, depth: number): Promise<string[]> 
  */
 export function createAnchorStore(deps: AnchorStoreDeps): AnchorStore {
   const now = deps.now ?? (() => new Date())
-  const root = resolve(deps.root)
+  // Resolved for real in `load`: the harness canonicalizes a workspace path
+  // before a session runs in it, so an anchor spelled through a symlink would
+  // never match the cwd a tool call arrives with.
+  let root = resolve(deps.root)
   let anchors: AnchorRecord[] = []
   let loaded = false
 
@@ -297,10 +300,20 @@ export function createAnchorStore(deps: AnchorStoreDeps): AnchorStore {
 
   return {
     async load() {
+      // A path the harness hands to a session has been through `realpath`, and
+      // the router matches it against these anchors by prefix. Resolving the
+      // root here — before anything is created below it — is what keeps the two
+      // spellings equal; otherwise every remote path classifies as local and
+      // the tools quietly run on this host instead of the machine.
+      await mkdir(root, { recursive: true })
+      root = await realpath(root)
       const files = (await findMetadataFiles(root, SCAN_DEPTH)).sort()
       anchors = []
       for (const file of files) {
-        anchors.push(parseAnchor(await readFile(file, 'utf8'), file))
+        const record = parseAnchor(await readFile(file, 'utf8'), file)
+        // A record written before the root was resolved carries whatever
+        // spelling the root had then; its own metadata file is the truth.
+        anchors.push({ ...record, anchorPath: await realpath(dirname(file)) })
       }
       loaded = true
       return anchors
