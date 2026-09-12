@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import type { SubprocessRuntime, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { NodeChannel } from '../../src/channel.ts'
 import type { AnchorRoute } from '../../src/anchors/store.ts'
-import { createRoutingSubprocessRuntime } from '../../src/routing/subprocess.ts'
+import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 const anchors: AnchorRoute[] = [

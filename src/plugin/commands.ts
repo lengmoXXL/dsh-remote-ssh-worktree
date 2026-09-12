@@ -7,16 +7,16 @@
  * finishes the job, because the two halves — a checkout on the node and an
  * anchor here — are cleaned up by different operations.
  *
- * @module dsh-remote-ssh-worktree/commands
+ * @module dsh-remote-ssh-worktree/plugin/commands
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
-import type { NodeConnections } from './nodes/connections.ts'
-import type { NodeRegistry } from './nodes/registry.ts'
-import { defaultNodeTitle } from './nodes/registry.ts'
-import { asAnchorId, asNodeId } from './ids.ts'
-import type { WorktreeManager } from './worktree/manager.ts'
+import type { NodeConnections } from '../nodes/connections.ts'
+import type { NodeRegistry } from '../nodes/registry.ts'
+import { defaultNodeTitle } from '../nodes/registry.ts'
+import { asAnchorId, asNodeId } from '../ids.ts'
+import type { WorktreeManager } from '../worktree/manager.ts'
 
 /** What the command needs from the plugin. */
 export interface WorktreeCommandDeps {

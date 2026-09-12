@@ -19,7 +19,7 @@ import type { SubprocessRuntime, SubprocessTerminalHandle } from '@deepseek-ai/d
 import { connectNode } from '../../src/nodes/client.ts'
 import type { ConnectedNode } from '../../src/nodes/client.ts'
 import type { AnchorRoute } from '../../src/anchors/store.ts'
-import { createRoutingSubprocessRuntime } from '../../src/routing/subprocess.ts'
+import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 const TOKEN = 'terminal-token-0123456789'

@@ -16,7 +16,7 @@
  * injected dependency, because a non-Web profile (headless, SDK) has no HTTP
  * server and the plugin must still load there.
  *
- * @module dsh-remote-ssh-worktree/web/api
+ * @module dsh-remote-ssh-worktree/plugin/api
  */
 
 import type { Context } from '@deepseek-ai/cordis'

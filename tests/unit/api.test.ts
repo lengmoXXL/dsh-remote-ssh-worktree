@@ -19,8 +19,8 @@ import { createNodeRegistry } from '../../src/nodes/registry.ts'
 import { createRepoStore } from '../../src/repos/store.ts'
 import { createWorktreeManager } from '../../src/worktree/manager.ts'
 import type { WireMethods } from '../../src/protocol.ts'
-import type { ApiRequest } from '../../src/web/api.ts'
-import { handleNodeApi } from '../../src/web/api.ts'
+import type { ApiRequest } from '../../src/plugin/api.ts'
+import { handleNodeApi } from '../../src/plugin/api.ts'
 import { asNodeId, asRepoId } from '../../src/ids.ts'
 
 let dir: string

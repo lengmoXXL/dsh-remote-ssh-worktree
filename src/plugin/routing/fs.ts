@@ -13,18 +13,18 @@
  * remote branch forwards to the node's daemon and maps its answers back onto
  * the same seam vocabulary.
  *
- * @module dsh-remote-ssh-worktree/routing/fs
+ * @module dsh-remote-ssh-worktree/plugin/routing/fs
  */
 
 import type { FileSystem, FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { TARGET_KEY_PREFIX, isFsErrorCode } from '../protocol.ts'
-import type { ChannelLookup, NodeChannel } from '../channel.ts'
-import { NodeRequestError } from '../channel.ts'
-import { asNodeId } from '../ids.ts'
-import type { NodeId } from '../ids.ts'
-import type { AnchorRoute } from '../anchors/store.ts'
+import { TARGET_KEY_PREFIX, isFsErrorCode } from '../../protocol.ts'
+import type { ChannelLookup, NodeChannel } from '../../channel.ts'
+import { NodeRequestError } from '../../channel.ts'
+import { asNodeId } from '../../ids.ts'
+import type { NodeId } from '../../ids.ts'
+import type { AnchorRoute } from '../../anchors/store.ts'
 import { classifyPath, isWithin } from './classify.ts'
 
 /** Bytes per remote text pull. Bounds one round trip without capping file size. */

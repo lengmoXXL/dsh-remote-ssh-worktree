@@ -8,15 +8,15 @@
  * names the machine and the local path, because the model has to be able to say
  * where its work actually lives.
  *
- * @module dsh-remote-ssh-worktree/tools
+ * @module dsh-remote-ssh-worktree/plugin/tools
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { asAnchorId, asNodeId } from './ids.ts'
-import type { NodeConnections } from './nodes/connections.ts'
-import type { NodeRegistry } from './nodes/registry.ts'
-import type { WorktreeManager } from './worktree/manager.ts'
+import { asAnchorId, asNodeId } from '../ids.ts'
+import type { NodeConnections } from '../nodes/connections.ts'
+import type { NodeRegistry } from '../nodes/registry.ts'
+import type { WorktreeManager } from '../worktree/manager.ts'
 
 /** What the tools need from the plugin. */
 export interface WorktreeToolDeps {

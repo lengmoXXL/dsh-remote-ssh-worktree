@@ -14,8 +14,8 @@ import type { AnchorStore } from '../../src/anchors/store.ts'
 import type { NodeConnections, NodeState } from '../../src/nodes/connections.ts'
 import type { NodeRecord, NodeRegistry } from '../../src/nodes/registry.ts'
 import { createWorktreeManager } from '../../src/worktree/manager.ts'
-import { runWorktreeCommand } from '../../src/commands.ts'
-import type { WorktreeCommandDeps } from '../../src/commands.ts'
+import { runWorktreeCommand } from '../../src/plugin/commands.ts'
+import type { WorktreeCommandDeps } from '../../src/plugin/commands.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 let root: string

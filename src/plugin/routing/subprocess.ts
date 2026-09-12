@@ -21,7 +21,7 @@
  * `'pipe'` output is refused for a remote cwd rather than silently collected:
  * a consumer that asked for a live stream must learn it cannot have one.
  *
- * @module dsh-remote-ssh-worktree/routing/subprocess
+ * @module dsh-remote-ssh-worktree/plugin/routing/subprocess
  */
 
 import { PassThrough } from 'node:stream'
@@ -40,9 +40,9 @@ import type {
   SubprocessTerminalSignal,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import type { ProcId, SpPipeFrame } from '../protocol.ts'
-import type { ChannelLookup, NodeChannel } from '../channel.ts'
-import type { AnchorRoute } from '../anchors/store.ts'
+import type { ProcId, SpPipeFrame } from '../../protocol.ts'
+import type { ChannelLookup, NodeChannel } from '../../channel.ts'
+import type { AnchorRoute } from '../../anchors/store.ts'
 import { classifyPath } from './classify.ts'
 
 /**

@@ -15,7 +15,7 @@
  * workdir does both the resolving and the running, so timeout, output caps, and
  * managed-environment handling keep their shipped behavior on both sides.
  *
- * @module dsh-remote-ssh-worktree/routing/shell
+ * @module dsh-remote-ssh-worktree/plugin/routing/shell
  */
 
 import type {
@@ -26,7 +26,7 @@ import type {
   ShellRunResult,
 } from '@deepseek-ai/dsh-shell'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { AnchorRoute } from '../anchors/store.ts'
+import type { AnchorRoute } from '../../anchors/store.ts'
 import { classifyPath } from './classify.ts'
 
 /**
