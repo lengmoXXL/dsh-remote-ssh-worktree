@@ -1,11 +1,11 @@
 # dsh-remote-ssh-worktree
 
-A DSH plugin that runs the harness's file, shell, and terminal tools inside a git worktree on a remote
-machine.
+A DSH plugin that puts a directory on a remote machine in front of the harness: read, write, edit, bash, grep, and
+terminal tools run there — in a git worktree, or in the directory itself — while the model sees ordinary local paths.
 
 English | [中文](README.zh.md)
 
-![A session in a remote worktree, running tools on that machine](docs/screenshots/en/08-session.png)
+![A session running tools inside a remote worktree](docs/screenshots/en/08-session.png)
 
 | Machines | Connected | A worktree |
 | --- | --- | --- |
@@ -13,26 +13,52 @@ English | [中文](README.zh.md)
 
 ## What it does
 
-- Reaches a machine over SSH — `user@host` or a `~/.ssh/config` alias. Nothing to install there by hand.
-- Cuts `worktree/<name>` from any git repository on the machine and registers the checkout as a DSH workspace; one row
-  opens, closes, or removes each worktree.
-- Opens a directory that is not a git repository as a workspace in its own right; initialize it on the machine and
-  worktrees can be cut from it without registering anything again.
-- Read, write, edit, bash, grep, and terminal tools then run on that machine, unchanged. The model never sees
-  that the files are remote.
-- Removing one takes the checkout and leaves the branch, so an unmerged commit is never lost silently.
+- Reaches a machine over SSH — `user@host` or a `~/.ssh/config` alias — and installs nothing there by hand.
+- Cuts `worktree/<name>` from any repository on it, and registers the checkout as a DSH workspace.
+- Opens a plain directory as a workspace too, before it is a repository; `git init` it later and worktrees can be cut
+  from it without registering anything again.
+- Runs read, write, edit, bash, grep, and terminal tools on that machine unchanged.
+- Removes a worktree without losing work: the checkout goes, the branch stays unless you ask for it.
+
+## Install
+
+Needs Node 22.19+ (or 24+) and `ssh`. The agent is a release download, so no Rust toolchain is required to use it.
+
+```sh
+git clone https://github.com/lengmoXXL/dsh-remote-ssh-worktree
+cd dsh-remote-ssh-worktree && npm install && npm run build
+dsh plugin --profile web add "$PWD"
+dsh --profile web
+```
+
+## Use it
+
+**Settings → Remote worktrees.** Add a machine by its SSH destination and a token — any string, it is the daemon's
+shared secret. The plugin connects on load and retries a few times per machine; one that stays unreachable is left
+failed, with a Connect button to try again.
+
+A repository is any directory on the machine. Each row opens, closes, or removes what it holds, and a directory that is
+not a git repository yet can still be opened as a workspace.
+
+**From a session**, a person types `/rwt` and the model calls the same operations as tools:
+
+| | |
+| --- | --- |
+| `/rwt list` · `/rwt nodes` | the worktrees, and each machine's state |
+| `/rwt create <nodeId> <repoPath> <name> [baseRef]` | cut a worktree |
+| `/rwt remove <anchorId> [--force] [--delete-branch]` | drop the checkout; the branch stays unless asked |
+| `rw_list` · `rw_create` · `rw_remove` | the same three for the model |
 
 ## How it works
 
-- The plugin replaces the harness's `fs`, `subprocess`, and `shell` seams with routing versions: a path under a
-  remote anchor goes to that machine's agent, every other path stays local.
-- The agent is one statically linked Rust binary. It binds a kernel-assigned loopback port and publishes it in a
-  state file, so a machine is configured by its SSH destination and a token alone — there is no port to agree on.
-- The plugin installs and updates it: on connect it reads `uname`, downloads the matching build from this
-  repository's GitHub Releases, verifies it against `SHA256SUMS`, uploads it over the same SSH connection, starts
-  it detached, then forwards to the port it published.
-- Agent traffic reaches your machine through `ssh -L`, so a connection has exactly the trust of your own SSH
-  access.
+- The plugin replaces the harness's `fs`, `subprocess`, and `shell` seams with routing versions: a path under a remote
+  anchor goes to that machine's agent, every other path stays local.
+- The agent is one statically linked Rust binary. It binds a kernel-assigned loopback port and publishes it in a state
+  file, so a machine is configured by its SSH destination and a token alone — there is no port to agree on.
+- The plugin installs and updates it: on connect it reads `uname`, downloads the matching build from this repository's
+  GitHub Releases, verifies it against `SHA256SUMS`, uploads it over the same SSH connection, starts it detached, then
+  forwards to the port it published.
+- Agent traffic reaches your machine through `ssh -L`, so a connection has exactly the trust of your own SSH access.
 
 ## Architecture
 
@@ -68,14 +94,11 @@ semantics built on both; `plugin/` is the only layer that knows DSH. Imports onl
 is the one file that assembles the layers. The settings section is the other half — it runs in the browser and reaches
 the host through its management API.
 
-## Install
+## Where the state lives
 
-```sh
-git clone https://github.com/lengmoXXL/dsh-remote-ssh-worktree
-cd dsh-remote-ssh-worktree && npm install && npm run build
-dsh plugin --profile web add "$PWD"
-dsh --profile web
-```
+`$DSH_HOME/remote-worktrees/` holds `nodes.json`, `repos.json`, one anchor directory per remote directory this plugin
+addresses, and the agent builds downloaded for each platform. Removing the plugin leaves that directory behind;
+deleting it forgets every machine.
 
 ## License
 
