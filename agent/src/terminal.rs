@@ -16,7 +16,7 @@ use base64::Engine;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_ulong};
+use std::os::raw::{c_char, c_int};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::RawFd;
 use std::sync::atomic::AtomicU64;
@@ -368,7 +368,7 @@ fn spawn_on_pty(
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
-    unsafe { libc::ioctl(master, libc::TIOCSWINSZ as c_ulong, &winsize) };
+    unsafe { libc::ioctl(master, libc::TIOCSWINSZ, &winsize) };
 
     // The child reports a failed `execve` through this pipe; it closes on a
     // successful exec, so the parent reads either four errno bytes or EOF.
@@ -412,7 +412,9 @@ fn spawn_on_pty(
             if slave < 0 {
                 child_fail(report[1]);
             }
-            libc::ioctl(slave, libc::TIOCSCTTY as c_ulong, 0);
+            // The request type is `Ioctl` on Linux (i32 on musl) and `c_ulong`
+            // on macOS, so the cast follows whichever `ioctl` declares.
+            libc::ioctl(slave, libc::TIOCSCTTY as _, 0);
             libc::dup2(slave, 0);
             libc::dup2(slave, 1);
             libc::dup2(slave, 2);

@@ -40,7 +40,14 @@ jobs:
           npm test
 
   rust:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Rust half behaves differently on the two platforms this plugin
+        # reaches: PTY allocation, foreground groups, and the `/proc` evidence
+        # behind `term.inspectForeground` are per-OS.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -50,3 +57,11 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all
+      # The Linux release assets are musl static builds, and musl types the
+      # `ioctl` request differently from glibc, so type-check that target here
+      # rather than discovering it when a release is already tagged.
+      - if: runner.os == 'Linux'
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          cargo check --target x86_64-unknown-linux-musl --all-targets
+          cargo check --target aarch64-unknown-linux-musl --all-targets
