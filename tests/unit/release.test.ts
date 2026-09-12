@@ -1,8 +1,9 @@
 /**
  * The release resolver is where a machine's platform becomes bytes that will
- * be executed there, so its cases are about the two ways that can go wrong:
- * naming an asset no release carries, and accepting bytes whose hash does not
- * match the release's own sums file.
+ * be executed there, so its cases are about the ways that can go wrong: naming
+ * an asset no release carries, accepting bytes whose hash does not match the
+ * release's own sums file, and reading the release through an endpoint that
+ * answers with something else.
  */
 
 import assert from 'node:assert/strict'
@@ -11,11 +12,19 @@ import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { agentAssetName, agentReleaseBase, resolveAgentBinary } from '../../src/agent/release.ts'
+import type { AgentFetcher } from '../../src/agent/release.ts'
+import { agentAssetName, agentReleaseApi, resolveAgentBinary } from '../../src/agent/release.ts'
 
 const VERSION = '0.0.1'
 const ASSET = 'dsh-remote-agent-linux-x86_64'
 const BINARY = Buffer.from('the binary bytes')
+const RELEASE_URL = agentReleaseApi(VERSION)
+
+/** One request a scripted fetcher answered. */
+interface SeenRequest {
+  readonly url: string
+  readonly accept: string
+}
 
 /** A fresh cache directory for one case. */
 async function cacheDir(): Promise<string> {
@@ -25,6 +34,60 @@ async function cacheDir(): Promise<string> {
 /** A checksum line for one asset. */
 function sumsFor(asset: string, digest: string): Buffer {
   return Buffer.from(`${digest}  ${asset}\n`)
+}
+
+/** The digest of the fixture binary. */
+function binaryDigest(): string {
+  return createHash('sha256').update(BINARY).digest('hex')
+}
+
+/** Where a fake release serves one asset's bytes. */
+function assetApi(name: string): string {
+  return `https://api.github.com/repos/lengmoXXL/dsh-remote-ssh-worktree/releases/assets/${name}`
+}
+
+/** Where a person would download one asset from. */
+function assetBrowser(name: string): string {
+  return `https://github.com/lengmoXXL/dsh-remote-ssh-worktree/releases/download/v${VERSION}/${name}`
+}
+
+/** A release metadata body naming the given assets. */
+function releaseBody(names: readonly string[]): Buffer {
+  return Buffer.from(JSON.stringify({
+    tag_name: `v${VERSION}`,
+    assets: names.map(name => ({
+      name,
+      url: assetApi(name),
+      browser_download_url: assetBrowser(name),
+    })),
+  }))
+}
+
+/**
+ * A scripted fetcher: the release metadata, then whichever asset bytes the
+ * caller supplies.
+ * @param bodies - per-asset bodies; an absent entry fails the request.
+ * @returns the fetcher and the requests it saw.
+ */
+function scriptedFetch(bodies: Readonly<Record<string, Buffer | undefined>>): {
+  fetch: AgentFetcher
+  seen: SeenRequest[]
+} {
+  const seen: SeenRequest[] = []
+  return {
+    seen,
+    fetch: (url, accept) => {
+      seen.push({ url, accept })
+      if (url === RELEASE_URL) {
+        const names = Object.keys(bodies).filter(name => bodies[name] !== undefined)
+        return Promise.resolve(releaseBody(names))
+      }
+      for (const [name, body] of Object.entries(bodies)) {
+        if (url === assetApi(name) && body !== undefined) return Promise.resolve(body)
+      }
+      return Promise.reject(new Error(`unscripted request to ${url}`))
+    },
+  }
 }
 
 test('each reported platform maps to its release asset', () => {
@@ -40,10 +103,10 @@ test('a platform with no release fails naming what the machine reported', () => 
   assert.throws(() => agentAssetName('Linux', 'riscv64'), /riscv64/)
 })
 
-test('the release base is the versioned download directory', () => {
+test('a version is read from the release the tag names', () => {
   assert.equal(
-    agentReleaseBase('0.0.1'),
-    'https://github.com/lengmoXXL/dsh-remote-ssh-worktree/releases/download/v0.0.1',
+    agentReleaseApi('0.0.1'),
+    'https://api.github.com/repos/lengmoXXL/dsh-remote-ssh-worktree/releases/tags/v0.0.1',
   )
 })
 
@@ -67,45 +130,55 @@ test('a cached binary is returned without touching the network', async () => {
 test('a verified download is returned and cached at the versioned path', async () => {
   const dir = await cacheDir()
   try {
-    const digest = createHash('sha256').update(BINARY).digest('hex')
-    const seen: string[] = []
-    const result = await resolveAgentBinary({
-      version: VERSION,
-      assetName: ASSET,
-      cacheDir: dir,
-      fetch: (url) => {
-        seen.push(url)
-        return Promise.resolve(url.endsWith('SHA256SUMS') ? sumsFor(ASSET, digest) : BINARY)
-      },
+    const { fetch, seen } = scriptedFetch({
+      [ASSET]: BINARY,
+      SHA256SUMS: sumsFor(ASSET, binaryDigest()),
     })
+    const result = await resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch })
 
-    const base = agentReleaseBase(VERSION)
     assert.deepEqual(result, BINARY)
-    assert.deepEqual([...seen].sort(), [`${base}/${ASSET}`, `${base}/SHA256SUMS`].sort())
     assert.deepEqual(await readFile(join(dir, VERSION, ASSET)), BINARY)
+    // The release metadata is asked for as JSON, and both assets as bytes.
+    assert.deepEqual(seen, [
+      { url: RELEASE_URL, accept: 'application/vnd.github+json' },
+      { url: assetApi(ASSET), accept: 'application/octet-stream' },
+      { url: assetApi('SHA256SUMS'), accept: 'application/octet-stream' },
+    ])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
 })
 
-test('a checksum mismatch refuses the bytes and names the URL', async () => {
+test('a release that carries no such asset is refused before anything is downloaded', async () => {
+  const dir = await cacheDir()
+  try {
+    const { fetch, seen } = scriptedFetch({ 'dsh-remote-agent-other-x86_64': BINARY })
+    await assert.rejects(
+      () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        assert.equal(message.includes(RELEASE_URL), true)
+        assert.equal(message.includes(ASSET), true)
+        return true
+      },
+    )
+    assert.deepEqual(seen.map(request => request.url), [RELEASE_URL])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a checksum mismatch refuses the bytes and names the download', async () => {
   const dir = await cacheDir()
   try {
     const wrong = createHash('sha256').update('something else').digest('hex')
-    const url = `${agentReleaseBase(VERSION)}/${ASSET}`
+    const { fetch } = scriptedFetch({ [ASSET]: BINARY, SHA256SUMS: sumsFor(ASSET, wrong) })
     await assert.rejects(
-      () => resolveAgentBinary({
-        version: VERSION,
-        assetName: ASSET,
-        cacheDir: dir,
-        fetch: (requested) => Promise.resolve(
-          requested.endsWith('SHA256SUMS') ? sumsFor(ASSET, wrong) : BINARY,
-        ),
-      }),
+      () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         assert.match(message, /SHA-256 check/)
-        assert.equal(message.includes(url), true)
+        assert.equal(message.includes(assetBrowser(ASSET)), true)
         return true
       },
     )
@@ -119,20 +192,21 @@ test('a checksum mismatch refuses the bytes and names the URL', async () => {
 test('a failed download names the URL it could not read', async () => {
   const dir = await cacheDir()
   try {
-    const url = `${agentReleaseBase(VERSION)}/${ASSET}`
+    const sumsUrl = assetApi('SHA256SUMS')
     await assert.rejects(
       () => resolveAgentBinary({
         version: VERSION,
         assetName: ASSET,
         cacheDir: dir,
-        fetch: (requested) => {
-          if (requested === url) return Promise.reject(new Error('socket hang up'))
-          return Promise.resolve(sumsFor(ASSET, 'a'.repeat(64)))
+        fetch: (url) => {
+          if (url === sumsUrl) return Promise.reject(new Error('socket hang up'))
+          if (url === RELEASE_URL) return Promise.resolve(releaseBody([ASSET, 'SHA256SUMS']))
+          return Promise.resolve(BINARY)
         },
       }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        assert.equal(message.includes(`downloading ${url} failed`), true)
+        assert.equal(message.includes(`downloading ${sumsUrl} failed`), true)
         assert.match(message, /socket hang up/)
         return true
       },
@@ -145,22 +219,37 @@ test('a failed download names the URL it could not read', async () => {
 test('a sums file that names no such asset is refused', async () => {
   const dir = await cacheDir()
   try {
-    const sumsUrl = `${agentReleaseBase(VERSION)}/SHA256SUMS`
+    const { fetch } = scriptedFetch({
+      [ASSET]: BINARY,
+      SHA256SUMS: sumsFor('dsh-remote-agent-other-x86_64', 'a'.repeat(64)),
+    })
+    await assert.rejects(
+      () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        assert.equal(message.includes(assetBrowser('SHA256SUMS')), true)
+        assert.equal(message.includes(ASSET), true)
+        return true
+      },
+    )
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('an answer that is not release JSON is refused by name', async () => {
+  const dir = await cacheDir()
+  try {
     await assert.rejects(
       () => resolveAgentBinary({
         version: VERSION,
         assetName: ASSET,
         cacheDir: dir,
-        fetch: (requested) => Promise.resolve(
-          requested.endsWith('SHA256SUMS')
-            ? sumsFor('dsh-remote-agent-other-x86_64', 'a'.repeat(64))
-            : BINARY,
-        ),
+        fetch: () => Promise.resolve(Buffer.from('<html>not found</html>')),
       }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        assert.equal(message.includes(sumsUrl), true)
-        assert.equal(message.includes(ASSET), true)
+        assert.equal(message.includes(`${RELEASE_URL} did not answer with release JSON`), true)
         return true
       },
     )

@@ -7,6 +7,15 @@
  * makes a version bump a fresh download and a second machine of the same
  * platform a cache hit.
  *
+ * Assets are read through the GitHub API rather than the address a browser
+ * would use. The API is what `gh` itself downloads through, it serves a public
+ * repository anonymously, it answers with the release's own asset list — so a
+ * missing asset is a named error instead of an HTML error page — and it is the
+ * endpoint that stays reachable on networks which drop the web host. Anonymous
+ * reads are rate-limited, which the version-keyed cache keeps to one release
+ * lookup and two asset reads per version and host. A private repository would
+ * refuse an anonymous read; this build reads public releases.
+ *
  * Every download is verified against the release's `SHA256SUMS` before it is
  * cached: the bytes are executed on a remote machine, so a truncated or
  * substituted asset must fail here rather than at exec time there.
@@ -19,7 +28,22 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 /** Repository whose releases carry the agent binaries. */
-const RELEASE_REPOSITORY = 'https://github.com/lengmoXXL/dsh-remote-ssh-worktree'
+const RELEASE_REPOSITORY = 'lengmoXXL/dsh-remote-ssh-worktree'
+
+/** The release API root every request below hangs off. */
+const API_ROOT = `https://api.github.com/repos/${RELEASE_REPOSITORY}`
+
+/** Media type the release metadata is requested as. */
+const RELEASE_MEDIA_TYPE = 'application/vnd.github+json'
+
+/** Media type an asset's bytes are requested as. */
+const BINARY_MEDIA_TYPE = 'application/octet-stream'
+
+/** Pinned API revision, so a GitHub change cannot alter what this parses. */
+const API_VERSION = '2022-11-28'
+
+/** The sums asset every release carries beside its binaries. */
+const SUMS_ASSET = 'SHA256SUMS'
 
 /** Platform names `uname -s` reports, and the asset token each maps to. */
 const PLATFORMS: Readonly<Record<string, string>> = {
@@ -35,6 +59,9 @@ const ARCHITECTURES: Readonly<Record<string, string>> = {
   arm64: 'aarch64',
 }
 
+/** Downloads one URL, asking for one media type; injectable so tests need no network. */
+export type AgentFetcher = (url: string, accept: string) => Promise<Buffer>
+
 /** Options {@link resolveAgentBinary} reads. */
 export interface AgentBinaryOptions {
   /** Agent build to fetch, e.g. `0.0.1`. */
@@ -44,7 +71,17 @@ export interface AgentBinaryOptions {
   /** Host directory the binary cache lives under. */
   readonly cacheDir: string
   /** Downloads one URL; injectable so tests need no network. */
-  readonly fetch?: (url: string) => Promise<Buffer>
+  readonly fetch?: AgentFetcher
+}
+
+/** One asset of a release, as much of it as this module uses. */
+interface ReleaseAsset {
+  /** Asset name, e.g. `dsh-remote-agent-linux-x86_64`. */
+  readonly name: string
+  /** API URL whose bytes the plugin downloads. */
+  readonly apiUrl: string
+  /** Browser URL for the same bytes, used only in diagnostics. */
+  readonly browserUrl: string
 }
 
 /**
@@ -71,18 +108,18 @@ export function agentAssetName(platform: string, arch: string): string {
 }
 
 /**
- * The release directory one agent version's assets live under.
+ * The release API URL one agent version's metadata lives at.
  * @param version - the agent build.
- * @returns the base URL an asset name and `SHA256SUMS` are appended to.
+ * @returns the URL the asset list is read from.
  */
-export function agentReleaseBase(version: string): string {
-  return `${RELEASE_REPOSITORY}/releases/download/v${version}`
+export function agentReleaseApi(version: string): string {
+  return `${API_ROOT}/releases/tags/v${version}`
 }
 
 /** Download one URL, or fail with a message that names it. */
-async function download(fetchBinary: (url: string) => Promise<Buffer>, url: string): Promise<Buffer> {
+async function download(fetcher: AgentFetcher, url: string, accept: string): Promise<Buffer> {
   try {
-    return await fetchBinary(url)
+    return await fetcher(url, accept)
   } catch (error) {
     throw new Error(
       `downloading ${url} failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -92,10 +129,53 @@ async function download(fetchBinary: (url: string) => Promise<Buffer>, url: stri
 }
 
 /** The real HTTPS GET, refusing any non-2xx answer. */
-async function fetchOverHttps(url: string): Promise<Buffer> {
-  const response = await fetch(url)
+async function fetchOverHttps(url: string, accept: string): Promise<Buffer> {
+  const response = await fetch(url, {
+    headers: { accept, 'X-GitHub-Api-Version': API_VERSION },
+  })
   if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
   return Buffer.from(await response.arrayBuffer())
+}
+
+/**
+ * Read the assets one release metadata answer names.
+ * @param release - the release API response body.
+ * @param releaseUrl - the URL it came from, for the diagnostic.
+ * @returns the usable assets.
+ * @throws when the answer is not release JSON.
+ */
+function releaseAssets(release: Buffer, releaseUrl: string): readonly ReleaseAsset[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(release.toString('utf8'))
+  } catch {
+    throw new Error(`${releaseUrl} did not answer with release JSON`)
+  }
+  const assets = (parsed as { assets?: unknown }).assets
+  if (!Array.isArray(assets)) throw new Error(`${releaseUrl} did not answer with a release`)
+  return assets.flatMap(asset => {
+    const record = asset as { name?: unknown; url?: unknown; browser_download_url?: unknown }
+    if (typeof record.name !== 'string' || typeof record.url !== 'string') return []
+    return [{
+      name: record.name,
+      apiUrl: record.url,
+      browserUrl: typeof record.browser_download_url === 'string' ? record.browser_download_url : record.url,
+    }]
+  })
+}
+
+/**
+ * The asset one release carries under a name.
+ * @param release - the release API response body.
+ * @param releaseUrl - the URL it came from, for the diagnostic.
+ * @param name - the asset name to find.
+ * @returns the asset.
+ * @throws when the release carries no such asset.
+ */
+function requireAsset(release: Buffer, releaseUrl: string, name: string): ReleaseAsset {
+  const found = releaseAssets(release, releaseUrl).find(asset => asset.name === name)
+  if (found === undefined) throw new Error(`${releaseUrl} names no "${name}" asset`)
+  return found
 }
 
 /**
@@ -123,11 +203,11 @@ function expectedChecksum(sums: string, assetName: string, sumsUrl: string): str
  * plugin itself produced.
  * @param options - version, asset, cache directory, and an optional fetch.
  * @returns the verified binary bytes.
- * @throws when the download fails, the checksum mismatches, or the cache
- *   cannot be written.
+ * @throws when the release cannot be read, carries no such asset, the download
+ *   fails, the checksum mismatches, or the cache cannot be written.
  */
 export async function resolveAgentBinary(options: AgentBinaryOptions): Promise<Buffer> {
-  const fetchBinary = options.fetch ?? fetchOverHttps
+  const fetcher = options.fetch ?? fetchOverHttps
   const cached = join(options.cacheDir, options.version, options.assetName)
   try {
     return await readFile(cached)
@@ -135,18 +215,19 @@ export async function resolveAgentBinary(options: AgentBinaryOptions): Promise<B
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
 
-  const base = agentReleaseBase(options.version)
-  const binaryUrl = `${base}/${options.assetName}`
-  const sumsUrl = `${base}/SHA256SUMS`
+  const releaseUrl = agentReleaseApi(options.version)
+  const release = await download(fetcher, releaseUrl, RELEASE_MEDIA_TYPE)
+  const binaryAsset = requireAsset(release, releaseUrl, options.assetName)
+  const sumsAsset = requireAsset(release, releaseUrl, SUMS_ASSET)
   const [binary, sums] = await Promise.all([
-    download(fetchBinary, binaryUrl),
-    download(fetchBinary, sumsUrl),
+    download(fetcher, binaryAsset.apiUrl, BINARY_MEDIA_TYPE),
+    download(fetcher, sumsAsset.apiUrl, BINARY_MEDIA_TYPE),
   ])
-  const expected = expectedChecksum(sums.toString('utf8'), options.assetName, sumsUrl)
+  const expected = expectedChecksum(sums.toString('utf8'), options.assetName, sumsAsset.browserUrl)
   const actual = createHash('sha256').update(binary).digest('hex')
   if (actual !== expected) {
     throw new Error(
-      `the download from ${binaryUrl} failed its SHA-256 check: expected ${expected}, got ${actual}`,
+      `the download from ${binaryAsset.browserUrl} failed its SHA-256 check: expected ${expected}, got ${actual}`,
     )
   }
 
