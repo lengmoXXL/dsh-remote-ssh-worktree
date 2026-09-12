@@ -17,16 +17,8 @@
 
 import { spawn } from 'node:child_process'
 import { createServer, connect } from 'node:net'
-
-/** How to reach a machine's SSH server. */
-export interface SshTarget {
-  /** `ssh` destination: `user@host`, or a `~/.ssh/config` alias. */
-  readonly target: string
-  /** SSH port; omitted defers to the operator's `ssh` configuration. */
-  readonly sshPort?: number
-  /** Identity file; omitted defers to the operator's `ssh` configuration. */
-  readonly identityFile?: string
-}
+import type { SshTarget } from './ssh.ts'
+import { sshArgs, sshFailure } from './ssh.ts'
 
 /** One forward to open. */
 export interface TunnelSpec {
@@ -112,17 +104,7 @@ export function allocateLocalPort(): Promise<number> {
 export function tunnelArgs(spec: TunnelSpec, localPort: number): readonly string[] {
   return [
     '-N',
-    // No terminal is attached, so an authentication or host-key prompt would
-    // hang until the readiness budget expired. Fail immediately instead, and
-    // let the diagnostic name what the operator must do.
-    '-o', 'BatchMode=yes',
-    // Without this a forward that cannot bind leaves an ssh process running
-    // that forwards nothing, which reads as a healthy connection.
-    '-o', 'ExitOnForwardFailure=yes',
-    '-o', 'ServerAliveInterval=15',
-    '-o', 'ServerAliveCountMax=3',
-    ...spec.ssh.sshPort === undefined ? [] : ['-p', String(spec.ssh.sshPort)],
-    ...spec.ssh.identityFile === undefined ? [] : ['-i', spec.ssh.identityFile],
+    ...sshArgs(spec.ssh),
     '-L', `127.0.0.1:${String(localPort)}:127.0.0.1:${String(spec.remotePort)}`,
     spec.ssh.target,
   ]
@@ -130,32 +112,12 @@ export function tunnelArgs(spec: TunnelSpec, localPort: number): readonly string
 
 /**
  * Turn what `ssh` wrote into a reason an operator can act on.
- *
- * The raw text stays in the message: this maps only the failures with a known
- * remedy, and everything else is more useful verbatim than paraphrased.
  * @param target - the destination the forward named.
  * @param stderr - everything the process wrote to stderr.
  * @returns the message to raise.
  */
 export function tunnelFailure(target: string, stderr: string): string {
-  const text = stderr.trim()
-  const suffix = text === '' ? '' : `: ${text}`
-  if (/host key verification failed/i.test(text)) {
-    return `the SSH host key for "${target}" is not known yet; run \`ssh ${target}\` once to verify and accept it${suffix}`
-  }
-  if (/administratively prohibited/i.test(text)) {
-    return `"${target}" refuses TCP forwarding; its sshd needs AllowTcpForwarding yes${suffix}`
-  }
-  if (/permission denied|no supported authentication/i.test(text)) {
-    return `"${target}" rejected the key or agent; check the SSH key and ssh-agent${suffix}`
-  }
-  if (/could not resolve hostname/i.test(text)) {
-    return `"${target}" cannot be resolved; check the SSH destination${suffix}`
-  }
-  if (/connection refused|connection timed out|no route to host/i.test(text)) {
-    return `"${target}" is unreachable over SSH${suffix}`
-  }
-  return `could not open an SSH forward to "${target}"${suffix}`
+  return sshFailure(target, stderr, `could not open an SSH forward to "${target}"`)
 }
 
 /** Start the real `ssh` process for one forward. */

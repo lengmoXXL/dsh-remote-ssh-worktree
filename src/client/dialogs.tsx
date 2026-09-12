@@ -55,9 +55,9 @@ function DialogError({ message }: { message: string | undefined }) {
 /**
  * Add a machine by its SSH destination.
  *
- * The host opens the forward itself, so the operator never picks a local port
- * and never runs `ssh -L` by hand. The token is the remote daemon's own secret,
- * which the operator started it with.
+ * The host installs and starts the agent itself, so the operator picks no port
+ * and never runs `ssh -L` by hand. The token is the shared secret the plugin
+ * gives that agent.
  */
 export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
   open: boolean
@@ -65,7 +65,6 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
   onClose: () => void
   onSubmit: (draft: {
     ssh: { target: string; port?: number; identityFile?: string }
-    remotePort: number
     token: string
     title?: string
   }) => Promise<void>
@@ -74,7 +73,6 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
   const [target, setTarget] = useState('')
   const [sshPort, setSshPort] = useState('')
   const [identityFile, setIdentityFile] = useState('')
-  const [remotePort, setRemotePort] = useState('7801')
   const [token, setToken] = useState('')
   const [title, setTitle] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
@@ -84,7 +82,6 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
     setTarget('')
     setSshPort('')
     setIdentityFile('')
-    setRemotePort('7801')
     setToken('')
     setTitle('')
     setError(undefined)
@@ -99,7 +96,6 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
           ...sshPort.trim() === '' ? {} : { port: Number(sshPort) },
           ...identityFile.trim() === '' ? {} : { identityFile: identityFile.trim() },
         },
-        remotePort: Number(remotePort),
         token,
         ...title.trim() === '' ? {} : { title: title.trim() },
       })
@@ -120,7 +116,7 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
           <Button onClick={onClose}>{t('cancel')}</Button>
           <Button
             variant="primary"
-            disabled={busy || target.trim() === '' || token.trim() === '' || remotePort.trim() === ''}
+            disabled={busy || target.trim() === '' || token.trim() === ''}
             onClick={() => void submit()}
           >
             {t('create')}
@@ -138,9 +134,6 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
         </Field>
         <Field label={`${t('fieldIdentityFile')} · ${t('optional')}`} hint={t('hintIdentityFile')}>
           <Input value={identityFile} placeholder={t('placeholderIdentityFile')} onChange={e => setIdentityFile(e.target.value)} />
-        </Field>
-        <Field label={t('fieldRemotePort')} hint={t('hintRemotePort')}>
-          <Input value={remotePort} inputMode="numeric" onChange={e => setRemotePort(e.target.value)} />
         </Field>
         <Field label={t('fieldToken')} hint={t('hintToken')}>
           <Input type="password" value={token} onChange={e => setToken(e.target.value)} />

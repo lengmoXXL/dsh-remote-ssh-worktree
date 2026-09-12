@@ -85,13 +85,6 @@ function stringField(value: unknown, key: string): string | undefined {
   return typeof field === 'string' ? field : undefined
 }
 
-/** Whether an unknown value is a plain object with the named number field. */
-function numberField(value: unknown, key: string): number | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const field = (value as Record<string, unknown>)[key]
-  return typeof field === 'number' && Number.isInteger(field) ? field : undefined
-}
-
 /**
  * Read a required non-empty string field, or fail as a client error.
  * @param body - the parsed request body.
@@ -104,20 +97,6 @@ function requireString(body: unknown, key: string): string {
   if (value === undefined || value === '') {
     throw new ApiError(400, `"${key}" is required and must be a non-empty string`)
   }
-  return value
-}
-
-/**
- * Read an optional TCP port field, or fail as a client error.
- * @param body - the parsed request body.
- * @param key - the field name.
- * @returns the port, or undefined when the field is absent.
- * @throws ApiError 400 when the field is present but not a usable TCP port.
- */
-function optionalPort(body: unknown, key: string): number | undefined {
-  const value = numberField(body, key)
-  if (value === undefined) return undefined
-  if (value < 1 || value > 65535) throw new ApiError(400, `"${key}" must be between 1 and 65535`)
   return value
 }
 
@@ -392,12 +371,10 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
     if (nodeId === undefined) {
       if (request.method === 'GET') return { status: 200, body: withStatuses(deps.registry, deps.connections) }
       if (request.method === 'POST') {
-        const remotePort = optionalPort(request.body, 'remotePort')
         const title = stringField(request.body, 'title')
         const record = await deps.registry.upsert({
           transport: requireTransport(request.body),
           token: requireString(request.body, 'token'),
-          ...remotePort === undefined ? {} : { remotePort },
           ...title === undefined ? {} : { title },
         })
         return { status: 201, body: { node: toNodeView(record) } }
@@ -420,7 +397,6 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
         return { status: 200, body: { deleted } }
       }
       if (request.method === 'PATCH') {
-        const remotePort = optionalPort(request.body, 'remotePort')
         // A patch that names a destination replaces it; one that does not keeps
         // the stored one, so re-pointing a machine is a deliberate act.
         const ssh = typeof request.body === 'object' && request.body !== null
@@ -431,7 +407,6 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
           transport: ssh === undefined ? record.transport : requireTransport(request.body),
           token: stringField(request.body, 'token') ?? record.token,
           title: stringField(request.body, 'title') ?? record.title,
-          ...remotePort === undefined ? { remotePort: record.remotePort } : { remotePort },
         })
         return { status: 200, body: { node: toNodeView(updated) } }
       }

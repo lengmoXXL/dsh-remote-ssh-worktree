@@ -4,7 +4,10 @@ node_modules/
 # Build outputs. The profile loads these from this directory, so they stay on
 # disk; they are rebuilt from src/ and are not part of the source history.
 lib/
-agent/lib/
+
+# Cargo build outputs. The plugin installs the published release binary on the
+# remote machine, so nothing built here belongs in the source history.
+target/
 
 # Local noise
 *.log

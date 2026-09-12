@@ -147,6 +147,30 @@ test('a revision-1 entry with no usable address is refused', async () => {
   await assert.rejects(() => registry.load(), /revision 1/)
 })
 
+test('a document that still carries the retired remote port keeps loading', async () => {
+  // The daemon port moved out of the record and off the stored address, but a
+  // document written before that must keep resolving so the workspaces
+  // anchored to a node are not stranded by an ignored key.
+  const file = fileIn()
+  await writeFile(file, JSON.stringify({
+    version: 2,
+    nodes: [{
+      nodeId: asNodeId('kept'),
+      title: 'build-01',
+      transport: { kind: 'ssh', target: 'me@build-01' },
+      remotePort: 47_801,
+      token: 'secret',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }],
+  }), 'utf8')
+  const registry = createNodeRegistry({ file })
+  const [record] = await registry.load()
+
+  assert.equal(record?.nodeId, 'kept')
+  assert.deepEqual(record?.transport, { kind: 'ssh', target: 'me@build-01' })
+})
+
 test('reads before load fail loud rather than reporting an empty install', async () => {
   const registry = createNodeRegistry({ file: fileIn() })
   assert.throws(() => registry.list(), /before load/)
@@ -160,6 +184,7 @@ test('the view drops the secret and keeps its presence', async () => {
 
   assert.equal(view.hasToken, true)
   assert.equal('token' in view, false)
+  assert.equal('remotePort' in view, false)
   assert.equal(JSON.stringify(view).includes('secret'), false)
 })
 

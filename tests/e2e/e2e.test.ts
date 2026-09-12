@@ -13,8 +13,9 @@ import { after, before, test } from 'node:test'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { startServer } from '../../agent/src/server.ts'
-import type { RunningServer } from '../../agent/src/server.ts'
+import { startAgent } from './harness.ts'
+import type { TestAgent } from './harness.ts'
+import { AGENT_VERSION } from '../../src/agent/version.ts'
 import { connectNode } from '../../src/transport/client.ts'
 import type { ConnectedNode } from '../../src/transport/client.ts'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
@@ -26,7 +27,7 @@ const TOKEN = 'test-token-0123456789'
 
 let remoteRoot: string
 let anchorRoot: string
-let server: RunningServer
+let server: TestAgent
 let node: ConnectedNode
 
 /** A local delegate that fails loudly if the remote branch ever reaches it. */
@@ -64,13 +65,7 @@ before(async () => {
   await mkdir(join(remoteRoot, 'sub'))
   await writeFile(join(remoteRoot, 'sub', 'nested.txt'), 'nested\n', 'utf8')
 
-  server = await startServer({
-    host: '127.0.0.1',
-    port: 0,
-    token: TOKEN,
-    root: remoteRoot,
-    agentVersion: '0.0.1-test',
-  })
+  server = await startAgent({ token: TOKEN, root: remoteRoot })
   const port = Number(server.boundAddress.slice(server.boundAddress.lastIndexOf(':') + 1))
   node = await connectNode({ host: '127.0.0.1', port, token: TOKEN, timeoutMs: 5_000 })
 })
@@ -84,7 +79,7 @@ after(async () => {
 
 test('the handshake reports the protocol revision and capabilities', () => {
   assert.equal(node.info.protocol, 1)
-  assert.equal(node.info.agentVersion, '0.0.1-test')
+  assert.equal(node.info.agentVersion, AGENT_VERSION)
   assert.equal(typeof node.info.platform, 'string')
   // The handshake reports which capabilities exist; the terminal tests pin
   // the terminal one, so this only asserts that the daemon answered the field.

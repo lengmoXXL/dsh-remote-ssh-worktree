@@ -13,8 +13,8 @@ import { after, before, test } from 'node:test'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { startServer } from '../../agent/src/server.ts'
-import type { RunningServer } from '../../agent/src/server.ts'
+import { startAgent } from './harness.ts'
+import type { TestAgent } from './harness.ts'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { connectNode } from '../../src/transport/client.ts'
 import type { ConnectedNode } from '../../src/transport/client.ts'
@@ -26,7 +26,7 @@ const TOKEN = 'pipe-token-0123456789'
 
 let remoteRoot: string
 let anchorRoot: string
-let server: RunningServer
+let server: TestAgent
 let node: ConnectedNode
 let runtime: ReturnType<typeof createRoutingSubprocessRuntime>
 
@@ -34,13 +34,7 @@ before(async () => {
   remoteRoot = await realpath(await mkdtemp(join(tmpdir(), 'drw-pipe-remote-')))
   anchorRoot = await realpath(await mkdtemp(join(tmpdir(), 'drw-pipe-anchor-')))
 
-  server = await startServer({
-    host: '127.0.0.1',
-    port: 0,
-    token: TOKEN,
-    root: remoteRoot,
-    agentVersion: '0.0.1-test',
-  })
+  server = await startAgent({ token: TOKEN, root: remoteRoot })
   const port = Number(server.boundAddress.slice(server.boundAddress.lastIndexOf(':') + 1))
   node = await connectNode({ host: '127.0.0.1', port, token: TOKEN, timeoutMs: 5_000 })
 

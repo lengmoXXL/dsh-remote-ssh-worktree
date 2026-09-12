@@ -35,7 +35,6 @@ const record: NodeRecord = {
   nodeId: asNodeId('n1'),
   title: 'build-01',
   transport: { kind: 'direct', host: 'build-01', port: 7801 },
-  remotePort: 7801,
   token: 'secret',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

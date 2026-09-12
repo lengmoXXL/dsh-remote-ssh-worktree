@@ -20,6 +20,9 @@ import type { NodeInfo } from '../../shared/protocol.ts'
 import type { NodeRecord } from './registry.ts'
 import type { NodeId } from '../ids.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS, openTunnel } from '../transport/tunnel.ts'
+import type { AgentEndpoint, EnsureAgentOptions } from '../agent/install.ts'
+import { ensureAgent } from '../agent/install.ts'
+import { AGENT_VERSION } from '../agent/version.ts'
 
 /** Where one node's connection stands. */
 export type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'
@@ -79,6 +82,21 @@ export interface NodeConnectionsDeps {
    * {@link DEFAULT_FORWARD_TIMEOUT_MS}.
    */
   readonly sshForwardTimeoutMs?: number
+  /**
+   * Host directory the agent binaries are cached under. Required to reach an
+   * `ssh` record with the default opener; tests that inject `openTransport`
+   * never need it.
+   */
+  readonly cacheDir?: string
+  /**
+   * Agent build to ensure on every machine. Defaults to {@link AGENT_VERSION}.
+   */
+  readonly agentVersion?: string
+  /**
+   * Ensures the agent on a machine and reports the port it serves on. Defaults
+   * to the SSH installer; injectable so tests need no `ssh` binary or network.
+   */
+  readonly ensureAgent?: (options: EnsureAgentOptions) => Promise<AgentEndpoint>
 }
 
 /**
@@ -93,9 +111,10 @@ export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000
 /**
  * Explain a failed connect attempt in the terms the operator can act on.
  *
- * A `ssh -L` forward binds its local port whether or not anything listens
+ * A `ssh -L` forward binds its local port whether or not the agent listens
  * behind it on the machine, so a handshake that times out through a forward
- * means the daemon is absent far more often than it means the network failed.
+ * means the agent is absent or wedged far more often than it means the network
+ * failed — and the agent's own log is where the reason will be.
  * @param record - the machine that was being reached.
  * @param error - the failure the connector raised.
  * @returns the error to record and rethrow.
@@ -103,24 +122,39 @@ export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000
 function describeFailure(record: NodeRecord, error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error)
   // Both deadlines the connector enforces mean the same thing here: the
-  // socket opened, so something accepted it, but the daemon never spoke.
+  // socket opened, so something accepted it, but the agent never spoke.
   if (record.transport.kind === 'ssh' && /timed out connecting to|handshake with .* timed out/.test(message)) {
     return new Error(
-      `the SSH forward to "${record.transport.target}" is up, but nothing answered on daemon port ${String(record.remotePort)}; check that the daemon is running there`,
+      `the SSH forward to "${record.transport.target}" is up, but nothing answered; check ~/.dsh/remote-agent/agent.log on the machine`,
       { cause: error },
     )
   }
   return error instanceof Error ? error : new Error(message)
 }
 
+/** Everything the default transport opener needs from the manager's deps. */
+interface OpenTransportDeps {
+  /** Budget for an SSH forward to become ready. */
+  readonly forwardTimeoutMs: number
+  /** Agent build to ensure on a machine. */
+  readonly agentVersion: string
+  /** Agent binary cache directory; omitted refuses an `ssh` record. */
+  readonly cacheDir: string | undefined
+  /** Installs and starts the agent on a machine. */
+  readonly ensureAgent: (options: EnsureAgentOptions) => Promise<AgentEndpoint>
+}
+
 /**
  * Build the default transport opener.
- * @param forwardTimeoutMs - budget for an SSH forward to become ready.
- * @returns an opener that dials a direct address as recorded and opens a
- *   forward for an `ssh` one.
+ *
+ * An `ssh` record is reached in two steps — ensure the agent is running, then
+ * forward the port it published — because the port is kernel-assigned and
+ * known only from the machine. A `direct` address is dialled as recorded.
+ * @param deps - forward budget and the agent-ensuring seams.
+ * @returns an opener for both transport kinds.
  */
 function defaultOpenTransport(
-  forwardTimeoutMs: number,
+  deps: OpenTransportDeps,
 ): (record: NodeRecord) => Promise<ResolvedTransport> {
   return async (record) => {
     if (record.transport.kind === 'direct') {
@@ -130,9 +164,18 @@ function defaultOpenTransport(
         close: () => {},
       }
     }
+    if (deps.cacheDir === undefined) {
+      throw new Error('reaching a machine over SSH needs the plugin data directory to cache the agent')
+    }
+    const endpoint = await deps.ensureAgent({
+      ssh: record.transport,
+      token: record.token,
+      version: deps.agentVersion,
+      cacheDir: deps.cacheDir,
+    })
     const tunnel = await openTunnel(
-      { ssh: record.transport, remotePort: record.remotePort },
-      { readyTimeoutMs: forwardTimeoutMs },
+      { ssh: record.transport, remotePort: endpoint.port },
+      { readyTimeoutMs: deps.forwardTimeoutMs },
     )
     return {
       host: '127.0.0.1',
@@ -193,8 +236,12 @@ interface Entry {
  */
 export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConnections {
   const connect = deps.connect ?? connectNode
-  const openTransport = deps.openTransport
-    ?? defaultOpenTransport(deps.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS)
+  const openTransport = deps.openTransport ?? defaultOpenTransport({
+    forwardTimeoutMs: deps.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS,
+    agentVersion: deps.agentVersion ?? AGENT_VERSION,
+    cacheDir: deps.cacheDir,
+    ensureAgent: deps.ensureAgent ?? ensureAgent,
+  })
   const handshakeTimeoutMs = deps.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS
   const entries = new Map<NodeId, Entry>()
 

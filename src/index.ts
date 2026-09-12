@@ -31,6 +31,7 @@ import z from '@deepseek-ai/schemastery'
 import { join } from 'node:path'
 import { createAnchorStore } from './anchors/store.ts'
 import { registerWorktreeCommand } from './commands.ts'
+import { AGENT_VERSION } from './agent/version.ts'
 import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './nodes/connections.ts'
 import { createNodeRegistry, defaultNodeTitle } from './nodes/registry.ts'
 import { createRepoStore } from './repos/store.ts'
@@ -109,6 +110,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   await repos.load()
 
   const connections = createNodeConnections({
+    cacheDir: join(dataDir, 'agents'),
+    agentVersion: AGENT_VERSION,
     sshForwardTimeoutMs: config.sshForwardTimeoutMs ?? DEFAULT_FORWARD_TIMEOUT_MS,
     daemonHandshakeTimeoutMs: config.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS,
   })

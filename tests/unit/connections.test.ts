@@ -27,7 +27,6 @@ const record: NodeRecord = {
   nodeId: asNodeId('n1'),
   title: 'build-01',
   transport: { kind: 'direct', host: 'build-01', port: 7801 },
-  remotePort: 7801,
   token: 'secret',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -156,7 +155,6 @@ function sshRecord(): NodeRecord {
   return {
     ...record,
     transport: { kind: 'ssh', target: 'me@build-01' },
-    remotePort: 47801,
   }
 }
 
@@ -206,7 +204,7 @@ test('either deadline through a forward blames the absent daemon', async () => {
 
     await assert.rejects(
       () => connections.connect(sshRecord()),
-      /forward to "me@build-01" is up, but nothing answered on daemon port 47801/,
+      /forward to "me@build-01" is up, but nothing answered; check ~\/\.dsh\/remote-agent\/agent\.log/,
       message,
     )
     // The forward exists only to carry the connection that just failed.
@@ -266,4 +264,30 @@ test('disposing closes every forward', async () => {
   connections.dispose()
 
   assert.equal(closed, 1)
+})
+
+test('the default opener ensures the agent from the record before forwarding', async () => {
+  let asked: { token: string; version: string; cacheDir: string } | undefined
+  const connections = createNodeConnections({
+    cacheDir: '/tmp/agents',
+    agentVersion: '9.9.9',
+    ensureAgent: (options) => {
+      asked = { token: options.token, version: options.version, cacheDir: options.cacheDir }
+      return Promise.reject(new Error('agent install refused'))
+    },
+  })
+
+  await assert.rejects(() => connections.connect(sshRecord()), /agent install refused/)
+  assert.deepEqual(asked, { token: 'secret', version: '9.9.9', cacheDir: '/tmp/agents' })
+})
+
+test('an ssh record without a cache directory is refused before any process starts', async () => {
+  const connections = createNodeConnections({
+    ensureAgent: () => Promise.reject(new Error('must not be reached')),
+  })
+
+  await assert.rejects(
+    () => connections.connect(sshRecord()),
+    /needs the plugin data directory to cache the agent/,
+  )
 })

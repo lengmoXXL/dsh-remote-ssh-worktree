@@ -22,9 +22,6 @@ import { readDocument, writeDocument } from '../storage.ts'
  */
 const DOCUMENT_VERSION = 2
 
-/** Port a daemon listens on when a caller names none. */
-const DEFAULT_REMOTE_PORT = 7801
-
 /**
  * The title a node gets when its caller named none.
  * @param transport - how the host reaches the daemon.
@@ -70,8 +67,6 @@ export interface NodeRecord {
   readonly title: string
   /** How the host reaches this machine's daemon. */
   readonly transport: NodeTransport
-  /** TCP port the daemon listens on, on the machine's own loopback. */
-  readonly remotePort: number
   /**
    * The daemon's shared secret. Kept out of every view this module returns to
    * callers that render to a browser or a model; a later phase moves it to the
@@ -89,7 +84,6 @@ export interface NodeView {
   readonly nodeId: NodeId
   readonly title: string
   readonly transport: NodeTransport
-  readonly remotePort: number
   /** Whether a secret is configured; the value itself never travels. */
   readonly hasToken: boolean
   readonly createdAt: string
@@ -101,7 +95,6 @@ export interface NodeDraft {
   readonly nodeId?: NodeId
   readonly title?: string
   readonly transport: NodeTransport
-  readonly remotePort?: number
   readonly token: string
 }
 
@@ -167,7 +160,6 @@ function isNodeRecord(value: unknown): value is NodeRecord {
   return typeof record['nodeId'] === 'string'
     && typeof record['title'] === 'string'
     && isTransport(record['transport'])
-    && typeof record['remotePort'] === 'number'
     && typeof record['token'] === 'string'
     && typeof record['createdAt'] === 'string'
     && typeof record['updatedAt'] === 'string'
@@ -202,7 +194,6 @@ function migrateV1(value: unknown, index: number): NodeRecord {
     nodeId: brandString<NodeId>(record['nodeId'] as string),
     title: record['title'] as string,
     transport: { kind: 'direct', host, port },
-    remotePort: port,
     token: record['token'] as string,
     createdAt: record['createdAt'] as string,
     updatedAt: record['updatedAt'] as string,
@@ -219,7 +210,6 @@ export function toNodeView(record: NodeRecord): NodeView {
     nodeId: record.nodeId,
     title: record.title,
     transport: record.transport,
-    remotePort: record.remotePort,
     hasToken: record.token.length > 0,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -272,7 +262,6 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
         nodeId: existing?.nodeId ?? draft.nodeId ?? brandString<NodeId>(randomUUID()),
         title: draft.title?.trim() || defaultNodeTitle(draft.transport),
         transport: draft.transport,
-        remotePort: draft.remotePort ?? DEFAULT_REMOTE_PORT,
         token: draft.token,
         createdAt: existing?.createdAt ?? stamp,
         updatedAt: stamp,

@@ -50,7 +50,6 @@ interface NodeView {
   readonly nodeId: NodeId
   readonly title: string
   readonly transport: NodeTransport
-  readonly remotePort: number
   readonly hasToken: boolean
 }
 

@@ -24,6 +24,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { agentBinaryPath } from '../agent-binary.ts'
 
 const run = promisify(execFile)
 
@@ -136,7 +137,6 @@ async function deploy(
       nodeId,
       title: 'e2e daemon',
       transport: { kind: 'direct', host: '127.0.0.1', port: daemonPort },
-      remotePort: daemonPort,
       token,
       createdAt: stamp,
       updatedAt: stamp,
@@ -147,8 +147,7 @@ async function deploy(
   await writeFile(tokenFile, `${token}\n`, { mode: 0o600 })
 
   const logs: string[] = []
-  const daemon = spawn(process.execPath, [
-    join(process.cwd(), 'agent', 'lib', 'main.mjs'),
+  const daemon = spawn(agentBinaryPath(), [
     '--listen', `127.0.0.1:${String(daemonPort)}`,
     '--token-file', tokenFile,
     '--root', remoteRoot,

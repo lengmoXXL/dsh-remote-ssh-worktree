@@ -39,12 +39,12 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
   await repos.load()
   const connections = createNodeConnections({
     ...connect ?? {},
-    // No test may spawn an `ssh` process: the recorded destination is a
-    // placeholder, and a real forward would spend the readiness budget failing.
+    // No test may install an agent over `ssh`: the recorded destination is a
+    // placeholder, and the opener is stubbed to a fixed loopback port.
     openTransport: record => Promise.resolve(
       record.transport.kind === 'direct'
         ? { host: record.transport.host, port: record.transport.port, close: () => {} }
-        : { host: '127.0.0.1', port: record.remotePort, close: () => {} },
+        : { host: '127.0.0.1', port: 1, close: () => {} },
     ),
   })
   const anchors = createAnchorStore({ root: join(dir, 'anchors') })
@@ -74,7 +74,7 @@ test('an empty install lists no nodes', async () => {
 test('creating a node answers with a view that carries no secret', async () => {
   const { deps } = await setup()
   const response = await handleNodeApi(
-    request('POST', '/nodes', { ssh: { target: 'build-01' }, remotePort: 7801, token: 'hunter2' }),
+    request('POST', '/nodes', { ssh: { target: 'build-01' }, token: 'hunter2' }),
     deps,
   )
 
@@ -99,13 +99,11 @@ test('a missing host is a client error, not a created node', async () => {
   assert.deepEqual(registry.list(), [])
 })
 
-test('an out-of-range port is a client error', async () => {
-  const { deps } = await setup()
-  const response = await handleNodeApi(
-    request('POST', '/nodes', { ssh: { target: 'a' }, token: 't', remotePort: 70_000 }),
-    deps,
-  )
+test('a node cannot be created without a token', async () => {
+  const { deps, registry } = await setup()
+  const response = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' } }), deps)
   assert.equal(response.status, 400)
+  assert.deepEqual(registry.list(), [])
 })
 
 test('reading one node joins its live status', async () => {
@@ -132,7 +130,7 @@ test('an unknown node is a 404 on every verb that names one', async () => {
 test('patching keeps the fields the caller omitted', async () => {
   const { deps, registry } = await setup()
   const created = await handleNodeApi(
-    request('POST', '/nodes', { ssh: { target: 'a' }, remotePort: 7801, token: 't', title: 'First' }),
+    request('POST', '/nodes', { ssh: { target: 'a' }, token: 't', title: 'First' }),
     deps,
   )
   const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
@@ -141,7 +139,6 @@ test('patching keeps the fields the caller omitted', async () => {
   const record = registry.get(nodeId)
   assert.equal(record?.title, 'Second')
   assert.equal(record?.transport.kind === 'ssh' ? record.transport.target : '', 'a')
-  assert.equal(record?.remotePort, 7801)
   assert.equal(record?.token, 't')
 })
 

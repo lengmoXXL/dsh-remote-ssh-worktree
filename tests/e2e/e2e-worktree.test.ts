@@ -15,8 +15,8 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { startServer } from '../../agent/src/server.ts'
-import type { RunningServer } from '../../agent/src/server.ts'
+import { startAgent } from './harness.ts'
+import type { TestAgent } from './harness.ts'
 import { createAnchorStore } from '../../src/anchors/store.ts'
 import type { AnchorStore } from '../../src/anchors/store.ts'
 import { connectNode } from '../../src/transport/client.ts'
@@ -31,7 +31,7 @@ const TOKEN = 'worktree-token-0123456789'
 
 let repoPath: string
 let dataDir: string
-let server: RunningServer
+let server: TestAgent
 let node: ConnectedNode
 let anchors: AnchorStore
 let worktrees: WorktreeManager
@@ -56,13 +56,7 @@ before(async () => {
   await git(['add', '.'])
   await git(['commit', '-m', 'initial'])
 
-  server = await startServer({
-    host: '127.0.0.1',
-    port: 0,
-    token: TOKEN,
-    root: repoPath,
-    agentVersion: '0.0.1-test',
-  })
+  server = await startAgent({ token: TOKEN, root: repoPath })
   const port = Number(server.boundAddress.slice(server.boundAddress.lastIndexOf(':') + 1))
   node = await connectNode({ host: '127.0.0.1', port, token: TOKEN, timeoutMs: 5_000 })
 

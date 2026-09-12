@@ -52,7 +52,6 @@ interface NodeView {
   readonly nodeId: NodeId
   readonly title: string
   readonly transport: NodeTransport
-  readonly remotePort: number
   readonly hasToken: boolean
 }
 
@@ -135,7 +134,6 @@ export interface RemoteWorktreesFace {
   /** Add a machine. */
   addNode(draft: {
     ssh: { target: string; port?: number; identityFile?: string }
-    remotePort: number
     token: string
     title?: string
   }): Promise<void>
