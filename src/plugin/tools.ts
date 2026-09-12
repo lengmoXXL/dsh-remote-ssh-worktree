@@ -36,14 +36,14 @@ function failure(error: unknown): string {
 /**
  * Register the remote-worktree tools when the deployment composes a tool registry.
  * @param ctx - the plugin's context.
- * @param deps - the lifecycle, the node registry, and the connection manager.
+ * @param deps - the lifecycle and the node registry.
  */
 export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): void {
   ctx.inject(['tools'], (toolCtx) => {
     toolCtx.tools.register(defineTool({
       name: 'rw_list',
-      description: 'List the remote worktrees this session can use, with the machine each one lives on '
-        + 'and whether its checkout is clean.',
+      description: 'List the remote worktrees this deployment knows, with the machine each one lives on, '
+        + 'the branch it is on, and whether its workspace is open.',
       parameters: {},
       output: {
         schema: {

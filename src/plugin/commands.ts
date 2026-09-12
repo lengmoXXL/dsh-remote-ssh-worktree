@@ -3,9 +3,9 @@
  *
  * A human has to be able to set a machine up and take a worktree down without
  * asking the model to do it, so this surface exists beside the model tools
- * rather than behind them. Every subcommand prints the exact command that
- * finishes the job, because the two halves — a checkout on the node and an
- * anchor here — are cleaned up by different operations.
+ * rather than behind them. Each result names what finishes the job — the next
+ * command, or the paths on both sides — because a checkout on the node and an
+ * anchor here are cleaned up by different operations.
  *
  * @module dsh-remote-ssh-worktree/plugin/commands
  */
