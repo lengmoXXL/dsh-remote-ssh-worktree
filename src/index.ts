@@ -129,6 +129,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   const worktrees = createWorktreeManager({
     anchors: anchorStore,
+    repos,
     channel: nodeId => connections.channel(nodeId),
     workspace: {
       async register(anchor) {

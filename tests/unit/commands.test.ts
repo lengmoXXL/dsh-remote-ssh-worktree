@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAnchorStore } from '../../src/plugin/anchors.ts'
 import type { AnchorStore } from '../../src/plugin/anchors.ts'
+import { createRepoStore } from '../../src/repos/store.ts'
+import type { RepoStore } from '../../src/repos/store.ts'
 import type { NodeConnections, NodeState } from '../../src/nodes/connections.ts'
 import type { NodeRecord, NodeRegistry } from '../../src/nodes/registry.ts'
 import { createWorktreeManager } from '../../src/worktree/manager.ts'
@@ -20,11 +22,14 @@ import { asNodeId } from '../../src/ids.ts'
 
 let root: string
 let anchors: AnchorStore
+let repos: RepoStore
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'drw-cmd-'))
   anchors = createAnchorStore({ root })
   await anchors.load()
+  repos = createRepoStore({ file: join(root, 'repos.json') })
+  await repos.load()
 })
 
 after(async () => {
@@ -81,13 +86,14 @@ function depsWith(
   state: NodeState = 'ready',
 ): WorktreeCommandDeps {
   const channel = {
-    request: (method: string) => {
+    request: (method: string, params: { path: string }) => {
+      if (method === 'fs.resolve') return Promise.resolve({ canonicalPath: params.path })
       const answer = answers[method]
       return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer)
     },
   }
   return {
-    worktrees: createWorktreeManager({ anchors, channel: id => (id === 'n1' ? channel as never : undefined) }),
+    worktrees: createWorktreeManager({ anchors, repos, channel: id => (id === 'n1' ? channel as never : undefined) }),
     registry: registryOf(nodes),
     connections: connectionsOf(id => (id === 'n1' ? channel : undefined), state),
   }

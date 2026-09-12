@@ -19,6 +19,8 @@ import { startAgent } from './harness.ts'
 import type { TestAgent } from './harness.ts'
 import { createAnchorStore } from '../../src/plugin/anchors.ts'
 import type { AnchorStore } from '../../src/plugin/anchors.ts'
+import { createRepoStore } from '../../src/repos/store.ts'
+import type { RepoStore } from '../../src/repos/store.ts'
 import { connectNode } from '../../src/nodes/client.ts'
 import type { ConnectedNode } from '../../src/nodes/client.ts'
 import { createWorktreeManager } from '../../src/worktree/manager.ts'
@@ -34,6 +36,7 @@ let dataDir: string
 let server: TestAgent
 let node: ConnectedNode
 let anchors: AnchorStore
+let repos: RepoStore
 let worktrees: WorktreeManager
 
 /** Run git in the fixture repository with a fixed identity. */
@@ -62,8 +65,11 @@ before(async () => {
 
   anchors = createAnchorStore({ root: join(dataDir, 'anchors') })
   await anchors.load()
+  repos = createRepoStore({ file: join(dataDir, 'repos.json') })
+  await repos.load()
   worktrees = createWorktreeManager({
     anchors,
+    repos,
     channel: nodeId => (nodeId === 'n1' ? node.channel : undefined),
   })
 })
@@ -89,6 +95,9 @@ test('creating a worktree cuts a real checkout and records an anchor', async () 
 
   const branches = await git(['branch', '--list', '--format=%(refname:short)', 'worktree/login'])
   assert.equal(branches, 'worktree/login')
+  // The daemon canonicalized the path, and the record carries that spelling:
+  // it is what groups this worktree under its repository everywhere else.
+  assert.deepEqual(repos.list().map(repo => repo.repoPath), [anchor.repoPath])
 })
 
 test('the worktree carries the base revision content', async () => {

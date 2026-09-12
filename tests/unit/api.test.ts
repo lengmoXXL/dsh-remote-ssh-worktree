@@ -60,7 +60,7 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
     registered: (anchor: AnchorRecord) => Promise.resolve(registered.has(anchor.anchorId)),
   }
   const worktrees = createWorktreeManager({
-    anchors, channel: nodeId => connections.channel(nodeId), workspace,
+    anchors, repos, channel: nodeId => connections.channel(nodeId), workspace,
   })
   return {
     registry,

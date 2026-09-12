@@ -8,6 +8,11 @@
  * local path routing into nothing. Within teardown the workspace entry goes
  * first, because dropping the anchor takes the directory that resolves it.
  *
+ * Creating one also records the repository it was cut from. That is not
+ * bookkeeping for its own sake: the surfaces group worktrees by repository, so
+ * a worktree whose repository has no record is a worktree nobody can see or
+ * remove from the settings section.
+ *
  * The branch is out of scope. Creating a worktree creates the branch it needs,
  * that is unavoidable; deleting one leaves the branch behind unless the caller
  * explicitly asks for it, because deleting branches belongs to whatever plugin
@@ -21,6 +26,7 @@
 import { posix } from 'node:path'
 import type { WireWorktree } from '../protocol.ts'
 import type { AnchorDraft, AnchorRecord, AnchorStore } from '../plugin/anchors.ts'
+import type { RepoStore } from '../repos/store.ts'
 import type { ChannelLookup, NodeChannel } from '../channel.ts'
 import { NodeRequestError } from '../channel.ts'
 import type { AnchorId, NodeId } from '../ids.ts'
@@ -90,6 +96,12 @@ export interface WorkspaceHooks {
 export interface WorktreeManagerDeps {
   /** The anchor store that owns local identity. */
   readonly anchors: AnchorStore
+  /**
+   * The repository records. Cutting a worktree records the repository it came
+   * from, because every surface groups worktrees by repository and a worktree
+   * whose repository is missing is one nobody can see.
+   */
+  readonly repos: RepoStore
   /** Resolves the live channel for a node. */
   readonly channel: ChannelLookup
   /**
@@ -236,28 +248,38 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
   return {
     async create(draft) {
       const channel = channelFor(draft.nodeId)
+      // One spelling of the repository, settled before anything is written: it
+      // is what the worktree path, the anchor, and the repository record carry,
+      // so a later lookup by path — the removal guard, the section's tree —
+      // finds the same directory the caller meant.
+      const { canonicalPath: repoPath } = await channel.request('fs.resolve', { path: draft.repoPath })
       const branch = branchFor(draft.name)
-      const worktreePath = remoteWorktreePath(draft.repoPath, draft.name)
+      const worktreePath = remoteWorktreePath(repoPath, draft.name)
       const worktree: WireWorktree = await channel.request('git.worktreeAdd', {
-        repoPath: draft.repoPath,
+        repoPath,
         worktreePath,
         branch,
         ...draft.baseRef === undefined ? {} : { baseRef: draft.baseRef },
       })
 
       // The add created the parent directory, so the ignore file can land now.
-      await ensureIgnored(channel, draft.repoPath)
+      await ensureIgnored(channel, repoPath)
 
       const anchorDraft: AnchorDraft = {
         nodeId: draft.nodeId,
         name: draft.name,
-        repoPath: draft.repoPath,
+        repoPath,
         // The daemon reports where the checkout actually landed, which is the
         // path every later call must use.
         remoteRoot: worktree.path,
         branch: worktree.branch ?? branch,
       }
       const anchor = await deps.anchors.create(anchorDraft)
+      // Known repositories keep the name a person gave them; a worktree is
+      // only ever what registers a repository nobody has registered yet.
+      if (deps.repos.find({ nodeId: draft.nodeId, repoPath }) === undefined) {
+        await deps.repos.upsert({ nodeId: draft.nodeId, repoPath })
+      }
       await registerWorkspace(deps, anchor)
       return anchor
     },

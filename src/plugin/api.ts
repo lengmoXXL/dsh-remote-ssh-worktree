@@ -326,10 +326,6 @@ async function handleWorktrees(
         name: requireString(request.body, 'name'),
         ...baseRef === undefined ? {} : { baseRef },
       })
-      // A worktree cut by path still belongs to a repository, so the tree the
-      // UI renders stays complete whichever surface cut it. Registered after
-      // the cut, so a refused checkout records nothing.
-      if (deps.repos.find(target) === undefined) await deps.repos.upsert(target)
       return { status: 201, body: { worktree: anchor } }
     }
     throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
