@@ -10,7 +10,7 @@
  * itself lives in local state, every mutation arrives as an injected callback,
  * every string comes from the locale seat, and no value reaches for `ctx`.
  *
- * @module dsh-remote-ssh-worktree/client/Section
+ * @module dsh-remote-ssh-worktree/plugin/client/Section
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -30,7 +30,7 @@ import {
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { AnchorId, NodeId, RepoId } from '../ids.ts'
+import type { AnchorId, NodeId, RepoId } from '../../ids.ts'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { NS } from './locales.ts'
 import { AddMachineDialog, AddRepoDialog, NewWorktreeDialog, reasonOf } from './dialogs.tsx'

@@ -7,5 +7,5 @@
     "noPropertyAccessFromIndexSignature": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["src/client/**"]
+  "exclude": ["src/plugin/client/**"]
 }

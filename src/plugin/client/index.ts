@@ -13,7 +13,7 @@
  * `Section`, which attaches it to the document when it is first evaluated. The
  * component itself receives all data and callbacks through its prop shares.
  *
- * @module dsh-remote-ssh-worktree/client
+ * @module dsh-remote-ssh-worktree/plugin/client
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type { AnchorId, NodeId, RepoId } from '../ids.ts'
+import type { AnchorId, NodeId, RepoId } from '../../ids.ts'
 import type { DirListing, RemoteWorktreesFace, Snapshot } from './Section.tsx'
 import { RemoteWorktreesSection } from './Section.tsx'
 import type { RemoteWorktreesKey } from './locales.ts'

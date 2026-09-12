@@ -245,9 +245,11 @@ test('the bundle carries its stylesheet inlined under hashed local names', async
   // Local names, so nothing this section renders can collide with the shell or
   // another plugin: `drw-section` must not survive into the artifact.
   assert.equal(source.includes('drw-section'), false)
-  assert.match(source, /\.[A-Za-z0-9]{6}_section\s*\{/)
+  // The hash is derived from the stylesheet's path as well as its content, so
+  // the pattern pins its shape and not its length.
+  assert.match(source, /\.[A-Za-z0-9_]{5,}_section\s*\{/)
   // The component resolves those names through the compiled map, not a literal.
-  assert.match(source, /"section":\s*"[A-Za-z0-9]{6}_section"/)
+  assert.match(source, /"section":\s*"[A-Za-z0-9_]{5,}_section"/)
 })
 
 test('the bundle inlines every dependency the shell does not provide', async () => {

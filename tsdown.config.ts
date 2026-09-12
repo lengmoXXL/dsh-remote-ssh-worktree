@@ -112,7 +112,7 @@ const host = defineConfig({
 })
 
 const client = defineConfig({
-  entry: { client: 'src/client/index.ts' },
+  entry: { client: 'src/plugin/client/index.ts' },
   outDir: 'lib',
   format: 'cjs',
   platform: 'browser',

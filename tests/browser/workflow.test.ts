@@ -39,7 +39,7 @@ import { cp, mkdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
-import { en, zh } from '../../src/client/locales.ts'
+import { en, zh } from '../../src/plugin/client/locales.ts'
 import {
   bodyText,
   clickByText,

@@ -7,7 +7,7 @@
  * helper live here because only these editors and the section that opens them
  * render with them.
  *
- * @module dsh-remote-ssh-worktree/client/dialogs
+ * @module dsh-remote-ssh-worktree/plugin/client/dialogs
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
@@ -19,7 +19,7 @@ import {
   Input,
   Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { NodeId, RepoId } from '../ids.ts'
+import type { NodeId, RepoId } from '../../ids.ts'
 import type { DirListing, RepoRecord, T } from './Section.tsx'
 import css from './Section.module.css'
 
