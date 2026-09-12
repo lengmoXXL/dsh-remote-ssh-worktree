@@ -20,7 +20,7 @@
  */
 
 import type { NodeConnections } from './connections.ts'
-import type { NodeRecord } from './registry.ts'
+import type { NodeRecord } from '../storage/nodes.ts'
 
 /** How many times one machine is attempted before this pass gives up on it. */
 const ATTEMPTS = 3

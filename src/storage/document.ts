@@ -1,5 +1,5 @@
 /**
- * The durable JSON document both stores share.
+ * The durable JSON document the node and repository stores share.
  *
  * A document is one file holding a versioned array of records, replaced
  * atomically under a cross-process lock, so two harness processes never
@@ -8,7 +8,7 @@
  * revision gate, the write lock, the atomic publication, and the diagnostics
  * that name a document this build cannot read.
  *
- * @module dsh-remote-ssh-worktree/storage
+ * @module dsh-remote-ssh-worktree/storage/document
  */
 
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'

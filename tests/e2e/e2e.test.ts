@@ -19,7 +19,7 @@ import { AGENT_VERSION } from '../../src/nodes/agent/install.ts'
 import { connectNode } from '../../src/nodes/client.ts'
 import type { ConnectedNode } from '../../src/nodes/client.ts'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
-import type { AnchorRoute } from '../../src/plugin/anchors.ts'
+import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingFileSystem } from '../../src/plugin/routing/fs.ts'
 import { asNodeId } from '../../src/ids.ts'
 

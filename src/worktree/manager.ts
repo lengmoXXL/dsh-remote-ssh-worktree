@@ -25,12 +25,12 @@
 
 import { posix } from 'node:path'
 import type { WireWorktree } from '../protocol.ts'
-import type { AnchorDraft, AnchorRecord, AnchorStore } from '../plugin/anchors.ts'
-import type { RepoStore } from '../repos/store.ts'
+import type { AnchorDraft, AnchorRecord, AnchorStore } from '../storage/anchors.ts'
+import type { RepoStore } from '../storage/repos.ts'
 import type { ChannelLookup, NodeChannel } from '../channel.ts'
 import { NodeRequestError } from '../channel.ts'
 import type { AnchorId, NodeId } from '../ids.ts'
-import type { RepoRef } from '../repos/store.ts'
+import type { RepoRef } from '../storage/repos.ts'
 
 /** Directory, relative to the repository, that holds every managed checkout. */
 const WORKTREE_ROOT = '.dsh-worktrees'

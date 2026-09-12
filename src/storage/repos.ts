@@ -12,15 +12,15 @@
  * replaced atomically under a cross-process lock, so two harness processes
  * never interleave a read-render-commit cycle.
  *
- * @module dsh-remote-ssh-worktree/repos/store
+ * @module dsh-remote-ssh-worktree/storage/repos
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { NodeId, RepoId } from '../ids.ts'
-import type { DocumentSpec } from '../storage.ts'
-import { readDocument, writeDocument } from '../storage.ts'
+import type { DocumentSpec } from './document.ts'
+import { readDocument, writeDocument } from './document.ts'
 
 /** Document revision; a field change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1

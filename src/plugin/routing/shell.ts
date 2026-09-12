@@ -26,7 +26,7 @@ import type {
   ShellRunResult,
 } from '@deepseek-ai/dsh-shell'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { AnchorRoute } from '../anchors.ts'
+import type { AnchorRoute } from '../../storage/anchors.ts'
 import { classifyPath } from './classify.ts'
 
 /**

@@ -13,8 +13,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import type { NodeConnections } from '../nodes/connections.ts'
-import type { NodeRegistry } from '../nodes/registry.ts'
-import { defaultNodeTitle } from '../nodes/registry.ts'
+import type { NodeRegistry } from '../storage/nodes.ts'
+import { defaultNodeTitle } from '../storage/nodes.ts'
 import { asAnchorId, asNodeId } from '../ids.ts'
 import type { WorktreeManager } from '../worktree/manager.ts'
 

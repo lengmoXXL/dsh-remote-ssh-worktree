@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { NodeConnections } from '../../src/nodes/connections.ts'
-import type { NodeRecord } from '../../src/nodes/registry.ts'
+import type { NodeRecord } from '../../src/storage/nodes.ts'
 import { autoconnect } from '../../src/nodes/autoconnect.ts'
 import { asNodeId } from '../../src/ids.ts'
 

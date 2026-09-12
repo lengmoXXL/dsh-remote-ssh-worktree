@@ -12,7 +12,7 @@ import type { SubprocessHandle, SubprocessRuntime, SubprocessSpawnSpec } from '@
 import type { SpPipeFrame } from '../../src/protocol.ts'
 import type { NodeChannel } from '../../src/channel.ts'
 import { NodeRequestError } from '../../src/channel.ts'
-import type { AnchorRoute } from '../../src/plugin/anchors.ts'
+import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
 import { asNodeId } from '../../src/ids.ts'
 import { asProcId } from '../../src/protocol.ts'

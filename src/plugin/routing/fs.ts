@@ -24,7 +24,7 @@ import type { ChannelLookup, NodeChannel } from '../../channel.ts'
 import { NodeRequestError } from '../../channel.ts'
 import { asNodeId } from '../../ids.ts'
 import type { NodeId } from '../../ids.ts'
-import type { AnchorRoute } from '../anchors.ts'
+import type { AnchorRoute } from '../../storage/anchors.ts'
 import { classifyPath, isWithin } from './classify.ts'
 
 /** Bytes per remote text pull. Bounds one round trip without capping file size. */

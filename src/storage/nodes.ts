@@ -7,14 +7,14 @@
  * leaves this module drops it, and {@link toNodeView} is the only supported way
  * to produce one.
  *
- * @module dsh-remote-ssh-worktree/nodes/registry
+ * @module dsh-remote-ssh-worktree/storage/nodes
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { randomUUID } from 'node:crypto'
 import type { NodeId } from '../ids.ts'
-import type { DocumentSpec } from '../storage.ts'
-import { readDocument, writeDocument } from '../storage.ts'
+import type { DocumentSpec } from './document.ts'
+import { readDocument, writeDocument } from './document.ts'
 
 /**
  * Document revision. Revision 1 stored `host`/`port` on the record; revision 2

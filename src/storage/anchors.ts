@@ -18,7 +18,7 @@
  * metadata without the directory would leave a path that still routes, so both
  * move together.
  *
- * @module dsh-remote-ssh-worktree/plugin/anchors
+ * @module dsh-remote-ssh-worktree/storage/anchors
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'

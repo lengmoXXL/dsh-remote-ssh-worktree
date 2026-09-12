@@ -11,8 +11,8 @@ import { after, beforeEach, test } from 'node:test'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createNodeRegistry, toNodeView } from '../../src/nodes/registry.ts'
-import type { NodeTransport } from '../../src/nodes/registry.ts'
+import { createNodeRegistry, toNodeView } from '../../src/storage/nodes.ts'
+import type { NodeTransport } from '../../src/storage/nodes.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 let dir: string

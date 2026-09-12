@@ -14,7 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { asAnchorId, asNodeId } from '../ids.ts'
-import type { NodeRegistry } from '../nodes/registry.ts'
+import type { NodeRegistry } from '../storage/nodes.ts'
 import type { WorktreeManager } from '../worktree/manager.ts'
 
 /** What the tools need from the plugin. */

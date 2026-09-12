@@ -10,7 +10,7 @@ import { after, beforeEach, test } from 'node:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createRepoStore, defaultRepoName } from '../../src/repos/store.ts'
+import { createRepoStore, defaultRepoName } from '../../src/storage/repos.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 let dir: string
