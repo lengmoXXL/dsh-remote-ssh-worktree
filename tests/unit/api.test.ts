@@ -19,7 +19,7 @@ import { createNodeConnections } from '../../src/models/machines.ts'
 import { createNodeRegistry } from '../../src/storage/nodes.ts'
 import { createRepoStore } from '../../src/storage/repos.ts'
 import { createWorktreeManager } from '../../src/models/worktrees.ts'
-import type { WireMethods } from '../../src/remote/protocol.ts'
+import type { NodeInfo, WireMethods } from '../../src/remote/protocol.ts'
 import type { ApiRequest } from '../../src/plugin/api.ts'
 import { handleNodeApi } from '../../src/plugin/api.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
@@ -78,6 +78,17 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
 /** A request with a JSON body. */
 function request(method: string, path: string, body?: unknown, query = ''): ApiRequest {
   return { method, path, query: new URLSearchParams(query), body }
+}
+
+/** What a daemon reports about itself in its handshake. */
+const DAEMON_INFO: NodeInfo = {
+  protocol: 1,
+  agentVersion: '0.0.1',
+  platform: 'linux',
+  arch: 'x64',
+  node: 'v22.19.0',
+  homedir: '/home/dev',
+  capability: { pty: false, spill: false, ripgrep: null },
 }
 
 test('an empty install lists no nodes', async () => {
@@ -223,15 +234,7 @@ test('browsing directories lists resolved children', async () => {
   }
   const { deps } = await setup({
     connect: () => Promise.resolve({
-      info: {
-        protocol: 1,
-        agentVersion: '0.0.1',
-        platform: 'linux',
-        arch: 'x64',
-        node: 'v22.19.0',
-        homedir: '/home/dev',
-        capability: { pty: false, spill: false, ripgrep: null },
-      },
+      info: DAEMON_INFO,
       channel,
       close: () => {},
     }),
@@ -251,6 +254,33 @@ test('browsing directories lists resolved children', async () => {
       ],
     },
   })
+})
+
+test('browsing with no path starts at the home the daemon reported', async () => {
+  const asked: string[] = []
+  const channel: NodeChannel = {
+    onPipeFrame: () => () => {},
+    request: (method, params) => {
+      if (method === 'fs.resolve') {
+        asked.push((params as unknown as { path: string }).path)
+        return Promise.resolve({ canonicalPath: DAEMON_INFO.homedir }) as never
+      }
+      if (method === 'fs.listDir') return Promise.resolve([]) as never
+      return Promise.reject(new Error(`unexpected ${method}`)) as never
+    },
+  }
+  const { deps } = await setup({
+    connect: () => Promise.resolve({ info: DAEMON_INFO, channel, close: () => {} }),
+  })
+  const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
+  const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
+  await handleNodeApi(request('POST', `/nodes/${nodeId}/connect`), deps)
+
+  // The daemon expands no `~`, so the spelling never travels: the home it named
+  // is what the browse starts from.
+  const response = await handleNodeApi(request('GET', `/nodes/${nodeId}/dirs`, undefined, 'path='), deps)
+  assert.equal(response.status, 200)
+  assert.deepEqual(asked, ['/home/dev'])
 })
 
 test('an unknown endpoint is a 404 and a wrong verb is a 405', async () => {

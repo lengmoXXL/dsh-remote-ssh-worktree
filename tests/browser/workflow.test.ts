@@ -36,7 +36,7 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { cp, mkdir, readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
 import { en, zh } from '../../src/plugin/client/locales.ts'
@@ -92,6 +92,40 @@ function enabledCount(...keys: Key[]): string {
 function present(...keys: Key[]): string {
   const needles = keys.flatMap(key => [zh[key], en[key]]).map(text => JSON.stringify(text)).join(',')
   return `[${needles}].some(text => document.body.innerText.includes(text))`
+}
+
+/** The open form's controls and path field, which the picker is driven with. */
+const FORM_PARTS = `
+  const dialogs = [...document.querySelectorAll('[role="dialog"][aria-label]')]
+  const dialog = dialogs[dialogs.length - 1]
+  const field = dialog === undefined ? undefined : [...dialog.querySelectorAll('input')]
+    .find(input => (input.getAttribute('placeholder') ?? '') === ${JSON.stringify(en.placeholderRepoPath)})
+  const controls = dialog === undefined
+    ? []
+    : [...dialog.querySelectorAll('button')].map(button => (button.textContent ?? '').trim())
+`
+
+/**
+ * An expression that holds when the open form's directory picker lists one
+ * directory and not another, which is what a narrowed suggestion list is.
+ */
+function pickerShows(offered: string, absent: string): string {
+  return `
+    (() => {
+      ${FORM_PARTS}
+      return controls.includes(${JSON.stringify(offered)}) && !controls.includes(${JSON.stringify(absent)})
+    })()
+  `
+}
+
+/** An expression that holds when the open form's path field reads exactly one path. */
+function pathFieldIs(path: string): string {
+  return `
+    (() => {
+      ${FORM_PARTS}
+      return field !== undefined && field.value === ${JSON.stringify(path)}
+    })()
+  `
 }
 
 /**
@@ -185,6 +219,30 @@ async function waitForBranchGone(repoPath: string, branch: string): Promise<void
   }
 }
 
+/**
+ * Run git in a fixture, retrying while another process holds the index lock.
+ *
+ * A directory that was opened as a workspace is read by the shell as well —
+ * describing a workspace asks git about it — and a reader refreshes the index,
+ * which takes the lock this fixture's own write needs. Losing that race is the
+ * environment's timing, not the plugin's behaviour, so the fixture waits it out.
+ * @param cwd - the fixture directory to run in.
+ * @param args - the git arguments.
+ * @throws the git failure when it is not the lock, or the lock never clears.
+ */
+async function gitLocked(cwd: string, args: readonly string[]): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await run('git', [...args], { cwd })
+      return
+    } catch (error) {
+      const stderr = String((error as { stderr?: unknown }).stderr ?? '')
+      if (attempt >= 10 || !stderr.includes('index.lock')) throw error
+      await delay(200)
+    }
+  }
+}
+
 /** The shell's own onboarding and notice buttons, which trap focus while open. */
 const SKIP_SHELL_DIALOG = /^(?:稍后配置|Configure later|继续|Continue)$/i
 
@@ -250,11 +308,19 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await waitForEnabled(page, exact('addRepository'), 'the repository control to settle')
     await shot('03-connected')
 
-    // Register the fixture repository; the daemon proves it is a git checkout.
+    // Register the fixture repository. The path field drives the picker while
+    // it is typed: a half-typed name narrows the list to what answers it, and a
+    // clicked row descends into itself and lands in the field.
     await clickByText(page, exact('addRepository'))
     await waitForForm(page, exact('addRepository'), 'the add-repository form')
-    await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderRepoPath)), instance.repoPath)
     await shot('04-repository-form')
+    await fillDialogInputByPlaceholder(
+      page, new RegExp(escape(en.placeholderRepoPath)), `${dirname(instance.repoPath)}/demo`,
+    )
+    await waitFor(page, pickerShows('demo-repo', 'plain-dir'), 'the list to narrow to the typed prefix')
+    await shot('04b-picker-narrowed')
+    await clickInDialog(page, /^demo-repo$/)
+    await waitFor(page, pathFieldIs(instance.repoPath), 'the clicked directory to reach the path field')
     await waitForEnabled(page, exact('create'), 'the form to accept the repository')
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('addRepository'), 'the add-repository form to close')
@@ -357,6 +423,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await waitFor(page, present('notARepository'), 'the row to say it is not a repository')
     // Only the repository registered first can be cut from.
     await waitFor(page, `${enabledCount('newWorktree')} === 1`, 'the plain directory to refuse a worktree')
+    await shot('08-plain-directory')
 
     // Opening it as a workspace asks the machine for the path and nothing else.
     await clickByText(page, exact('openWorktree'), 1)
@@ -376,13 +443,16 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     // Initializing it on the machine is all it takes: the next read offers
     // worktrees again, and the record is the one that was already there.
     await run('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: instance.plainDir })
-    await run('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'add', '.'], { cwd: instance.plainDir })
-    await run('git', [
+    await gitLocked(instance.plainDir, [
+      '-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'add', '.',
+    ])
+    await gitLocked(instance.plainDir, [
       '-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false',
       'commit', '-m', 'initial',
-    ], { cwd: instance.plainDir })
+    ])
     await clickByText(page, exact('refresh'))
     await waitFor(page, `${enabledCount('newWorktree')} === 2`, 'the initialized directory to accept a worktree')
+    await shot('09-directory-initialized')
 
     await clickByText(page, exact('newWorktree'), 1)
     await waitForForm(page, exact('newWorktree'), 'the initialized directory form')

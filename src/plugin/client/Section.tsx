@@ -518,6 +518,11 @@ export function RemoteWorktreesSection(props: SectionProps) {
                         // directory is a live fact: a plain directory can be
                         // worked in, and initialized on the machine later.
                         const why = entry.error ?? t('notARepository')
+                        // Opening a directory the section has never resolved
+                        // needs the machine to spell the path; an anchor that
+                        // already exists is registered locally, so changing its
+                        // state keeps working while the machine is away.
+                        const cannotOpen = entry.error !== undefined && directory === undefined
                         return (
                           <div key={repo.repoId} className={css.repoCard}>
                             <DisclosureRow
@@ -532,7 +537,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               onToggle={() => toggle(openRepos, setOpenRepos, repo.repoId)}
                               collapsedContent={entry.git
                                 ? null
-                                : <span className={css.dim}>{why}</span>}
+                                : <span className={css.reason} title={why}>{why}</span>}
                             >
                               <div className={css.actions}>
                                 <Button
@@ -546,7 +551,8 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                 </Button>
                                 <Button
                                   size="sm"
-                                  disabled={busy}
+                                  disabled={busy || cannotOpen}
+                                  title={cannotOpen ? entry.error : undefined}
                                   onClick={() => void mutate(() => (
                                     directory?.open === true
                                       ? props.closeDirectory(repo.repoId)
@@ -570,7 +576,11 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               </div>
                               <div className={css.worktrees}>
                                 {worktrees.length === 0
-                                  ? <div className={css.empty}>{t('worktreesEmpty')}</div>
+                                  ? (
+                                    <div className={css.empty}>
+                                      {t(entry.git ? 'worktreesEmpty' : 'worktreesEmptyDirectory')}
+                                    </div>
+                                  )
                                   : worktrees.map(item => (
                                     <WorktreeRow
                                       key={item.anchor.anchorId}

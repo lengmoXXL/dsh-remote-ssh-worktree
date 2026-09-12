@@ -472,7 +472,13 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
       if (request.method !== 'GET') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
       const channel = deps.connections.channel(nodeId)
       if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
-      const path = request.query.get('path') ?? '~'
+      // A request without a path starts at the daemon user's home, which the
+      // handshake reported. The daemon itself expands no `~`, so the spelling
+      // never travels: the home it named is asked for verbatim.
+      const requested = (request.query.get('path') ?? '').trim()
+      const path = requested === ''
+        ? deps.connections.status(nodeId).info?.homedir ?? '/'
+        : requested
       const resolved = await channel.request('fs.resolve', { path })
       if (resolved.canonicalPath === undefined) throw new ApiError(502, 'the daemon returned no path')
       const listing = await channel.request('fs.listDir', { path: resolved.canonicalPath })

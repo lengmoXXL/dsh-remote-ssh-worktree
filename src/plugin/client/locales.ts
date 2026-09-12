@@ -16,7 +16,7 @@ export const NS = 'remote-worktrees'
 export const zh = {
   title: '远程 worktree',
   subtitle:
-    '管理可以访问的机器、机器上的 git 仓库，以及从仓库切出的 worktree。'
+    '管理可以访问的机器、机器上的目录，以及从 git 仓库切出的 worktree。'
     + '切出的 worktree 会成为一个本地工作区，其文件与命令都在那台机器上执行。',
   refresh: '刷新',
   addMachine: '添加机器',
@@ -24,6 +24,7 @@ export const zh = {
   machinesEmpty: '还没有配置机器。添加一台机器后，就能浏览它的仓库并切出 worktree。',
   repositoriesEmpty: '这台机器上还没有登记仓库。',
   worktreesEmpty: '这个仓库还没有 worktree。',
+  worktreesEmptyDirectory: '这个目录还不是 git 仓库；在机器上 git init 之后，就能从它切出 worktree。',
 
   'status.ready': '已连接',
   'status.connecting': '连接中',
@@ -64,12 +65,13 @@ export const zh = {
   hintIdentityFile: '留空则沿用 ssh 的配置与 agent。',
   forwarding: '隧道 127.0.0.1:{port}',
   hintToken: '插件安装并启动远端 agent 时使用的访问令牌。',
-  hintRepository: '该机器上的绝对路径；必须已经是一个 git 仓库。',
+  hintRepository: '该机器上的绝对路径。普通目录也可以登记；在机器上 git init 之后就能从它切出 worktree。',
   hintWorktreeName: '分支名会变成 worktree/<名称>，名称不可重复。',
   optional: '可选',
 
   pickDirectory: '浏览目录',
   pickerEmpty: '这个目录下没有子目录。',
+  pickerNoMatch: '没有匹配的子目录。',
   pickerUp: '上一层',
   pickerUse: '使用这个目录',
 
@@ -82,7 +84,7 @@ export const zh = {
   removeMachineTitle: '移除机器？',
   removeMachineBody: '这台机器的仓库登记会一起删除，机器上的 worktree 与分支不受影响。',
   removeRepositoryTitle: '移除仓库登记？',
-  removeRepositoryBody: '只会删除本地记录；机器上的仓库和 worktree 都不受影响。',
+  removeRepositoryBody: '只会删除本地登记，并关闭它的目录工作区；机器上的文件和 worktree 都不受影响。',
   notARepository: '还不是 git 仓库',
   removeWorktreeTitle: '移除 worktree？',
   removeWorktreeBody: '会删除机器上的检出目录；勾选后分支也会被删除。未提交的改动会一并丢弃。',
@@ -97,15 +99,16 @@ export type RemoteWorktreesKey = keyof typeof zh
 export const en = {
   title: 'Remote worktrees',
   subtitle:
-    'Manage the machines this deployment can reach, the git repositories on '
-    + 'them, and the worktrees cut from those repositories. A worktree becomes '
-    + 'a local workspace whose file and shell tools run on that machine.',
+    'Manage the machines this deployment can reach, the directories on them, '
+    + 'and the worktrees cut from the git repositories among them. A worktree '
+    + 'becomes a local workspace whose file and shell tools run on that machine.',
   refresh: 'Refresh',
   addMachine: 'Add machine',
   loading: 'Loading…',
   machinesEmpty: 'No machines yet. Add one to browse its repositories and cut worktrees from them.',
   repositoriesEmpty: 'No repositories registered on this machine yet.',
   worktreesEmpty: 'No worktrees in this repository yet.',
+  worktreesEmptyDirectory: 'This directory is not a git repository yet; once it is initialized on the machine, worktrees can be cut from it.',
 
   'status.ready': 'Connected',
   'status.connecting': 'Connecting',
@@ -146,12 +149,13 @@ export const en = {
   hintIdentityFile: 'Leave blank to use your ssh configuration and agent.',
   forwarding: 'tunnel 127.0.0.1:{port}',
   hintToken: 'The token the plugin gives the remote agent it installs and starts.',
-  hintRepository: 'An absolute path on that machine that is already a git repository.',
+  hintRepository: 'An absolute path on that machine. A plain directory is fine too; once it is a git repository there, worktrees can be cut from it.',
   hintWorktreeName: 'The branch becomes worktree/<name>; the name must be unique.',
   optional: 'optional',
 
   pickDirectory: 'Browse',
   pickerEmpty: 'No subdirectories here.',
+  pickerNoMatch: 'No subdirectories match.',
   pickerUp: 'Parent directory',
   pickerUse: 'Use this directory',
 
@@ -164,7 +168,7 @@ export const en = {
   removeMachineTitle: 'Remove this machine?',
   removeMachineBody: 'Its repository registrations are dropped too. Worktrees and branches on the machine are untouched.',
   removeRepositoryTitle: 'Forget this repository?',
-  removeRepositoryBody: 'Only the local record is deleted; the repository and its worktrees on the machine are untouched.',
+  removeRepositoryBody: 'Only the local registration is dropped, and the workspace of the directory itself is closed with it; files and worktrees on the machine are untouched.',
   notARepository: 'Not a git repository yet',
   removeWorktreeTitle: 'Remove this worktree?',
   removeWorktreeBody: 'The checkout is deleted on the machine; tick the option to delete its branch too. Uncommitted changes are discarded.',

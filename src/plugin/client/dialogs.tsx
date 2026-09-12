@@ -10,7 +10,7 @@
  * @module dsh-remote-ssh-worktree/plugin/client/dialogs
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Button,
   IconChevronLeftOutline14,
@@ -149,6 +149,12 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
  *
  * The listing comes from the same remote filesystem the agent's tools use, so
  * what the picker shows is what a session opened on the result would see.
+ *
+ * The typed path drives the list: while it is edited, the picker lists the
+ * children of the directory the text names and keeps only the ones answering
+ * the segment being typed, so the suggestion list narrows under the cursor.
+ * Clicking a row descends into it and writes it into the field, which leaves
+ * the field holding the directory that would be registered.
  */
 function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
   nodeId: NodeId
@@ -157,34 +163,50 @@ function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
   listDirs: (nodeId: NodeId, path: string) => Promise<DirListing>
   t: T
 }) {
-  const [listing, setListing] = useState<DirListing | undefined>(undefined)
+  /** The loaded listing and the directory it answers, so a late reply about an
+      abandoned directory is never shown under the current one. */
+  const [listing, setListing] = useState<{ readonly dir: string; readonly value: DirListing } | undefined>(
+    undefined,
+  )
   const [error, setError] = useState<string | undefined>(undefined)
-  const [loading, setLoading] = useState(false)
+  /** A path the picker itself navigated to. While the text still reads as the
+      text it was chosen from, that path is the directory to list rather than a
+      name to filter its parent by. */
+  const [entered, setEntered] = useState<string | undefined>(undefined)
 
-  const browse = useCallback(async (path: string) => {
-    setLoading(true)
-    setError(undefined)
-    try {
-      const next = await listDirs(nodeId, path)
-      setListing(next)
-      onChange(next.path)
-    } catch (failure) {
-      setError(reasonOf(failure))
-      setListing(undefined)
-    } finally {
-      setLoading(false)
-    }
-  }, [listDirs, nodeId, onChange])
+  const text = value.trim()
+  const { dir, prefix } = browseTarget(text, entered)
 
   useEffect(() => {
-    void browse(value.trim() === '' ? '~' : value)
-    // Opening the dialog browses the starting path exactly once; later loads
-    // are driven by the picker's own controls.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browse])
+    let live = true
+    // The previous directory's failure is not this one's; it clears as soon as
+    // the text moves on, rather than lingering until the answer arrives.
+    setError(undefined)
+    // Keyed on the directory rather than the text: a keystroke inside one
+    // directory only narrows what is already loaded, so asking the machine
+    // again would be a round trip for an answer the picker holds.
+    listDirs(nodeId, dir).then(
+      next => { if (live) setListing({ dir, value: next }) },
+      (failure: unknown) => { if (live) setError(reasonOf(failure)) },
+    )
+    return () => { live = false }
+  }, [dir, listDirs, nodeId])
 
-  const entries = (listing?.entries ?? []).filter(entry => entry.type === 'directory')
-  const parent = listing === undefined ? undefined : parentOf(listing.path)
+  // What the picker can show right now, or undefined while it is still asking.
+  const current = listing !== undefined && listing.dir === dir ? listing.value : undefined
+  const entries = (current?.entries ?? []).filter(
+    entry => entry.type === 'directory' && matchesName(entry.name, prefix),
+  )
+  const parent = current === undefined ? undefined : parentOf(current.path)
+  // The bar names what is listed. Until the machine answers, an unspelled
+  // request is the home directory, which `~` is the readable name for.
+  const place = current?.path ?? (dir === '' ? HOME_LABEL : dir)
+
+  /** Descend: the text follows the path and the list shows what it holds. */
+  const navigate = (path: string): void => {
+    setEntered(path)
+    onChange(path)
+  }
 
   return (
     <div className={css.picker}>
@@ -192,31 +214,39 @@ function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
         <Button
           size="sm"
           icon={<IconChevronLeftOutline14 />}
-          disabled={loading || parent === undefined}
-          onClick={() => { if (parent !== undefined) void browse(parent) }}
+          disabled={parent === undefined}
+          onClick={() => { if (parent !== undefined) navigate(parent) }}
         >
           {t('pickerUp')}
         </Button>
-        <span className={css.pickerPath} title={listing?.path ?? value}>{listing?.path ?? value}</span>
-        <Button size="sm" disabled={loading || listing === undefined} onClick={() => { if (listing !== undefined) onChange(listing.path) }}>
+        <span className={css.pickerPath} title={place}>{place}</span>
+        <Button
+          size="sm"
+          disabled={text === '' && current === undefined}
+          onClick={() => onChange(text === '' ? current?.path ?? dir : text)}
+        >
           {t('pickerUse')}
         </Button>
       </div>
       <DialogError message={error} />
       <div className={css.pickerList}>
-        {entries.length === 0
-          ? <div className={css.pickerEmpty}>{loading ? t('loading') : t('pickerEmpty')}</div>
-          : entries.map(entry => (
+        {error !== undefined ? null : current === undefined ? (
+          <div className={css.pickerEmpty}>{t('loading')}</div>
+        ) : entries.length === 0 ? (
+          <div className={css.pickerEmpty}>{t(prefix === '' ? 'pickerEmpty' : 'pickerNoMatch')}</div>
+        ) : (
+          entries.map(entry => (
             <button
               key={entry.path}
               type="button"
               className={css.pickerItem}
-              onClick={() => void browse(entry.path)}
+              onClick={() => navigate(entry.path)}
             >
               <IconFolderOpen16 />
               <span>{entry.name}</span>
             </button>
-          ))}
+          ))
+        )}
       </div>
     </div>
   )
@@ -227,6 +257,42 @@ function parentOf(path: string): string | undefined {
   const cut = path.replace(/\/+$/, '').lastIndexOf('/')
   if (cut < 0) return undefined
   return cut === 0 ? '/' : path.slice(0, cut)
+}
+/** The label the picker bar shows for the machine's own home directory. */
+const HOME_LABEL = '~'
+/** Whether one directory name answers the segment being typed. */
+function matchesName(name: string, prefix: string): boolean {
+  // A dotted directory is furniture on this machine, not a suggestion, unless
+  // it is what is being typed.
+  if (name.startsWith('.') && !prefix.startsWith('.')) return false
+  return prefix === '' || name.toLowerCase().startsWith(prefix.toLowerCase())
+}
+/**
+ * Read a typed path the way a completion list should: the directory to list,
+ * and the name segment to keep from it.
+ *
+ * A trailing separator names a directory to list; any other text names a child
+ * of its parent, so its last segment is the filter. A path the picker itself
+ * navigated to is read the same way as a trailing separator, which is what
+ * makes a clicked row descend into itself instead of collapsing to its own
+ * name. Text with no separator at all is a name under the machine's home, which
+ * is where browsing starts; an empty path asks for that home itself.
+ * @param text - the path as typed, trimmed.
+ * @param entered - the path the picker last navigated to, when it did.
+ * @returns the directory to list and the prefix to filter it by.
+ */
+function browseTarget(text: string, entered: string | undefined): { dir: string; prefix: string } {
+  if (text === entered) return { dir: text, prefix: '' }
+  if (text === '') return { dir: '', prefix: '' }
+  if (text.endsWith('/')) return { dir: withoutTail(text) || '/', prefix: '' }
+  const cut = text.lastIndexOf('/')
+  if (cut < 0) return { dir: '', prefix: text }
+  const dir = text.slice(0, cut)
+  return { dir: dir.endsWith('/') ? withoutTail(dir) || '/' : dir, prefix: text.slice(cut + 1) }
+}
+/** A path without its trailing separators. */
+function withoutTail(path: string): string {
+  return path.replace(/\/+$/, '')
 }
 /** Register a repository on a machine. */
 export function AddRepoDialog({ nodeId, busy, onClose, onSubmit, listDirs, t }: {
@@ -275,15 +341,13 @@ export function AddRepoDialog({ nodeId, busy, onClose, onSubmit, listDirs, t }: 
         <Field label={t('fieldRepository')} hint={t('hintRepository')}>
           <Input value={repoPath} onChange={e => setRepoPath(e.target.value)} placeholder={t('placeholderRepoPath')} />
         </Field>
-        {repoPath.trim() === '' ? null : (
-          <DirectoryPicker
-            nodeId={nodeId}
-            value={repoPath}
-            onChange={setRepoPath}
-            listDirs={listDirs}
-            t={t}
-          />
-        )}
+        <DirectoryPicker
+          nodeId={nodeId}
+          value={repoPath}
+          onChange={setRepoPath}
+          listDirs={listDirs}
+          t={t}
+        />
         <Field label={`${t('fieldName')} · ${t('optional')}`}>
           <Input value={name} onChange={e => setName(e.target.value)} />
         </Field>
