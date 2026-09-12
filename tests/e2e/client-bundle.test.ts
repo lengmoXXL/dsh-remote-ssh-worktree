@@ -215,6 +215,8 @@ test('the section renders its frame with the injected face threaded through', as
     disconnectNode: () => Promise.resolve(),
     addRepo: () => Promise.resolve(),
     removeRepo: () => Promise.resolve(),
+    openDirectory: () => Promise.resolve(),
+    closeDirectory: () => Promise.resolve(),
     listDirs: () => Promise.resolve({ path: '/', entries: [] }),
     createWorktree: () => Promise.resolve(),
     removeWorktree: () => Promise.resolve(),

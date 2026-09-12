@@ -12,6 +12,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { AnchorDraft } from '../../src/storage/anchors.ts'
 import { ANCHOR_FILE, createAnchorStore } from '../../src/storage/anchors.ts'
 import { asNodeId } from '../../src/ids.ts'
 
@@ -25,8 +26,9 @@ after(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const draft = {
+const draft: AnchorDraft = {
   nodeId: asNodeId('n1'),
+  kind: 'worktree',
   name: 'login',
   repoPath: '/srv/app',
   remoteRoot: '/srv/app/.dsh-worktrees/worktree/worktree/login',
@@ -97,6 +99,48 @@ test('remove deletes the directory and reports what it removed', async () => {
   assert.equal(existsSync(anchor.anchorPath), false)
   assert.deepEqual(store.list(), [])
   assert.equal(await store.remove(anchor.anchorId), undefined)
+})
+
+test('a directory anchor sits beside the worktrees and carries no branch', async () => {
+  const store = createAnchorStore({ root })
+  await store.load()
+  await store.create(draft)
+  const directory = await store.create({
+    nodeId: asNodeId('n1'),
+    kind: 'directory',
+    name: 'app',
+    repoPath: '/srv/app',
+    remoteRoot: '/srv/app',
+  })
+
+  assert.equal(directory.anchorPath, join(root, 'n1', 'app', '.self'))
+  assert.equal(directory.kind, 'directory')
+  assert.equal('branch' in directory, false)
+  // Neither anchor claims the other's directory, so no path routes two ways.
+  const reloaded = await createAnchorStore({ root }).load()
+  assert.deepEqual(reloaded.map(anchor => anchor.kind).sort(), ['directory', 'worktree'])
+})
+
+test('an anchor written before kinds existed reads as a worktree', async () => {
+  const dir = join(root, 'n1', 'app', 'old')
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, ANCHOR_FILE), JSON.stringify({
+    version: 1,
+    anchor: {
+      anchorId: 'a-1',
+      nodeId: 'n1',
+      name: 'old',
+      anchorPath: dir,
+      remoteRoot: '/srv/app/.dsh-worktrees/worktree/old',
+      repoPath: '/srv/app',
+      branch: 'worktree/old',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+  }), 'utf8')
+
+  const [anchor] = await createAnchorStore({ root }).load()
+  assert.equal(anchor?.kind, 'worktree')
+  assert.equal(anchor?.kind === 'worktree' ? anchor.branch : undefined, 'worktree/old')
 })
 
 test('a malformed anchor document fails loud instead of disappearing', async () => {

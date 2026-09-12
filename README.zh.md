@@ -14,6 +14,7 @@
 
 - 通过 SSH 连接机器——`user@host` 或 `~/.ssh/config` 里的别名，机器上不需要手动装任何东西。
 - 从机器上任意 git 仓库切出 `worktree/<名称>`，把该 checkout 注册成 DSH 工作区；同一行上可以打开、关闭或删除它。
+- 还不是 git 仓库的目录也能登记，并直接作为工作区打开；在机器上 `git init` 之后不用重新登记就能切 worktree。
 - 之后 read、write、edit、bash、grep 和终端工具都在那台机器上原样执行，模型看不出文件在远端。
 - 删除时只删 checkout，分支保留，未合并的提交不会悄悄丢失。
 

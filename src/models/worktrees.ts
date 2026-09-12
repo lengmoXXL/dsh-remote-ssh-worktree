@@ -1,6 +1,13 @@
 /**
  * The remote worktree lifecycle: create, list, open, close, remove.
  *
+ * It also owns the one workspace that is not a worktree: a repository directory
+ * opened as itself. A machine's directory can be worked in before it is a git
+ * repository, so opening it maps the directory onto its own anchor, and cutting
+ * worktrees from it becomes possible later without re-registering anything —
+ * whether it is a repository is a live fact, asked of the machine each time the
+ * section reads it.
+ *
  * Every operation is two-sided on purpose: git runs on the node, and the local
  * anchor is created or dropped around it. The order matters in both
  * directions — an anchor is only recorded after the checkout exists, and the
@@ -25,7 +32,7 @@
 
 import { posix } from 'node:path'
 import type { WireWorktree } from '../remote/protocol.ts'
-import type { AnchorDraft, AnchorRecord, AnchorStore } from '../storage/anchors.ts'
+import type { AnchorRecord, AnchorStore, DirectoryAnchor, WorktreeAnchor } from '../storage/anchors.ts'
 import type { RepoStore } from '../storage/repos.ts'
 import type { ChannelLookup, NodeChannel } from '../remote/client.ts'
 import { NodeRequestError } from '../remote/client.ts'
@@ -55,8 +62,8 @@ export interface WorktreeDraft {
 
 /** What a removal did. */
 export interface WorktreeRemoval {
-  /** The anchor that was removed. */
-  readonly anchor: AnchorRecord
+  /** The worktree anchor that was removed. */
+  readonly anchor: WorktreeAnchor
   /** Whether the branch was deleted as well. */
   readonly branchDeleted: boolean
   /** Why the branch outlived the checkout, when it did. */
@@ -117,10 +124,10 @@ export interface WorktreeManager {
   /**
    * Cut a worktree on the node and record its anchor.
    * @param draft - node, repository, name, and optional base revision.
-   * @returns the created anchor.
+   * @returns the created worktree anchor.
    * @throws the daemon's typed failure when git refuses; no anchor is recorded.
    */
-  create(draft: WorktreeDraft): Promise<AnchorRecord>
+  create(draft: WorktreeDraft): Promise<WorktreeAnchor>
   /** Every managed worktree with its node's live state, in anchor order. */
   list(): Promise<readonly WorktreeStatus[]>
   /**
@@ -158,6 +165,27 @@ export interface WorktreeManager {
    * @throws when no such anchor exists.
    */
   close(anchorId: AnchorId): Promise<AnchorRecord>
+  /**
+   * Open a repository directory as a workspace in its own right.
+   *
+   * Git is not consulted: a directory that is not a repository yet can still be
+   * worked in, and the anchors of the worktrees cut from it later sit beside
+   * this one. Idempotent — opening an open directory registers it again instead
+   * of creating a second anchor.
+   * @param ref - the machine and the directory's path on it.
+   * @returns the directory anchor that is now open.
+   * @throws when the machine is unreachable or no workspace registry is composed.
+   */
+  openDirectory(ref: RepoRef): Promise<DirectoryAnchor>
+  /**
+   * Close a repository directory's workspace and drop its anchor.
+   *
+   * Nothing on the machine is touched: the anchor is this host's bookkeeping,
+   * so closing the workspace is what removes it.
+   * @param ref - the machine and the directory's path on it.
+   * @returns the anchor that was dropped, or undefined when none was open.
+   */
+  closeDirectory(ref: RepoRef): Promise<DirectoryAnchor | undefined>
 }
 
 /** The remote path a managed checkout lives at. */
@@ -265,23 +293,24 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       // The add created the parent directory, so the ignore file can land now.
       await ensureIgnored(channel, repoPath)
 
-      const anchorDraft: AnchorDraft = {
+      // The daemon reports where the checkout actually landed and which branch
+      // it settled on, which are the facts every later call must use.
+      const checkedOut = worktree.branch ?? branch
+      const anchor = await deps.anchors.create({
+        kind: 'worktree',
         nodeId: draft.nodeId,
         name: draft.name,
         repoPath,
-        // The daemon reports where the checkout actually landed, which is the
-        // path every later call must use.
         remoteRoot: worktree.path,
-        branch: worktree.branch ?? branch,
-      }
-      const anchor = await deps.anchors.create(anchorDraft)
+        branch: checkedOut,
+      })
       // Known repositories keep the name a person gave them; a worktree is
       // only ever what registers a repository nobody has registered yet.
       if (deps.repos.find({ nodeId: draft.nodeId, repoPath }) === undefined) {
         await deps.repos.upsert({ nodeId: draft.nodeId, repoPath })
       }
       await registerWorkspace(deps, anchor)
-      return anchor
+      return { ...anchor, kind: 'worktree', branch: checkedOut }
     },
 
     async list() {
@@ -305,6 +334,12 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
 
     async remove(anchorId, options) {
       const anchor = anchorById(anchorId)
+      // `git worktree remove` on the repository directory would delete the
+      // person's own checkout, so only a worktree can be removed. A directory
+      // anchor is closed instead, which touches nothing on the machine.
+      if (anchor.kind !== 'worktree') {
+        throw new Error(`"${anchor.name}" is the repository directory, not a worktree; close it instead`)
+      }
       const channel = channelFor(anchor.nodeId)
 
       await channel.request('git.worktreeRemove', {
@@ -350,39 +385,91 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       await deps.workspace?.unregister(anchor)
       return anchor
     },
+
+    async openDirectory(ref) {
+      const directoryAnchor = () => deps.anchors.list().find(
+        (anchor): anchor is DirectoryAnchor =>
+          anchor.kind === 'directory' && anchor.nodeId === ref.nodeId && anchor.repoPath === ref.repoPath,
+      )
+      const workspace = deps.workspace
+      if (workspace === undefined) {
+        throw new Error('this deployment composes no workspace registry, so a directory cannot be opened')
+      }
+      const existing = directoryAnchor()
+      if (existing !== undefined) {
+        await workspace.register(existing)
+        return existing
+      }
+
+      const channel = channelFor(ref.nodeId)
+      const { canonicalPath: repoPath } = await channel.request('fs.resolve', { path: ref.repoPath })
+      const anchor = await deps.anchors.create({
+        kind: 'directory',
+        nodeId: ref.nodeId,
+        name: posix.basename(repoPath) || repoPath,
+        repoPath,
+        // A directory anchor maps the directory onto itself: there is no
+        // checkout to distinguish, so the two spellings are one path.
+        remoteRoot: repoPath,
+      })
+      try {
+        await workspace.register(anchor)
+      } catch (error) {
+        // An anchor with no workspace is a path that routes into a directory
+        // nobody asked to open, so the attempt leaves nothing behind.
+        await deps.anchors.remove(anchor.anchorId)
+        throw error
+      }
+      return { ...anchor, kind: 'directory' }
+    },
+
+    async closeDirectory(ref) {
+      const anchor = deps.anchors.list().find(
+        (entry): entry is DirectoryAnchor =>
+          entry.kind === 'directory' && entry.nodeId === ref.nodeId && entry.repoPath === ref.repoPath,
+      )
+      if (anchor === undefined) return undefined
+      // The registration resolves by path, which stops resolving once the
+      // anchor directory is gone, so it goes first.
+      await unregisterWorkspace(deps, anchor)
+      await deps.anchors.remove(anchor.anchorId)
+      return anchor
+    },
   }
 }
 
-/** What a worktree label is composed from. */
-export interface WorktreeLabelParts {
+/** What a workspace label is composed from. */
+export interface WorkspaceLabelParts {
   /** The machine's display title, falling back to its host. */
   readonly machine: string
   /** Absolute POSIX path of the repository on that machine. */
   readonly repoPath: string
   /** The repository's display name, when a record supplies one. */
   readonly repoName?: string | undefined
-  /** The worktree name. */
-  readonly name: string
+  /** The checkout's name; absent when the workspace is the directory itself. */
+  readonly name?: string | undefined
 }
 
 /** Separator between the three parts. */
 const SEPARATOR = ' · '
 
 /**
- * Build the display title a remote worktree gets as a local workspace.
+ * Build the display title a remote directory gets as a local workspace.
  *
  * A workspace title is read by a person scanning a sidebar, so it names the
- * three things that distinguish one remote worktree from another — which
- * machine, which repository on it, and which checkout — and never the opaque
- * ids this plugin routes by. An unnamed repository falls back to its last path
- * segment, which is what a user would have called it; a path with no segment at
- * all falls back to the whole path so the label is never blank.
- * @param parts - the machine, repository, and worktree names.
+ * things that distinguish one from another — which machine, which repository on
+ * it, and which checkout — and never the opaque ids this plugin routes by. A
+ * directory opened as itself has no checkout to name, so its title stops at the
+ * repository. An unnamed repository falls back to its last path segment, which
+ * is what a user would have called it; a path with no segment at all falls back
+ * to the whole path so the label is never blank.
+ * @param parts - the machine, repository, and checkout names.
  * @returns the composed title.
  */
-export function worktreeLabel(parts: WorktreeLabelParts): string {
+export function workspaceLabel(parts: WorkspaceLabelParts): string {
   const base = posix.basename(parts.repoPath)
   const repo = parts.repoName?.trim()
     || (base === '' || base === '/' ? parts.repoPath : base)
-  return [parts.machine, repo, parts.name].join(SEPARATOR)
+  const named = parts.name === undefined ? [parts.machine, repo] : [parts.machine, repo, parts.name]
+  return named.join(SEPARATOR)
 }

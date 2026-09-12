@@ -47,6 +47,8 @@ export interface E2eInstance {
   readonly nodeId: string
   /** Absolute POSIX path of the fixture repository on the daemon's machine. */
   readonly repoPath: string
+  /** A directory on the same machine that is not a git repository yet. */
+  readonly plainDir: string
   /** Local directory the remote world maps onto inside the anchor store. */
   readonly home: string
   /** Scratch directory holding the home, the remote root, and artifacts. */
@@ -122,6 +124,13 @@ async function deploy(
   await mkdir(artifacts, { recursive: true })
   await mkdir(remoteRoot, { recursive: true })
   const repoPath = await createFixtureRepo(join(remoteRoot, 'demo-repo'))
+  // Beside the repository, a directory nobody has initialized: the plugin has
+  // to accept it as a plain directory and keep accepting it after `git init`.
+  // Resolved for the same reason the repository path is: a management response
+  // carries the canonical spelling, and on macOS the scratch `/var` is a link.
+  await mkdir(join(remoteRoot, 'plain-dir'), { recursive: true })
+  const plainDir = await realpath(join(remoteRoot, 'plain-dir'))
+  await writeFile(join(plainDir, 'notes.md'), 'plain\n', 'utf8')
 
   await cp(join(homedir(), '.dsh', 'profiles'), join(home, 'profiles'), { recursive: true })
   const linked = join(home, 'profiles', PROFILE, 'node_modules', 'dsh-remote-ssh-worktree')
@@ -174,6 +183,7 @@ async function deploy(
     pageUrl,
     nodeId,
     repoPath,
+    plainDir,
     home,
     root,
     artifacts,

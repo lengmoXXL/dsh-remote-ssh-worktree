@@ -88,20 +88,27 @@ export interface RepoRecord {
 /** One repository as the host reports it. */
 interface RepoReport {
   readonly repo: RepoRecord
+  /** Whether git owns that directory right now. */
+  readonly git: boolean
+  /** Why that could not be answered, when it could not. */
+  readonly error?: string
 }
 
 /** One local anchor. */
 interface AnchorRecord {
   readonly anchorId: AnchorId
   readonly nodeId: NodeId
+  /** A worktree's checkout, or the repository directory itself. */
+  readonly kind: 'worktree' | 'directory'
   readonly repoPath: string
   readonly name: string
-  readonly branch: string
+  /** Only a worktree is on a branch. */
+  readonly branch?: string
   readonly anchorPath: string
   readonly remoteRoot: string
 }
 
-/** One worktree, with whether it is currently openable. */
+/** One anchor, with whether it is currently openable. */
 interface WorktreeStatus {
   readonly anchor: AnchorRecord
   /** Whether the anchor holds a workspace registration right now. */
@@ -149,8 +156,12 @@ export interface RemoteWorktreesFace {
   disconnectNode(nodeId: NodeId): Promise<void>
   /** Register a repository on a machine. */
   addRepo(draft: { nodeId: NodeId; repoPath: string; name?: string }): Promise<void>
-  /** Drop a repository registration. */
+  /** Drop a repository registration and close the directory it was opened as. */
   removeRepo(repoId: RepoId): Promise<void>
+  /** Open a repository directory itself as a workspace; git is not required. */
+  openDirectory(repoId: RepoId): Promise<void>
+  /** Close a directory's own workspace, dropping its anchor. */
+  closeDirectory(repoId: RepoId): Promise<void>
   /** List one directory level on a machine. */
   listDirs(nodeId: NodeId, path: string): Promise<DirListing>
   /** Cut a worktree from a registered repository. */
@@ -359,9 +370,14 @@ export function RemoteWorktreesSection(props: SectionProps) {
     snapshot?.statuses.find(status => status.nodeId === nodeId)
   const reposOf = (nodeId: NodeId): readonly RepoReport[] =>
     (snapshot?.repos ?? []).filter(entry => entry.repo.nodeId === nodeId)
-  const worktreesOf = (repo: RepoRecord): readonly WorktreeStatus[] =>
+  const anchorsOf = (repo: RepoRecord): readonly WorktreeStatus[] =>
     (snapshot?.worktrees ?? []).filter(entry =>
       entry.anchor.nodeId === repo.nodeId && entry.anchor.repoPath === repo.repoPath)
+  const worktreesOf = (repo: RepoRecord): readonly WorktreeStatus[] =>
+    anchorsOf(repo).filter(entry => entry.anchor.kind === 'worktree')
+  /** The directory's own workspace, when one is open or was opened before. */
+  const directoryOf = (repo: RepoRecord): WorktreeStatus | undefined =>
+    anchorsOf(repo).find(entry => entry.anchor.kind === 'directory')
 
   const confirm = (next: Confirmation): void => {
     setConfirmedOption(false)
@@ -485,6 +501,11 @@ export function RemoteWorktreesSection(props: SectionProps) {
                         const repo = entry.repo
                         const repoOpen = openRepos.includes(repo.repoId)
                         const worktrees = worktreesOf(repo)
+                        const directory = directoryOf(repo)
+                        // Cutting a worktree needs git, and whether git owns the
+                        // directory is a live fact: a plain directory can be
+                        // worked in, and initialized on the machine later.
+                        const why = entry.error ?? t('notARepository')
                         return (
                           <div key={repo.repoId} className={css.repoCard}>
                             <DisclosureRow
@@ -497,16 +518,30 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               rowClassName={css.row}
                               leadingClassName={css.leading}
                               onToggle={() => toggle(openRepos, setOpenRepos, repo.repoId)}
-                              collapsedContent={null}
+                              collapsedContent={entry.git
+                                ? null
+                                : <span className={css.dim}>{why}</span>}
                             >
                               <div className={css.actions}>
                                 <Button
                                   size="sm"
                                   icon={<IconPlusOutline16 />}
-                                  disabled={busy}
+                                  disabled={busy || !entry.git}
+                                  title={entry.git ? undefined : why}
                                   onClick={() => setDialog({ kind: 'worktree', repo })}
                                 >
                                   {t('newWorktree')}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  disabled={busy}
+                                  onClick={() => void mutate(() => (
+                                    directory?.open === true
+                                      ? props.closeDirectory(repo.repoId)
+                                      : props.openDirectory(repo.repoId)
+                                  ))}
+                                >
+                                  {directory?.open === true ? t('closeWorktree') : t('openWorktree')}
                                 </Button>
                                 <Button
                                   size="sm"

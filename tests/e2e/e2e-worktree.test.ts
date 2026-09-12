@@ -108,7 +108,9 @@ test('the worktree carries the base revision content', async () => {
 test('listing reports each anchor and whether it is open', async () => {
   const statuses = await worktrees.list()
   assert.equal(statuses.length, 1)
-  assert.equal(statuses[0]?.anchor.branch, 'worktree/login')
+  const listed = statuses[0]?.anchor
+  assert.ok(listed?.kind === 'worktree', 'the anchor is a worktree')
+  assert.equal(listed.branch, 'worktree/login')
   assert.equal(statuses[0]?.open, false, 'nothing registered a workspace here')
 })
 

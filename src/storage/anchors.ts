@@ -18,6 +18,13 @@
  * metadata without the directory would leave a path that still routes, so both
  * move together.
  *
+ * An anchor maps one remote directory, and there are two cases. A worktree
+ * anchor maps the checkout `git worktree add` produced, and is what the
+ * lifecycle cuts and removes. A directory anchor maps the repository directory
+ * itself, which is what lets a machine's plain directory be opened as a
+ * workspace before it is a git repository — and stay one after it becomes a
+ * repository and worktrees are cut beside it.
+ *
  * @module dsh-remote-ssh-worktree/storage/anchors
  */
 
@@ -35,31 +42,53 @@ export const ANCHOR_FILE = '.dsh-remote-worktree.json'
 /** Metadata revision; a field change bumps it and refuses the old form. */
 const DOCUMENT_VERSION = 1
 
+/** Segment a directory anchor lives at, beside the worktrees of its repository. */
+const DIRECTORY_SEGMENT = '.self'
+
+/** What one anchor maps. */
+export type AnchorKind = 'worktree' | 'directory'
+
 /** Owner-only permissions: the file is bookkeeping, not a secret. */
 const FILE_MODE = 0o600
 
 /** How deep the loader walks below the anchor root: node / repo / name. */
 const SCAN_DEPTH = 3
 
-/** One remote worktree's local handle. */
-export interface AnchorRecord {
+/** What every anchor carries, whichever directory it maps. */
+interface AnchorBase {
   /** Stable generated id; the anchor path is the identity, this is a handle. */
   readonly anchorId: AnchorId
   /** The node the remote root lives on. */
   readonly nodeId: NodeId
-  /** Worktree name, which is also the branch suffix. */
+  /**
+   * Name of the directory this anchor was created for: the worktree's name, or
+   * the repository's own name for a directory anchor.
+   */
   readonly name: string
   /** Absolute local directory: the session cwd and workspace path. */
   readonly anchorPath: string
   /** Absolute POSIX directory on the node that this anchor maps onto. */
   readonly remoteRoot: string
-  /** Absolute POSIX path of the repository the worktree was cut from. */
+  /** Absolute POSIX path of the repository the directory belongs to. */
   readonly repoPath: string
-  /** Full branch name the worktree is checked out on. */
-  readonly branch: string
   /** ISO-8601 creation instant. */
   readonly createdAt: string
 }
+
+/** An anchor on the checkout a worktree was cut into. */
+export interface WorktreeAnchor extends AnchorBase {
+  readonly kind: 'worktree'
+  /** Full branch name the checkout is on. */
+  readonly branch: string
+}
+
+/** An anchor on the repository directory itself. */
+export interface DirectoryAnchor extends AnchorBase {
+  readonly kind: 'directory'
+}
+
+/** One remote directory's local handle. */
+export type AnchorRecord = WorktreeAnchor | DirectoryAnchor
 
 /**
  * The anchor facts a router routes by: which node, which local directory, and
@@ -74,14 +103,29 @@ export interface AnchorRoute {
   readonly remoteRoot: string
 }
 
-/** Fields a caller supplies when creating an anchor. */
-export interface AnchorDraft {
+/** Fields a caller supplies when creating a worktree anchor. */
+export interface WorktreeAnchorDraft {
+  readonly kind: 'worktree'
   readonly nodeId: NodeId
   readonly name: string
   readonly repoPath: string
   readonly remoteRoot: string
+  /** The branch the checkout is on, as the daemon reported it. */
   readonly branch: string
 }
+
+/** Fields a caller supplies when creating a directory anchor. */
+export interface DirectoryAnchorDraft {
+  readonly kind: 'directory'
+  readonly nodeId: NodeId
+  readonly name: string
+  readonly repoPath: string
+  /** The directory itself; a directory anchor maps one path onto itself. */
+  readonly remoteRoot: string
+}
+
+/** Fields a caller supplies when creating an anchor. */
+export type AnchorDraft = WorktreeAnchorDraft | DirectoryAnchorDraft
 
 /** What the store needs from its owner. */
 export interface AnchorStoreDeps {
@@ -130,17 +174,24 @@ interface AnchorDocument {
   readonly anchor: AnchorRecord
 }
 
+/** Every field a stored anchor may carry, as read from an untrusted document. */
+type AnchorFields = Partial<Record<keyof WorktreeAnchor | keyof DirectoryAnchor, unknown>>
+
 /** Whether an unknown value is a record this module wrote. */
 function isAnchorRecord(value: unknown): value is AnchorRecord {
   if (typeof value !== 'object' || value === null) return false
-  const record = value as Partial<Record<keyof AnchorRecord, unknown>>
+  const record = value as AnchorFields
+  const kind = record.kind
   return typeof record.anchorId === 'string'
     && typeof record.nodeId === 'string'
+    && (kind === undefined || kind === 'worktree' || kind === 'directory')
     && typeof record.name === 'string'
     && typeof record.anchorPath === 'string'
     && typeof record.remoteRoot === 'string'
     && typeof record.repoPath === 'string'
-    && typeof record.branch === 'string'
+    // A worktree has a branch; a directory anchor and any document written
+    // before kinds existed are the only ones allowed to omit it.
+    && (typeof record.branch === 'string' || (record.branch === undefined && kind !== 'worktree'))
     && typeof record.createdAt === 'string'
 }
 
@@ -166,7 +217,11 @@ function parseAnchor(text: string, file: string): AnchorRecord {
   if (!isAnchorRecord(document.anchor)) {
     throw new Error(`${file} carries an anchor this build does not understand`)
   }
-  return document.anchor
+  const anchor = document.anchor
+  // A document written before kinds existed carries none, and the guard has
+  // already refused any that omit the branch a worktree must have.
+  if (anchor.kind === 'directory') return anchor
+  return { ...anchor, kind: 'worktree' }
 }
 
 /** Read a directory's entries, treating absence as empty. */
@@ -241,22 +296,34 @@ export function createAnchorStore(deps: AnchorStoreDeps): AnchorStore {
 
     async create(draft) {
       requireLoaded()
-      const anchorPath = join(root, draft.nodeId, basename(draft.repoPath), draft.name)
+      // A worktree anchor sits at its own name; a directory anchor sits beside
+      // the worktrees at a segment no checkout can occupy, so the two kinds
+      // never nest and the routers never see one path under two anchors.
+      const anchorPath = join(
+        root,
+        draft.nodeId,
+        basename(draft.repoPath),
+        draft.kind === 'directory' ? DIRECTORY_SEGMENT : draft.name,
+      )
       // Two records pointing at one directory would make removal ambiguous and
       // leave the survivor routing into a deleted path.
       if (anchors.some(anchor => anchor.anchorPath === anchorPath)) {
         throw new Error(`an anchor already owns ${anchorPath}`)
       }
-      const record: AnchorRecord = {
+      const shared = {
         anchorId: brandString<AnchorId>(randomUUID()),
         nodeId: draft.nodeId,
         name: draft.name,
         anchorPath,
         remoteRoot: draft.remoteRoot,
         repoPath: draft.repoPath,
-        branch: draft.branch,
         createdAt: now().toISOString(),
       }
+      // `satisfies` on each arm keeps the discriminator narrow; an annotation
+      // on the whole conditional would widen both into one unusable union.
+      const record = draft.kind === 'worktree'
+        ? { ...shared, kind: 'worktree', branch: draft.branch } satisfies WorktreeAnchor
+        : { ...shared, kind: 'directory' } satisfies DirectoryAnchor
       await mkdir(anchorPath, { recursive: true })
       await writeFileAtomic(
         join(anchorPath, ANCHOR_FILE),

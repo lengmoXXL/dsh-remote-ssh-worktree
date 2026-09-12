@@ -88,8 +88,9 @@ function managerWithWorkspace(answers: Record<string, unknown>): {
   manager: WorktreeManager
   opened: string[]
   closed: string[]
+  calls: { method: string; params: unknown }[]
 } {
-  const { channel } = stubChannel({
+  const { channel, calls } = stubChannel({
     'fs.resolve': (params: { path: string }) => ({ canonicalPath: params.path }),
     'fs.writeText': {},
     ...answers,
@@ -100,6 +101,7 @@ function managerWithWorkspace(answers: Record<string, unknown>): {
   return {
     opened,
     closed,
+    calls,
     manager: createWorktreeManager({
       anchors,
       repos,
@@ -223,7 +225,9 @@ test('list answers from local records without asking the node', async () => {
 
   const statuses = await manager.list()
   assert.equal(statuses.length, 1)
-  assert.equal(statuses[0]?.anchor.branch, 'worktree/login')
+  const listed = statuses[0]?.anchor
+  assert.ok(listed?.kind === 'worktree', 'the anchor is a worktree')
+  assert.equal(listed.branch, 'worktree/login')
   assert.equal(statuses[0]?.open, false, 'no registry is composed here, so nothing is open')
   assert.equal(statuses[0]?.error, undefined)
 })
@@ -339,6 +343,54 @@ test('closing and opening a worktree move only its workspace registration', asyn
 
   await manager.open(anchor.anchorId)
   assert.equal((await manager.list())[0]?.open, true)
+})
+
+test('opening a directory maps it onto itself and registers it', async () => {
+  const { manager, opened, closed } = managerWithWorkspace({})
+
+  const anchor = await manager.openDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' })
+
+  assert.equal(anchor.kind, 'directory')
+  assert.equal(anchor.remoteRoot, '/srv/plain', 'the directory is its own remote root')
+  assert.equal('branch' in anchor, false, 'a directory is on no branch')
+  assert.deepEqual(opened, [anchor.anchorPath])
+  // Opening again registers the same anchor instead of cutting a second one.
+  await manager.openDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' })
+  assert.equal(anchors.list().length, 1)
+  assert.deepEqual(closed, [])
+})
+
+test('closing a directory drops its anchor and leaves the machine alone', async () => {
+  const { manager, calls } = managerWithWorkspace({})
+  const anchor = await manager.openDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' })
+
+  const closed = await manager.closeDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' })
+
+  assert.equal(closed?.anchorId, anchor.anchorId)
+  assert.deepEqual(anchors.list(), [])
+  assert.equal(existsSync(anchor.anchorPath), false)
+  assert.deepEqual(calls.filter(call => call.method.startsWith('git.')), [], 'git is never asked')
+  assert.equal(await manager.closeDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' }), undefined)
+})
+
+test('a directory workspace is not a worktree and is refused as one', async () => {
+  const { manager } = managerWithWorkspace({})
+  const anchor = await manager.openDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' })
+
+  await assert.rejects(
+    () => manager.remove(anchor.anchorId, { force: true, deleteBranch: false }),
+    /close it instead/,
+  )
+  assert.equal(anchors.list().length, 1, 'the directory is still there')
+})
+
+test('opening a directory without a workspace registry says so', async () => {
+  const { manager } = managerWith({})
+  await assert.rejects(
+    () => manager.openDirectory({ nodeId: asNodeId('n1'), repoPath: '/srv/plain' }),
+    /no workspace registry/,
+  )
+  assert.deepEqual(anchors.list(), [], 'and nothing is written')
 })
 
 test('opening without a workspace registry says so instead of failing silently', async () => {

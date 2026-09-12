@@ -42,8 +42,8 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
   ctx.inject(['tools'], (toolCtx) => {
     toolCtx.tools.register(defineTool({
       name: 'rw_list',
-      description: 'List the remote worktrees this deployment knows, with the machine each one lives on, '
-        + 'the branch it is on, and whether its workspace is open.',
+      description: 'List the remote checkouts and directories this deployment can work in, with the machine '
+        + 'each one lives on, the branch a worktree is on, and whether its workspace is open.',
       parameters: {},
       output: {
         schema: {
@@ -67,7 +67,9 @@ export function registerWorktreeTools(ctx: Context, deps: WorktreeToolDeps): voi
           text: statuses.map(({ anchor, open, error }) => [
             `id: ${anchor.anchorId}`,
             `machine: ${anchor.nodeId}`,
-            `branch: ${anchor.branch}`,
+            // A directory opened as itself is not on a branch; naming it keeps
+            // the two kinds apart without a second field to explain.
+            anchor.kind === 'worktree' ? `branch: ${anchor.branch}` : 'branch: none (directory)',
             `remote: ${anchor.remoteRoot}`,
             `local: ${anchor.anchorPath}`,
             `workspace: ${open ? 'open' : 'closed'}`,

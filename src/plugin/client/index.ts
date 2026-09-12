@@ -72,7 +72,7 @@ interface NodeStatus {
   readonly error?: string
 }
 
-/** One registered repository with the live state read from its machine. */
+/** One registered repository, with whether git owns that directory right now. */
 interface RepoReport {
   readonly repo: {
     readonly repoId: RepoId
@@ -80,18 +80,23 @@ interface RepoReport {
     readonly repoPath: string
     readonly name: string
   }
-  readonly state?: { readonly branch: string | null; readonly clean: boolean }
+  /** False for a plain directory, which can be opened but not cut from. */
+  readonly git: boolean
+  /** Why the question could not be answered, when it could not. */
   readonly error?: string
 }
 
-/** One worktree joined with its repository's live state. */
+/** One anchor with what this host can say about it. */
 interface WorktreeStatus {
   readonly anchor: {
     readonly anchorId: AnchorId
     readonly nodeId: NodeId
+    /** Whether this maps a worktree's checkout or the repository directory. */
+    readonly kind: 'worktree' | 'directory'
     readonly repoPath: string
     readonly name: string
-    readonly branch: string
+    /** Only a worktree is on a branch. */
+    readonly branch?: string
     readonly anchorPath: string
     readonly remoteRoot: string
   }
@@ -164,6 +169,12 @@ function sectionFace(t: Translate): RemoteWorktreesFace {
     },
     async removeRepo(repoId) {
       await call(t, `/repos/${encodeURIComponent(repoId)}`, { method: 'DELETE' })
+    },
+    async openDirectory(repoId) {
+      await call(t, `/repos/${encodeURIComponent(repoId)}/open`, { method: 'POST' })
+    },
+    async closeDirectory(repoId) {
+      await call(t, `/repos/${encodeURIComponent(repoId)}/close`, { method: 'POST' })
     },
     async listDirs(nodeId, path): Promise<DirListing> {
       const query = new URLSearchParams({ path })

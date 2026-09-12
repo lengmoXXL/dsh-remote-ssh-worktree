@@ -31,7 +31,7 @@ import z from '@deepseek-ai/schemastery'
 import { join } from 'node:path'
 import { autoconnect } from './models/autoconnect.ts'
 import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './models/machines.ts'
-import { createWorktreeManager, worktreeLabel } from './models/worktrees.ts'
+import { createWorktreeManager, workspaceLabel } from './models/worktrees.ts'
 import { registerNodeApi } from './plugin/api.ts'
 import { registerWorktreeCommand } from './plugin/commands.ts'
 import { createRoutingFileSystem } from './plugin/routing/fs.ts'
@@ -137,11 +137,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         // the machine, the repository, and the checkout — never the opaque ids
         // this plugin routes by.
         const node = registry.get(anchor.nodeId)
-        await workspaceRegistry(ctx)?.create(anchor.anchorPath, worktreeLabel({
+        await workspaceRegistry(ctx)?.create(anchor.anchorPath, workspaceLabel({
           machine: node?.title ?? (node === undefined ? anchor.nodeId : defaultNodeTitle(node.transport)),
           repoPath: anchor.repoPath,
           repoName: repos.find({ nodeId: anchor.nodeId, repoPath: anchor.repoPath })?.name,
-          name: anchor.name,
+          // A directory opened as itself names no checkout; the repository is
+          // the end of its title.
+          ...anchor.kind === 'worktree' ? { name: anchor.name } : {},
         }))
       },
       async unregister(anchor) {

@@ -12,6 +12,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NodeChannel } from '../../src/remote/client.ts'
+import { NodeRequestError } from '../../src/remote/client.ts'
 import { createAnchorStore } from '../../src/storage/anchors.ts'
 import type { AnchorRecord } from '../../src/storage/anchors.ts'
 import { createNodeConnections } from '../../src/models/machines.ts'
@@ -361,6 +362,7 @@ function daemon(overrides: Readonly<Record<string, (params: never) => unknown>> 
       const override = overrides[method]
       if (override !== undefined) return Promise.resolve(override(params as never)) as never
       if (method === 'fs.resolve') return Promise.resolve({ canonicalPath: params.path }) as never
+      if (method === 'fs.stat') return Promise.resolve({ version: '1', type: 'directory' }) as never
       if (method === 'git.repoState') return Promise.resolve({ branch: 'main', clean: true }) as never
       if (method === 'git.worktreeAdd') return Promise.resolve({ path: `${params.repoPath}/.dsh-worktrees/worktree/x`, branch: 'worktree/x' }) as never
       if (method === 'fs.writeText') return Promise.resolve({}) as never
@@ -430,7 +432,7 @@ test('a registered path is canonicalized and named from the machine', async () =
   assert.equal(response.status, 201)
   assert.equal(repos.list()[0]?.repoPath, '/srv/app')
   assert.equal(repos.list()[0]?.name, 'app')
-  assert.equal(JSON.stringify(response.body).includes('"state"'), true)
+  assert.equal((response.body as { repo: { git: boolean } }).repo.git, true)
 })
 
 test('re-registering the same path answers 200 and keeps one record', async () => {
@@ -444,15 +446,73 @@ test('re-registering the same path answers 200 and keeps one record', async () =
   assert.equal(repos.list().length, 1)
 })
 
-test('a path that is not a git repository is refused with the reason', async () => {
+test('a directory that is not a git repository registers as a plain one', async () => {
   const channel = daemon({
-    'git.repoState': () => { throw new Error('not a git repository') },
+    'git.repoState': () => {
+      throw new NodeRequestError({ code: 'GIT_NOT_A_REPOSITORY', message: 'not a git repository' })
+    },
   })
   const { deps, repos, nodeId } = await connected(channel)
   const response = await handleNodeApi(request('POST', '/repos', { nodeId, repoPath: '/srv/plain' }), deps)
 
+  assert.equal(response.status, 201)
+  assert.equal((response.body as { repo: { git: boolean } }).repo.git, false)
+  assert.deepEqual(repos.list().map(repo => repo.repoPath), ['/srv/plain'])
+})
+
+test('a file is not something to register', async () => {
+  const channel = daemon({
+    'fs.stat': () => ({ version: '1', type: 'file' }),
+  })
+  const { deps, repos, nodeId } = await connected(channel)
+  const response = await handleNodeApi(request('POST', '/repos', { nodeId, repoPath: '/srv/README' }), deps)
+
   assert.equal(response.status, 400)
-  assert.match(String((response.body as { error: string }).error), /not a git repository/)
+  assert.match(String((response.body as { error: string }).error), /not a directory/)
+  assert.deepEqual(repos.list(), [])
+})
+
+test('opening a directory maps it onto itself as a workspace', async () => {
+  const { deps, repos, anchors, registered, nodeId } = await connected(daemon())
+  const repo = await repos.upsert({ nodeId, repoPath: '/srv/plain' })
+
+  const response = await handleNodeApi(request('POST', `/repos/${repo.repoId}/open`), deps)
+  const anchor = (response.body as { anchor: { kind: string; remoteRoot: string; anchorPath: string } }).anchor
+
+  assert.equal(response.status, 200)
+  assert.equal(anchor.kind, 'directory')
+  assert.equal(anchor.remoteRoot, '/srv/plain', 'the directory is its own remote root')
+  assert.deepEqual(anchors.list().map(entry => entry.kind), ['directory'])
+  assert.equal(registered.has(String(anchors.list()[0]?.anchorId)), true, 'and it is open')
+
+  // Opening twice registers the same directory instead of adding a second anchor.
+  await handleNodeApi(request('POST', `/repos/${repo.repoId}/open`), deps)
+  assert.equal(anchors.list().length, 1)
+})
+
+test('closing a directory drops its anchor and its registration', async () => {
+  const { deps, repos, anchors, registered, nodeId } = await connected(daemon())
+  const repo = await repos.upsert({ nodeId, repoPath: '/srv/plain' })
+  await handleNodeApi(request('POST', `/repos/${repo.repoId}/open`), deps)
+  const anchorId = String(anchors.list()[0]?.anchorId)
+
+  const response = await handleNodeApi(request('POST', `/repos/${repo.repoId}/close`), deps)
+
+  assert.equal(response.status, 200)
+  assert.equal((response.body as { closed: boolean }).closed, true)
+  assert.deepEqual(anchors.list(), [])
+  assert.equal(registered.has(anchorId), false)
+})
+
+test('forgetting a repository closes the directory it was opened as', async () => {
+  const { deps, repos, anchors, nodeId } = await connected(daemon())
+  const repo = await repos.upsert({ nodeId, repoPath: '/srv/plain' })
+  await handleNodeApi(request('POST', `/repos/${repo.repoId}/open`), deps)
+
+  const response = await handleNodeApi(request('DELETE', `/repos/${repo.repoId}`), deps)
+
+  assert.equal(response.status, 200, 'an open directory is not work that would be stranded')
+  assert.deepEqual(anchors.list(), [])
   assert.deepEqual(repos.list(), [])
 })
 
@@ -479,6 +539,7 @@ test('forgetting a repository is refused while worktrees still belong to it', as
   const repo = await repos.upsert({ nodeId, repoPath: '/srv/app' })
   await anchors.create({
     nodeId,
+    kind: 'worktree',
     name: 'x',
     repoPath: '/srv/app',
     remoteRoot: '/srv/app/.dsh-worktrees/worktree/x',

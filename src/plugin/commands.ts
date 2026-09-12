@@ -63,11 +63,14 @@ export async function runWorktreeCommand(
     }
     return {
       kind: 'success',
-      text: statuses.map(({ anchor, open, error }) =>
-        `${anchor.anchorId}  ${anchor.nodeId}:${anchor.branch}  ${open ? 'open' : 'closed'}`
-        + (error === undefined ? '' : `  offline (${error})`)
-        + `\n  node:   ${anchor.remoteRoot}\n  local:  ${anchor.anchorPath}`,
-      ).join('\n\n'),
+      text: statuses.map(({ anchor, open, error }) => {
+        // A directory workspace has no branch to name; the repository it maps
+        // is what identifies it.
+        const what = anchor.kind === 'worktree' ? anchor.branch : `directory of ${anchor.repoPath}`
+        return `${anchor.anchorId}  ${anchor.nodeId}:${what}  ${open ? 'open' : 'closed'}`
+          + (error === undefined ? '' : `  offline (${error})`)
+          + `\n  node:   ${anchor.remoteRoot}\n  local:  ${anchor.anchorPath}`
+      }).join('\n\n'),
     }
   }
 

@@ -16,6 +16,8 @@ English | [中文](README.zh.md)
 - Reaches a machine over SSH — `user@host` or a `~/.ssh/config` alias. Nothing to install there by hand.
 - Cuts `worktree/<name>` from any git repository on the machine and registers the checkout as a DSH workspace; one row
   opens, closes, or removes each worktree.
+- Opens a directory that is not a git repository as a workspace in its own right; initialize it on the machine and
+  worktrees can be cut from it without registering anything again.
 - Read, write, edit, bash, grep, and terminal tools then run on that machine, unchanged. The model never sees
   that the files are remote.
 - Removing one takes the checkout and leaves the branch, so an unmerged commit is never lost silently.

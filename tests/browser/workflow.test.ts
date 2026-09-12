@@ -75,6 +75,19 @@ function exact(...keys: Key[]): RegExp {
   return new RegExp(`^(?:${keys.flatMap(key => [zh[key], en[key]]).map(escape).join('|')})$`, 'i')
 }
 
+/**
+ * An expression counting how many controls with these labels accept input.
+ *
+ * The section shows one per repository, so the count is what says whether the
+ * plain directory has joined the repositories that can be cut from.
+ */
+function enabledCount(...keys: Key[]): string {
+  const needles = keys.flatMap(key => [zh[key], en[key]])
+  return `[...document.querySelectorAll('button')]`
+    + `.filter(button => ${JSON.stringify(needles)}.includes((button.textContent ?? '').trim()))`
+    + `.filter(button => !button.disabled).length`
+}
+
 /** An expression that holds when any of these labels is on screen. */
 function present(...keys: Key[]): string {
   const needles = keys.flatMap(key => [zh[key], en[key]]).map(text => JSON.stringify(text)).join(',')
@@ -328,6 +341,60 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await waitForPath(join(scratch, '.dsh-remote-worktree.json'), 'absent')
     await waitForBranchGone(instance.repoPath, 'worktree/scratch')
     await waitFor(page, `!document.body.innerText.includes('scratch')`, 'the sidebar to drop the second workspace')
+
+    // A directory nobody initialized registers, opens as a workspace of its
+    // own, and refuses worktrees until someone makes it a repository.
+    await clickByText(page, exact('addRepository'))
+    await waitForForm(page, exact('addRepository'), 'the add-repository form for the plain directory')
+    await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderRepoPath)), instance.plainDir)
+    await waitForEnabled(page, exact('create'), 'the form to accept the plain directory')
+    await clickInDialog(page, exact('create'))
+    await waitForFormGone(page, exact('addRepository'), 'the add-repository form to close')
+    await waitForText(page, 'plain-dir', 'the plain directory row')
+    // Both repository rows are on screen, and the plain directory is the one
+    // registered second.
+    await clickByText(page, /plain-dir/)
+    await waitFor(page, present('notARepository'), 'the row to say it is not a repository')
+    // Only the repository registered first can be cut from.
+    await waitFor(page, `${enabledCount('newWorktree')} === 1`, 'the plain directory to refuse a worktree')
+
+    // Opening it as a workspace asks the machine for the path and nothing else.
+    await clickByText(page, exact('openWorktree'), 1)
+    const plainAnchor = join(
+      instance.home, 'remote-worktrees', 'anchors', instance.nodeId, 'plain-dir', '.self',
+    )
+    await waitForPath(join(plainAnchor, '.dsh-remote-worktree.json'), 'present')
+    const opened = await api<{ worktrees: readonly { anchor: { kind: string; remoteRoot: string } }[] }>(
+      instance, '/worktrees',
+    )
+    assert.ok(
+      opened.worktrees.some(entry =>
+        entry.anchor.kind === 'directory' && entry.anchor.remoteRoot === instance.plainDir),
+      'the directory is open as a workspace on itself',
+    )
+
+    // Initializing it on the machine is all it takes: the next read offers
+    // worktrees again, and the record is the one that was already there.
+    await run('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: instance.plainDir })
+    await run('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'add', '.'], { cwd: instance.plainDir })
+    await run('git', [
+      '-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false',
+      'commit', '-m', 'initial',
+    ], { cwd: instance.plainDir })
+    await clickByText(page, exact('refresh'))
+    await waitFor(page, `${enabledCount('newWorktree')} === 2`, 'the initialized directory to accept a worktree')
+
+    await clickByText(page, exact('newWorktree'), 1)
+    await waitForForm(page, exact('newWorktree'), 'the initialized directory form')
+    await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderWorktreeName)), 'plain')
+    await waitForEnabled(page, exact('create'), 'the form to accept the worktree')
+    await clickInDialog(page, exact('create'))
+    await waitForFormGone(page, exact('newWorktree'), 'the initialized directory form to close')
+    assert.ok(
+      (await readFile(join(instance.plainDir, '.dsh-worktrees', 'worktree', 'plain', 'notes.md'), 'utf8'))
+        .includes('plain'),
+      'the directory that was not a repository now holds a checkout',
+    )
   } catch (error) {
     failure = error
     if (browser !== undefined && deployment !== undefined) {

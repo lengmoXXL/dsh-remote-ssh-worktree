@@ -27,6 +27,7 @@ import type { NodeRegistry, NodeTransport, NodeView } from '../storage/nodes.ts'
 import { toNodeView } from '../storage/nodes.ts'
 import { asAnchorId, asNodeId, asRepoId } from '../ids.ts'
 import type { RepoRecord, RepoStore } from '../storage/repos.ts'
+import { NodeRequestError } from '../remote/client.ts'
 import type { WorktreeManager } from '../models/worktrees.ts'
 
 /** One normalized request, already routed to this API's prefix. */
@@ -61,12 +62,17 @@ export interface ManagementApiDeps {
   readonly worktrees: WorktreeManager
 }
 
-/** One repository as the API reports it: the record plus its live state. */
+/** One repository as the API reports it: the record, and whether git owns it. */
 interface RepoReport {
   readonly repo: RepoRecord
-  /** Live facts from the machine, absent when it is not connected. */
-  readonly state?: { readonly branch: string | null; readonly clean: boolean }
-  /** Why the live facts are missing. */
+  /**
+   * Whether the directory is inside a git repository on the machine, as of this
+   * read. A plain directory is a legitimate record — it can be opened as a
+   * workspace and initialized later — so this is asked every time rather than
+   * written down at registration.
+   */
+  readonly git: boolean
+  /** Why the question could not be answered, when it could not. */
   readonly error?: string
 }
 
@@ -195,24 +201,29 @@ async function resolveRemotePath(
 }
 
 /**
- * Read one repository's live state from its machine.
+ * Ask one repository's machine whether git owns that directory.
  *
- * A repository outlives the connection to its machine, so an unreachable one
- * still lists; only the live facts go missing, and `error` says why.
+ * A record outlives the connection to its machine, so an unreachable one still
+ * lists; only the answer goes missing, and `error` says why. The daemon's own
+ * "not a repository" is the one failure that answers the question — everything
+ * else means the question could not be put to the machine.
  * @param deps - the management dependencies.
  * @param record - the stored repository.
- * @returns the record joined with its live state.
+ * @returns the record and whether it is a repository right now.
  */
 async function reportRepo(deps: ManagementApiDeps, record: RepoRecord): Promise<RepoReport> {
   const channel = deps.connections.channel(record.nodeId)
   if (channel === undefined) {
-    return { repo: record, error: `node "${record.nodeId}" is not connected` }
+    return { repo: record, git: false, error: `node "${record.nodeId}" is not connected` }
   }
   try {
-    const state = await channel.request('git.repoState', { repoPath: record.repoPath })
-    return { repo: record, state: { branch: state.branch, clean: state.clean } }
+    await channel.request('git.repoState', { repoPath: record.repoPath })
+    return { repo: record, git: true }
   } catch (error) {
-    return { repo: record, error: error instanceof Error ? error.message : String(error) }
+    if (error instanceof NodeRequestError && error.data.code === 'GIT_NOT_A_REPOSITORY') {
+      return { repo: record, git: false }
+    }
+    return { repo: record, git: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -228,7 +239,7 @@ async function handleRepos(
   parts: readonly string[],
   deps: ManagementApiDeps,
 ): Promise<ApiResponse> {
-  const [rawRepoId] = parts
+  const [rawRepoId, action] = parts
   // A route segment is a string from an untrusted request; this is where it
   // becomes an id. Everything below passes the branded value.
   const repoId = rawRepoId === undefined ? undefined : asRepoId(rawRepoId)
@@ -248,13 +259,14 @@ async function handleRepos(
       const repoPath = await resolveRemotePath(deps, nodeId, requested)
       const channel = deps.connections.channel(nodeId)
       if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
-      try {
-        // Registration is the one moment a path is proven to be a checkout;
-        // every later read trusts the record and answers from the daemon.
-        await channel.request('git.repoState', { repoPath })
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        throw new ApiError(400, `"${repoPath}" is not a git repository on that machine: ${reason}`)
+      // Any directory can be registered: a plain one is opened as a workspace
+      // and may become a repository later, so git is not this moment's
+      // business. It has to be a directory, though — a file holds no checkout
+      // and no workspace.
+      const target = await channel.request('fs.stat', { path: repoPath })
+      if (target === null) throw new ApiError(400, `"${repoPath}" does not exist on that machine`)
+      if (target.type !== 'directory') {
+        throw new ApiError(400, `"${repoPath}" is a ${target.type} on that machine, not a directory`)
       }
       const existing = deps.repos.find({ nodeId, repoPath })
       const name = stringField(request.body, 'name')?.trim()
@@ -272,17 +284,35 @@ async function handleRepos(
   const record = deps.repos.get(repoId)
   if (record === undefined) throw new ApiError(404, `no repository "${repoId}"`)
 
+  const ref = { nodeId: record.nodeId, repoPath: record.repoPath }
+
+  // Opening the directory itself is what makes a machine's plain directory a
+  // workspace before it is a repository; git is never consulted for it.
+  if (action === 'open' || action === 'close') {
+    if (request.method !== 'POST') throw notAllowed
+    if (action === 'open') {
+      return { status: 200, body: { anchor: await deps.worktrees.openDirectory(ref) } }
+    }
+    return { status: 200, body: { closed: await deps.worktrees.closeDirectory(ref) !== undefined } }
+  }
+
+  if (action !== undefined) throw new ApiError(404, `unknown endpoint ${request.method} ${request.path}`)
+
   if (request.method === 'GET') {
     return { status: 200, body: { repo: await reportRepo(deps, record) } }
   }
   if (request.method === 'DELETE') {
-    const held = deps.worktrees.anchorsIn({ nodeId: record.nodeId, repoPath: record.repoPath })
+    // A worktree is work that only exists in that checkout, so forgetting the
+    // repository would strand it; a directory workspace is this host's own
+    // bookkeeping and goes with the record.
+    const held = deps.worktrees.anchorsIn(ref).filter(anchor => anchor.kind === 'worktree')
     if (held.length > 0) {
       throw new ApiError(
         409,
         `${String(held.length)} worktree(s) still belong to this repository; remove them first`,
       )
     }
+    await deps.worktrees.closeDirectory(ref)
     return { status: 200, body: { deleted: await deps.repos.remove(repoId) } }
   }
   throw notAllowed
