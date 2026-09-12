@@ -32,6 +32,40 @@ English | [中文](README.zh.md)
 - Agent traffic reaches your machine through `ssh -L`, so a connection has exactly the trust of your own SSH
   access.
 
+## Architecture
+
+```text
+┌─ browser ──────────────────────────────────────────────────┐
+│  plugin/client    the settings section                     │
+└──────────────────────────────┬─────────────────────────────┘
+                               │ management API over HTTP
+┌─ plugin/   the DSH surfaces ─▼─────────────────────────────┐
+│  api · tools · commands       over the models              │
+│  routing/  fs · subprocess · shell seams → the SDK         │
+└──────────────────────────────┬─────────────────────────────┘
+                               │
+┌─ models/   the business semantics ─────────────────────────┐
+│  worktrees · machines · autoconnect                        │
+│  routing   which execution world a path belongs to         │
+└─────────────┬───────────────────────────────┬──────────────┘
+              │ state                         │ the SDK
+┌─ storage/ ───────────────┐  ┌─ remote/   the SDK ──────────┐
+│  durable state           │  │  channel · protocol          │
+│  anchors · nodes · repos │  │  ssh · agent install         │
+│  document: lock + atomic │  │  one channel per machine     │
+└──────────────────────────┘  └───────────────┬──────────────┘
+                                              │ ssh -L, JSON-RPC 2.0
+                              ┌─ machines — one or more ─────┐
+                              │  dsh-remote-agent (Rust)     │
+                              │  random loopback port        │
+                              └──────────────────────────────┘
+```
+
+`remote/` turns a machine's daemon into an SDK; `storage/` keeps what has to survive a restart; `models/` is the business
+semantics built on both; `plugin/` is the only layer that knows DSH. Imports only ever point downward, `src/index.ts` is
+the one file that assembles the layers, and `ids.ts` is the one vocabulary they all share. The settings section is the
+other half — it runs in the browser and reaches the host through its management API.
+
 ## Install
 
 ```sh
