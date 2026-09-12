@@ -18,7 +18,7 @@ import type { TestAgent } from './harness.ts'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { connectNode } from '../../src/nodes/client.ts'
 import type { ConnectedNode } from '../../src/nodes/client.ts'
-import type { AnchorRoute } from '../../src/anchors/store.ts'
+import type { AnchorRoute } from '../../src/plugin/anchors.ts'
 import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
 import { asNodeId } from '../../src/ids.ts'
 

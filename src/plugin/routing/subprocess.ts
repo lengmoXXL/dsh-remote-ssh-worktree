@@ -42,7 +42,7 @@ import type {
 } from '@deepseek-ai/dsh-subprocess'
 import type { ProcId, SpPipeFrame } from '../../protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../../channel.ts'
-import type { AnchorRoute } from '../../anchors/store.ts'
+import type { AnchorRoute } from '../anchors.ts'
 import { classifyPath } from './classify.ts'
 
 /**

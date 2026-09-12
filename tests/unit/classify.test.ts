@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { AnchorRoute } from '../../src/anchors/store.ts'
+import type { AnchorRoute } from '../../src/plugin/anchors.ts'
 import { classifyPath, isWithin, toAbsolute } from '../../src/plugin/routing/classify.ts'
 import { asNodeId } from '../../src/ids.ts'
 

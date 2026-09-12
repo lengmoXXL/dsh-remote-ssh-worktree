@@ -12,7 +12,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ANCHOR_FILE, createAnchorStore } from '../../src/anchors/store.ts'
+import { ANCHOR_FILE, createAnchorStore } from '../../src/plugin/anchors.ts'
 import { asNodeId } from '../../src/ids.ts'
 
 let root: string
