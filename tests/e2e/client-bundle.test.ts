@@ -143,13 +143,13 @@ function stubContext(): {
 
 test('the built bundle registers itself under the plugin id', async () => {
   const entry = await loadBundle()
-  assert.equal(entry.id, 'dsh-remote-ssh-worktree')
+  assert.equal(entry.id, 'dsh-workspace')
 })
 
 test('the loaded module exposes exactly the plugin surface', async () => {
   const { exports } = await loadBundle()
   assert.deepEqual(Object.keys(exports).sort(), ['apply', 'inject', 'name'])
-  assert.equal(exports['name'], 'remote-ssh-worktree-ui')
+  assert.equal(exports['name'], 'dsh-workspace-ui')
   assert.deepEqual(exports['inject'], ['slots', 'locale'])
 })
 
@@ -161,7 +161,7 @@ test('apply registers one settings section with a stable id and a bound locale',
 
   assert.equal(registrations.length, 1)
   assert.equal(registrations[0]?.name, 'settings.section')
-  assert.equal(registrations[0]?.id, 'remote-worktrees')
+  assert.equal(registrations[0]?.id, 'dsh-workspace')
   assert.equal(typeof registrations[0]?.component, 'function')
 })
 
@@ -174,7 +174,7 @@ test('the section carries a nav label read from its own dictionary', async () =>
   // Without a label the settings nav renders an empty entry.
   const label = registrations[0]?.label
   assert.equal(typeof label, 'function')
-  assert.equal(label?.(), 'remote-worktrees.title')
+  assert.equal(label?.(), 'dsh-workspace.title')
 })
 
 test('apply registers both dictionaries under one namespace', async () => {
@@ -184,7 +184,7 @@ test('apply registers both dictionaries under one namespace', async () => {
   ;(exports['apply'] as (ctx: unknown) => void)(ctx)
 
   assert.equal(locales.length, 1)
-  assert.equal(locales[0]?.ns, 'remote-worktrees')
+  assert.equal(locales[0]?.ns, 'dsh-workspace')
   assert.deepEqual(Object.keys(locales[0]?.dictionaries ?? {}).sort(), ['en', 'zh'])
 })
 

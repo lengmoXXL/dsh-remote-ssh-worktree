@@ -11,7 +11,7 @@
  * `git status` that refreshes the index takes the lock a session's own `git`
  * command may be holding, and the answer it wanted never needed the lock.
  *
- * @module dsh-remote-ssh-worktree/local/git
+ * @module dsh-workspace/local/git
  */
 
 import { execFile } from 'node:child_process'

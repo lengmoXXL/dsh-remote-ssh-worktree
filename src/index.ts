@@ -1,5 +1,5 @@
 /**
- * dsh-remote-ssh-worktree — remote execution worlds for DeepSeek Harness.
+ * dsh-workspace — remote execution worlds for DeepSeek Harness.
  *
  * The plugin replaces the execution-world seams with routing versions: a path
  * that belongs to a remote anchor is served by that node's daemon over the
@@ -15,7 +15,7 @@
  * With no anchor configured the plugin is inert: every path classifies as
  * local and the routers delegate every call to the factory implementation.
  *
- * @module dsh-remote-ssh-worktree
+ * @module dsh-workspace
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -43,7 +43,7 @@ import { createNodeRegistry } from './storage/nodes.ts'
 import { createRepoStore } from './storage/repos.ts'
 
 /** Plugin name used by the Loader and by diagnostics. */
-export const name = 'remote-ssh-worktree'
+export const name = 'dsh-workspace'
 
 /**
  * Services this plugin needs before it activates. `sandboxPolicy` is required

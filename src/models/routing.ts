@@ -14,7 +14,7 @@
  * ambiguous match is a typed failure rather than a silent pick: guessing would
  * read one machine and write another.
  *
- * @module dsh-remote-ssh-worktree/models/routing
+ * @module dsh-workspace/models/routing
  */
 
 import { posix } from 'node:path'

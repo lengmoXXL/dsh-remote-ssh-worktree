@@ -6,11 +6,11 @@
  * section receives `t` through the standard locale seat, which the shell
  * derives from the namespace registered in {@link NS}.
  *
- * @module dsh-remote-ssh-worktree/plugin/client/locales
+ * @module dsh-workspace/plugin/client/locales
  */
 
 /** Locale namespace owned by this plugin's Web UI. */
-export const NS = 'remote-worktrees'
+export const NS = 'dsh-workspace'
 
 /** Simplified Chinese dictionary and key source. */
 export const zh = {

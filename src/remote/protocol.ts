@@ -20,7 +20,7 @@
  * own opaque key from the node id plus that path, so containment, process
  * paths, and file URLs are derived locally without another round trip.
  *
- * @module dsh-remote-ssh-worktree/remote/protocol
+ * @module dsh-workspace/remote/protocol
  */
 
 /**

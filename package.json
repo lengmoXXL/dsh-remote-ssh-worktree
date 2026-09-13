@@ -1,5 +1,5 @@
 {
-  "name": "dsh-remote-ssh-worktree",
+  "name": "dsh-workspace",
   "version": "0.0.1",
   "private": true,
   "description": "Remote execution worlds for DeepSeek Harness: create a git worktree on a remote machine over a self-hosted node daemon, and run the stock read / write / edit / bash / grep tools inside it.",
@@ -23,11 +23,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lengmoXXL/dsh-remote-ssh-worktree.git"
+    "url": "git+https://github.com/lengmoXXL/dsh-workspace.git"
   },
-  "homepage": "https://github.com/lengmoXXL/dsh-remote-ssh-worktree#readme",
+  "homepage": "https://github.com/lengmoXXL/dsh-workspace#readme",
   "bugs": {
-    "url": "https://github.com/lengmoXXL/dsh-remote-ssh-worktree/issues"
+    "url": "https://github.com/lengmoXXL/dsh-workspace/issues"
   },
   "keywords": [
     "deepseek-harness",

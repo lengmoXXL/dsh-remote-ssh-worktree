@@ -19,7 +19,7 @@
  * on a process meant to outlive it; and `setsid`/`nohup` detach that process
  * from a session that is about to end.
  *
- * @module dsh-remote-ssh-worktree/remote/agent/install
+ * @module dsh-workspace/remote/agent/install
  */
 
 import { agentAssetName, resolveAgentBinary } from './release.ts'

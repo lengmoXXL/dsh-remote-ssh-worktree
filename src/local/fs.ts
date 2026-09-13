@@ -7,7 +7,7 @@
  * working from a deployment whose sessions are confined somewhere else — or
  * whose execution world is another machine entirely.
  *
- * @module dsh-remote-ssh-worktree/local/fs
+ * @module dsh-workspace/local/fs
  */
 
 import { readdir, realpath, stat } from 'node:fs/promises'

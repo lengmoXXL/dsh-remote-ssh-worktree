@@ -7,7 +7,7 @@
  * helper live here because only these editors and the section that opens them
  * render with them.
  *
- * @module dsh-remote-ssh-worktree/plugin/client/dialogs
+ * @module dsh-workspace/plugin/client/dialogs
  */
 
 import { useEffect, useState, type ReactNode } from 'react'

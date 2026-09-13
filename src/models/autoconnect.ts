@@ -16,7 +16,7 @@
  * for SSH, and a machine that cannot be reached is a state the section renders,
  * not a failure of the plugin.
  *
- * @module dsh-remote-ssh-worktree/models/autoconnect
+ * @module dsh-workspace/models/autoconnect
  */
 
 import type { NodeConnections } from './machines.ts'

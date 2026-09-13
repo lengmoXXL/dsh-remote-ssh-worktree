@@ -15,7 +15,7 @@
  * workdir does both the resolving and the running, so timeout, output caps, and
  * managed-environment handling keep their shipped behavior on both sides.
  *
- * @module dsh-remote-ssh-worktree/plugin/routing/shell
+ * @module dsh-workspace/plugin/routing/shell
  */
 
 import type {

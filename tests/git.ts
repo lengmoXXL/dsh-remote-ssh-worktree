@@ -5,7 +5,7 @@
  * there is no channel to stub: those cases need a repository they can cut
  * worktrees from, built by the same binary the plugin calls.
  *
- * @module dsh-remote-ssh-worktree/tests/git
+ * @module dsh-workspace/tests/git
  */
 
 import { execFile } from 'node:child_process'
