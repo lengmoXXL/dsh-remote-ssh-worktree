@@ -129,6 +129,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     anchors: anchorStore,
     repos,
     channel: nodeId => connections.channel(nodeId),
+    // The local machine reads paths and runs git in this process instead of
+    // over a connection, so the manager is told which nodes those are once.
+    isLocalNode: nodeId => registry.get(nodeId)?.transport.kind === 'local',
     workspace: {
       async register(anchor) {
         // The title is what a person reads in the workspace list, so it names

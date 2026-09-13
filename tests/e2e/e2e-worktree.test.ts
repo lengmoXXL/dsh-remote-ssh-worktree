@@ -71,6 +71,7 @@ before(async () => {
     anchors,
     repos,
     channel: nodeId => (nodeId === 'n1' ? node.channel : undefined),
+    isLocalNode: () => false,
   })
 })
 

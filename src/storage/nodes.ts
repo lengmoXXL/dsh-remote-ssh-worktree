@@ -24,9 +24,10 @@ const DOCUMENT_VERSION = 2
 /**
  * The title a node gets when its caller named none.
  * @param transport - how the host reaches the daemon.
- * @returns the SSH destination, or the direct address.
+ * @returns the SSH destination, the direct address, or the local machine's name.
  */
 export function defaultNodeTitle(transport: NodeTransport): string {
+  if (transport.kind === 'local') return LOCAL_TITLE
   return transport.kind === 'ssh' ? transport.target : `${transport.host}:${String(transport.port)}`
 }
 
@@ -36,9 +37,10 @@ export function defaultNodeTitle(transport: NodeTransport): string {
  * `ssh` is the only transport a caller may create: the host picks a free local
  * port and forwards it to the daemon's loopback port over an SSH connection,
  * which is what the deployment documentation tells operators to set up by
- * hand. `direct` exists so a document written before the SSH transport keeps
- * loading; nothing creates one, and it names an address the operator reached
- * some other way.
+ * hand. `local` is this host itself, which needs no daemon and no connection;
+ * `direct` exists so a document written before the SSH transport keeps loading
+ * — nothing creates one, and it names an address the operator reached some
+ * other way.
  */
 export type NodeTransport =
   | {
@@ -49,6 +51,10 @@ export type NodeTransport =
     readonly sshPort?: number
     /** Identity file; omitted defers to the operator's `ssh` configuration. */
     readonly identityFile?: string
+  }
+  | {
+    /** This host: the machine the harness itself runs on. */
+    readonly kind: 'local'
   }
   | {
     readonly kind: 'direct'
@@ -78,6 +84,39 @@ export type NodeId = Branded<'NodeId'>
  */
 export function asNodeId(value: string): NodeId {
   return brandString<NodeId>(value)
+}
+
+/**
+ * The id, title, and instant the built-in local machine always carries.
+ *
+ * It is deliberately not a document entry: nothing configures it, so nothing
+ * can leave it unreachable or removed, and a deployment that has never added a
+ * machine still has this one to work in. The instant is the epoch because the
+ * machine has been there since before the plugin was.
+ */
+export const LOCAL_NODE_ID = brandString<NodeId>('local')
+
+/** Title the local machine carries, in the record and in every view. */
+const LOCAL_TITLE = 'Local'
+
+/**
+ * The machine that is this host itself.
+ *
+ * Every surface treats it like any other machine — the same repository rows,
+ * the same worktree lifecycle, the same dialogs — with two differences that
+ * follow from where it is: there is no daemon to install and no connection to
+ * make, and its paths are the paths this process already has.
+ * @returns the local machine's record, for a caller that needs one.
+ */
+export function localNode(): NodeRecord {
+  return {
+    nodeId: LOCAL_NODE_ID,
+    title: LOCAL_TITLE,
+    transport: { kind: 'local' },
+    token: '',
+    createdAt: '1970-01-01T00:00:00.000Z',
+    updatedAt: '1970-01-01T00:00:00.000Z',
+  }
 }
 
 /** One configured remote machine. */
@@ -163,6 +202,7 @@ export interface NodeRegistry {
 function isTransport(value: unknown): value is NodeTransport {
   if (typeof value !== 'object' || value === null) return false
   const transport = value as Record<string, unknown>
+  if (transport['kind'] === 'local') return true
   if (transport['kind'] === 'ssh') {
     return typeof transport['target'] === 'string'
       && (transport['sshPort'] === undefined || typeof transport['sshPort'] === 'number')
@@ -265,16 +305,22 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
 
     list() {
       if (!loaded) throw new Error('node registry read before load()')
-      return nodes
+      // The local machine leads every list: it is the one machine a deployment
+      // always has, and the one a person reaches for first.
+      return [localNode(), ...nodes]
     },
 
     get(nodeId) {
       if (!loaded) throw new Error('node registry read before load()')
+      if (nodeId === LOCAL_NODE_ID) return localNode()
       return nodes.find(node => node.nodeId === nodeId)
     },
 
     async upsert(draft) {
       if (!loaded) throw new Error('node registry written before load()')
+      if (draft.nodeId === LOCAL_NODE_ID) {
+        throw new Error('the local machine is built in and cannot be configured')
+      }
       const stamp = now().toISOString()
       const existing = draft.nodeId === undefined
         ? undefined
@@ -297,6 +343,10 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
 
     async remove(nodeId) {
       if (!loaded) throw new Error('node registry written before load()')
+      // Not an error: the local machine is simply not a document entry, so
+      // nothing was removed. Refusing it here keeps a caller from believing a
+      // machine went away when the next read brings it back.
+      if (nodeId === LOCAL_NODE_ID) return false
       const next = nodes.filter(node => node.nodeId !== nodeId)
       if (next.length === nodes.length) return false
       await writeDocument(document, next)

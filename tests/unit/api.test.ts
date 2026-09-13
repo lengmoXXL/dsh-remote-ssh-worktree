@@ -8,8 +8,9 @@
 
 import assert from 'node:assert/strict'
 import { after, beforeEach, test } from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NodeChannel } from '../../src/remote/client.ts'
 import { NodeRequestError } from '../../src/remote/client.ts'
@@ -20,6 +21,9 @@ import { createNodeRegistry } from '../../src/storage/nodes.ts'
 import { createRepoStore } from '../../src/storage/repos.ts'
 import { createWorktreeManager } from '../../src/models/worktrees.ts'
 import type { NodeInfo, WireMethods } from '../../src/remote/protocol.ts'
+import type { NodeRecord, NodeRegistry } from '../../src/storage/nodes.ts'
+import { LOCAL_NODE_ID } from '../../src/storage/nodes.ts'
+import { repositoryAt } from '../git.ts'
 import type { ApiRequest } from '../../src/plugin/api.ts'
 import { handleNodeApi } from '../../src/plugin/api.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
@@ -62,7 +66,12 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
     registered: (anchor: AnchorRecord) => Promise.resolve(registered.has(anchor.anchorId)),
   }
   const worktrees = createWorktreeManager({
-    anchors, repos, channel: nodeId => connections.channel(nodeId), workspace,
+    anchors,
+    repos,
+    channel: nodeId => connections.channel(nodeId),
+    // This suite drives machines; the local machine's own cases live beside it.
+    isLocalNode: nodeId => registry.get(nodeId)?.transport.kind === 'local',
+    workspace,
   })
   return {
     registry,
@@ -73,6 +82,18 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
     registered,
     deps: { registry, repos, connections, worktrees },
   }
+}
+
+/**
+ * The machines a registry holds a record for.
+ *
+ * The local machine is built in rather than stored, so it is present in every
+ * list and absent from this one.
+ * @param registry - the registry to read.
+ * @returns the stored records.
+ */
+function configured(registry: NodeRegistry): readonly NodeRecord[] {
+  return registry.list().filter(node => node.nodeId !== LOCAL_NODE_ID)
 }
 
 /** A request with a JSON body. */
@@ -91,10 +112,17 @@ const DAEMON_INFO: NodeInfo = {
   capability: { pty: false, spill: false, ripgrep: null },
 }
 
-test('an empty install lists no nodes', async () => {
+test('an install with no machines still has the local one, already ready', async () => {
   const { deps } = await setup()
   const response = await handleNodeApi(request('GET', '/nodes'), deps)
-  assert.deepEqual(response, { status: 200, body: { nodes: [], statuses: [] } })
+  const body = response.body as { nodes: readonly { nodeId: string; title: string }[]; statuses: readonly { nodeId: string; state: string }[] }
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(body.nodes.map(node => node.nodeId), [LOCAL_NODE_ID])
+  assert.equal(body.nodes[0]?.title, 'Local')
+  // Ready by definition: this is the machine the harness runs on, so there is
+  // no connection to make and none to fail.
+  assert.deepEqual(body.statuses, [{ nodeId: LOCAL_NODE_ID, state: 'ready' }])
 })
 
 test('creating a node answers with a view that carries no secret', async () => {
@@ -122,14 +150,14 @@ test('a missing host is a client error, not a created node', async () => {
   const { deps, registry } = await setup()
   const response = await handleNodeApi(request('POST', '/nodes', { token: 't' }), deps)
   assert.equal(response.status, 400)
-  assert.deepEqual(registry.list(), [])
+  assert.deepEqual(configured(registry), [])
 })
 
 test('a node cannot be created without a token', async () => {
   const { deps, registry } = await setup()
   const response = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' } }), deps)
   assert.equal(response.status, 400)
-  assert.deepEqual(registry.list(), [])
+  assert.deepEqual(configured(registry), [])
 })
 
 test('reading one node joins its live status', async () => {
@@ -175,7 +203,7 @@ test('deleting a node disconnects it and drops the record', async () => {
 
   const response = await handleNodeApi(request('DELETE', `/nodes/${nodeId}`), deps)
   assert.deepEqual(response, { status: 200, body: { deleted: true } })
-  assert.deepEqual(registry.list(), [])
+  assert.deepEqual(configured(registry), [])
 })
 
 test('connecting reports the daemon facts', async () => {
@@ -455,9 +483,9 @@ test('registering a repository without a connection is a conflict', async () => 
 })
 
 test('a registered path is canonicalized and named from the machine', async () => {
-  const { deps, repos } = await connected(daemon())
+  const { deps, repos, nodeId } = await connected(daemon())
   const response = await handleNodeApi(
-    request('POST', '/repos', { nodeId: (await deps.registry.list())[0]!.nodeId, repoPath: '/srv/app' }),
+    request('POST', '/repos', { nodeId, repoPath: '/srv/app' }),
     deps,
   )
   assert.equal(response.status, 201)
@@ -626,4 +654,130 @@ test('removing a machine drops its repository registrations', async () => {
 
   await handleNodeApi(request('DELETE', `/nodes/${nodeId}`), deps)
   assert.deepEqual(repos.list(), [])
+})
+
+test('the local machine cannot be removed or reconfigured', async () => {
+  const { deps, registry } = await setup()
+
+  assert.equal((await handleNodeApi(request('DELETE', `/nodes/${LOCAL_NODE_ID}`), deps)).status, 400)
+  assert.equal(
+    (await handleNodeApi(request('PATCH', `/nodes/${LOCAL_NODE_ID}`, { title: 'Mine' }), deps)).status,
+    400,
+  )
+  assert.equal(registry.get(LOCAL_NODE_ID)?.title, 'Local', 'and it is unchanged')
+})
+
+test('connecting the local machine answers its readiness without a connection', async () => {
+  const { deps } = await setup()
+  const response = await handleNodeApi(request('POST', `/nodes/${LOCAL_NODE_ID}/connect`), deps)
+
+  assert.deepEqual(response, { status: 200, body: { status: { nodeId: LOCAL_NODE_ID, state: 'ready' } } })
+})
+
+test('browsing this host lists its directories without a daemon', async () => {
+  const { deps } = await setup()
+  await mkdir(join(dir, 'projects'), { recursive: true })
+  await writeFile(join(dir, 'notes.txt'), 'x', 'utf8')
+
+  const response = await handleNodeApi(
+    request('GET', `/nodes/${LOCAL_NODE_ID}/dirs`, undefined, `path=${encodeURIComponent(dir)}`),
+    deps,
+  )
+  const body = response.body as { path: string; entries: readonly { name: string; type: string; path: string }[] }
+
+  assert.equal(response.status, 200)
+  assert.equal(body.path, await realpath(dir))
+  const entries = body.entries.map(entry => [entry.name, entry.type])
+  assert.ok(entries.some(entry => entry[0] === 'notes.txt' && entry[1] === 'file'), String(entries))
+  assert.ok(entries.some(entry => entry[0] === 'projects' && entry[1] === 'directory'), String(entries))
+  assert.equal(
+    body.entries.find(entry => entry.name === 'projects')?.path,
+    join(await realpath(dir), 'projects'),
+  )
+})
+
+test('a request without a path browses this host from its home directory', async () => {
+  const { deps } = await setup()
+  const response = await handleNodeApi(request('GET', `/nodes/${LOCAL_NODE_ID}/dirs`, undefined, 'path='), deps)
+  assert.deepEqual((response.body as { path: string }).path, await realpath(homedir()))
+})
+
+test('a local repository reports its git state, and a plain directory does not', async () => {
+  const { deps } = await setup()
+  const repo = await repositoryAt(join(dir, 'repo'))
+  const plain = join(dir, 'plain')
+  await mkdir(plain, { recursive: true })
+
+  const registered = await handleNodeApi(
+    request('POST', '/repos', { nodeId: LOCAL_NODE_ID, repoPath: repo }),
+    deps,
+  )
+  assert.equal(registered.status, 201)
+  assert.equal((registered.body as { repo: { git: boolean } }).repo.git, true)
+
+  const directory = await handleNodeApi(
+    request('POST', '/repos', { nodeId: LOCAL_NODE_ID, repoPath: plain }),
+    deps,
+  )
+  assert.equal(directory.status, 201)
+  assert.equal((directory.body as { repo: { git: boolean } }).repo.git, false)
+
+  const missing = await handleNodeApi(
+    request('POST', '/repos', { nodeId: LOCAL_NODE_ID, repoPath: join(dir, 'nope') }),
+    deps,
+  )
+  assert.equal(missing.status, 400)
+  assert.match(String((missing.body as { error: string }).error), /does not exist on that machine/)
+})
+
+test('a local worktree is cut, listed, and removed through the routes', async () => {
+  const { deps, repos } = await setup()
+  const repo = await repositoryAt(join(dir, 'route-repo'))
+
+  const created = await handleNodeApi(
+    request('POST', '/worktrees', { nodeId: LOCAL_NODE_ID, repoPath: repo, name: 'login' }),
+    deps,
+  )
+  assert.equal(created.status, 201)
+  const anchor = (created.body as { worktree: { anchorId: string; anchorPath: string } }).worktree
+  assert.equal(anchor.anchorPath, join(repo, '.dsh-worktrees', 'worktree', 'login'))
+  assert.deepEqual(repos.list().map(record => record.repoPath), [repo])
+
+  const listed = await handleNodeApi(request('GET', '/worktrees'), deps)
+  const body = listed.body as { worktrees: readonly { anchor: { anchorId: string; kind: string } }[] }
+  // The repository's own directory is a row too: opening it is how a session
+  // works in the repository itself.
+  assert.deepEqual(body.worktrees.map(entry => entry.anchor.kind), ['directory', 'worktree'])
+  assert.ok(body.worktrees.some(entry => entry.anchor.anchorId === anchor.anchorId))
+
+  // Forgetting the repository while its checkout exists is refused, as it is
+  // for a machine: the checkout would be stranded with no row to remove it.
+  const repoId = repos.list()[0]!.repoId
+  assert.equal((await handleNodeApi(request('DELETE', `/repos/${repoId}`), deps)).status, 409)
+
+  const removed = await handleNodeApi(
+    request('DELETE', `/worktrees/${anchor.anchorId}`, undefined, 'force=true&deleteBranch=false'),
+    deps,
+  )
+  assert.equal(removed.status, 200)
+  assert.equal(existsSync(anchor.anchorPath), false)
+})
+
+test('a local directory opens as a workspace and closes again', async () => {
+  const { deps, registered } = await setup()
+  const repo = await repositoryAt(join(dir, 'open-repo'))
+  const registeredRepo = await handleNodeApi(
+    request('POST', '/repos', { nodeId: LOCAL_NODE_ID, repoPath: repo }),
+    deps,
+  )
+  const repoId = (registeredRepo.body as { repo: { repo: { repoId: string } } }).repo.repo.repoId
+
+  const opened = await handleNodeApi(request('POST', `/repos/${repoId}/open`), deps)
+  assert.equal(opened.status, 200)
+  assert.equal((opened.body as { anchor: { anchorPath: string } }).anchor.anchorPath, repo)
+
+  const closed = await handleNodeApi(request('POST', `/repos/${repoId}/close`), deps)
+  assert.equal(closed.status, 200)
+  assert.equal((closed.body as { closed: boolean }).closed, true)
+  assert.equal(registered.size, 0)
 })

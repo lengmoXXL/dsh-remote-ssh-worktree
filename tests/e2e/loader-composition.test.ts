@@ -224,6 +224,7 @@ test('a machine added through the management route lands in the configured data 
     token: 'secret-token',
   })
   assert.equal(created.status, 201)
+  const createdId = (JSON.parse(created.payload) as { node: { nodeId: string } }).node.nodeId
 
   const written = JSON.parse(await readFile(join(dataDir, 'nodes.json'), 'utf8')) as {
     version: number
@@ -235,7 +236,12 @@ test('a machine added through the management route lands in the configured data 
 
   const listed = await request('GET', '/dsh-remote-ssh-worktree/nodes')
   assert.equal(listed.status, 200)
-  assert.equal(JSON.parse(listed.payload).nodes.length, 1)
+  // The stored machine, plus the local machine every deployment has and no
+  // document holds.
+  assert.deepEqual(
+    (JSON.parse(listed.payload) as { nodes: readonly { nodeId: string }[] }).nodes.map(node => node.nodeId),
+    ['local', createdId],
+  )
   // The secret never leaves the host, whatever surface asked.
   assert.equal(listed.payload.includes('secret-token'), false)
 })

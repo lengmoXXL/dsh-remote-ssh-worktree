@@ -37,12 +37,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const API = '/dsh-remote-ssh-worktree'
 
 /** How the host reaches a machine's daemon. */
-interface NodeTransport {
-  readonly kind: 'ssh'
-  readonly target: string
-  readonly sshPort?: number
-  readonly identityFile?: string
-}
+type NodeTransport =
+  | {
+    readonly kind: 'ssh'
+    readonly target: string
+    readonly sshPort?: number
+    readonly identityFile?: string
+  }
+  | {
+    /** This host, which needs no daemon and no connection. */
+    readonly kind: 'local'
+  }
 
 /** One machine as the host projects it. */
 interface NodeView {

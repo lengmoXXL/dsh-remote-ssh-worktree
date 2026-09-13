@@ -27,6 +27,7 @@ export const zh = {
   worktreesEmptyDirectory: '这个目录还不是 git 仓库；在机器上 git init 之后，就能从它切出 worktree。',
 
   'status.ready': '已连接',
+  'status.local': '始终可用',
   'status.connecting': '连接中',
   'progress.checking': '检查远端环境…',
   'progress.reusing': '复用已在运行的 agent {version}',
@@ -111,6 +112,7 @@ export const en = {
   worktreesEmptyDirectory: 'This directory is not a git repository yet; once it is initialized on the machine, worktrees can be cut from it.',
 
   'status.ready': 'Connected',
+  'status.local': 'always available',
   'status.connecting': 'Connecting',
   'progress.checking': 'Checking the machine…',
   'progress.reusing': 'Reusing the running agent {version}',

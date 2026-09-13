@@ -306,6 +306,10 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     // Register the fixture repository. The path field drives the picker while
     // it is typed: a half-typed name narrows the list to what answers it, and a
     // clicked row descends into itself and lands in the field.
+    //
+    // A collapsed machine renders no controls, so this machine's repository
+    // form is the only one on the page: the built-in local machine, which is
+    // listed first, is still folded.
     await clickByText(page, exact('addRepository'))
     await waitForForm(page, exact('addRepository'), 'the add-repository form')
     await shot('04-repository-form')
@@ -460,6 +464,62 @@ test('a remote worktree is created and removed through the browser', { timeout: 
         .includes('plain'),
       'the directory that was not a repository now holds a checkout',
     )
+
+    // This host is a machine like any other, and it needs nothing installed to
+    // be one: the same form registers a repository here, and the same controls
+    // cut a worktree from it. What differs is only that the checkout is a real
+    // directory rather than a stand-in this plugin routes through.
+    // The local machine's title is the row to click, and it leads the section:
+    // once open, its controls are the first of their kind on the page.
+    await clickByText(page, /^Local/)
+    await waitForEnabled(page, exact('addRepository'), 'this host to offer its repository form')
+    await clickByText(page, exact('addRepository'), 0)
+    await waitForForm(page, exact('addRepository'), 'the add-repository form for this host')
+    await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderRepoPath)), instance.localRepo)
+    await waitForEnabled(page, exact('create'), "the form to accept this host's repository")
+    await clickInDialog(page, exact('create'))
+    await waitForFormGone(page, exact('addRepository'), 'the add-repository form to close')
+    await waitForText(page, 'local-repo', 'the local repository row')
+    const localRepos = await api<{ repos: readonly { repo: { nodeId: string; repoPath: string } }[] }>(
+      instance, '/repos',
+    )
+    assert.ok(
+      localRepos.repos.some(report => report.repo.nodeId === 'local' && report.repo.repoPath === instance.localRepo),
+      'the local repository reached the store',
+    )
+
+    // The local machine leads the section, so its repository row is the first
+    // one on the page once it is open.
+    await clickByText(page, /local-repo/)
+    await waitForEnabled(page, exact('newWorktree'), 'the local worktree control to settle')
+    await clickByText(page, exact('newWorktree'))
+    await waitForForm(page, exact('newWorktree'), 'the local new-worktree form')
+    await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderWorktreeName)), 'here')
+    await waitForEnabled(page, exact('create'), 'the form to accept the local worktree')
+    await clickInDialog(page, exact('create'))
+    await waitForFormGone(page, exact('newWorktree'), 'the local new-worktree form to close')
+
+    const localCheckout = join(instance.localRepo, '.dsh-worktrees', 'worktree', 'here')
+    await waitForPath(join(localCheckout, 'README.md'), 'present')
+    assert.match(
+      await readFile(join(localCheckout, 'README.md'), 'utf8'),
+      /fixture/,
+      'the local checkout carries the repository content',
+    )
+    const localWorktrees = await api<{
+      worktrees: readonly { anchor: { nodeId: string; kind: string; anchorPath: string; branch: string } }[]
+    }>(instance, '/worktrees')
+    const localEntry = localWorktrees.worktrees.find(entry =>
+      entry.anchor.nodeId === 'local' && entry.anchor.kind === 'worktree')
+    assert.equal(
+      localEntry?.anchor.anchorPath,
+      localCheckout,
+      'the checkout is its own workspace path, with no anchor standing in for it',
+    )
+    assert.equal(localEntry?.anchor.branch, 'worktree/here')
+    // The workspace a session would open is labelled for this machine too.
+    await waitFor(page, `document.body.innerText.includes('here · local-repo · Local')`, 'the local workspace label')
+    await shot('10-local-worktree')
   } catch (error) {
     failure = error
     if (browser !== undefined && deployment !== undefined) {

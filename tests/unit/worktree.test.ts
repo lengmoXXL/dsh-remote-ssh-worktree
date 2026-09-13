@@ -6,11 +6,13 @@
  */
 
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { after, beforeEach, test } from 'node:test'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { createAnchorStore } from '../../src/storage/anchors.ts'
 import type { AnchorStore } from '../../src/storage/anchors.ts'
 import { createRepoStore } from '../../src/storage/repos.ts'
@@ -18,9 +20,13 @@ import type { RepoStore } from '../../src/storage/repos.ts'
 import type { NodeChannel } from '../../src/remote/client.ts'
 import { NodeRequestError } from '../../src/remote/client.ts'
 import { createWorktreeManager } from '../../src/models/worktrees.ts'
-import type { WorktreeManager } from '../../src/models/worktrees.ts'
-import { asNodeId } from '../../src/storage/nodes.ts'
+import type { WorktreeManager, WorktreeStatus } from '../../src/models/worktrees.ts'
+import { asNodeId, LOCAL_NODE_ID } from '../../src/storage/nodes.ts'
+import { repositoryAt } from '../git.ts'
 import { asAnchorId } from '../../src/storage/anchors.ts'
+import type { WorktreeAnchor } from '../../src/storage/anchors.ts'
+
+const run = promisify(execFile)
 
 let root: string
 let anchors: AnchorStore
@@ -73,7 +79,12 @@ function managerWith(answers: Record<string, unknown>, nodeId = 'n1'): { manager
     ...answers,
   })
   return {
-    manager: createWorktreeManager({ anchors, repos, channel: id => (id === nodeId ? channel : undefined) }),
+    manager: createWorktreeManager({
+      anchors,
+      repos,
+      channel: id => (id === nodeId ? channel : undefined),
+      isLocalNode: () => false,
+    }),
     calls,
   }
 }
@@ -106,6 +117,7 @@ function managerWithWorkspace(answers: Record<string, unknown>): {
       anchors,
       repos,
       channel: id => (id === 'n1' ? channel : undefined),
+      isLocalNode: () => false,
       workspace: {
         register: anchor => { opened.push(anchor.anchorPath); live.add(anchor.anchorPath); return Promise.resolve() },
         unregister: anchor => { closed.push(anchor.anchorPath); live.delete(anchor.anchorPath); return Promise.resolve() },
@@ -238,7 +250,7 @@ test('list reports an offline node per anchor instead of failing the whole listi
   })
   await online.create(draft)
 
-  const offline = createWorktreeManager({ anchors, repos, channel: () => undefined })
+  const offline = createWorktreeManager({ anchors, repos, channel: () => undefined, isLocalNode: () => false })
   const statuses = await offline.list()
   assert.match(String(statuses[0]?.error), /is not connected/)
 })
@@ -312,6 +324,7 @@ test('removal unregisters the workspace while the anchor directory is still ther
     anchors,
     repos,
     channel: id => (id === 'n1' ? channel : undefined),
+    isLocalNode: () => false,
     workspace: {
       register: () => Promise.resolve(),
       unregister: anchor => { seen.push(existsSync(anchor.anchorPath)); return Promise.resolve() },
@@ -406,4 +419,164 @@ test('an unknown anchor is refused before any remote call', async () => {
   await assert.rejects(() => manager.open(asAnchorId('nope')), /no anchor/)
   await assert.rejects(() => manager.close(asAnchorId('nope')), /no anchor/)
   assert.deepEqual(calls, [])
+})
+
+/** The worktree rows of a listing, narrowed so their branch is readable. */
+function worktreesOf(statuses: readonly WorktreeStatus[]): (WorktreeStatus & { anchor: WorktreeAnchor })[] {
+  return statuses.filter(
+    (status): status is WorktreeStatus & { anchor: WorktreeAnchor } => status.anchor.kind === 'worktree',
+  )
+}
+
+/** A real repository below this suite's temporary root. */
+async function localRepository(name: string): Promise<string> {
+  return await repositoryAt(join(root, name))
+}
+
+/**
+ * A manager over this host, with a workspace registry that journals what it was
+ * asked to register.
+ *
+ * There is no channel to stub here: the local machine's git and filesystem are
+ * the code under test, so these cases run the binary on a real fixture.
+ * @returns the manager and the two journals.
+ */
+function localManager(): {
+  manager: WorktreeManager
+  opened: string[]
+  closed: string[]
+} {
+  const opened: string[] = []
+  const closed: string[] = []
+  const live = new Set<string>()
+  const manager = createWorktreeManager({
+    anchors,
+    repos,
+    channel: () => undefined,
+    isLocalNode: () => true,
+    workspace: {
+      register: anchor => { opened.push(anchor.anchorPath); live.add(anchor.anchorPath); return Promise.resolve() },
+      unregister: anchor => { closed.push(anchor.anchorPath); live.delete(anchor.anchorPath); return Promise.resolve() },
+      registered: anchor => Promise.resolve(live.has(anchor.anchorPath)),
+    },
+  })
+  return { manager, opened, closed }
+}
+
+test('a local worktree is cut here and listed by its own checkout path', async () => {
+  const repo = await localRepository('local-repo')
+  const { manager, opened } = localManager()
+  const anchor = await manager.create({ nodeId: LOCAL_NODE_ID, repoPath: repo, name: 'login' })
+
+  const checkout = join(repo, '.dsh-worktrees', 'worktree', 'login')
+  // No anchor stands in for the checkout: the workspace path *is* the checkout,
+  // which is what makes a local session an ordinary local session.
+  assert.equal(anchor.anchorPath, checkout)
+  assert.equal(anchor.remoteRoot, checkout)
+  assert.equal(anchor.branch, 'worktree/login')
+  assert.deepEqual(opened, [checkout])
+  assert.equal(existsSync(join(checkout, 'README.md')), true)
+
+  const statuses = await manager.list()
+  const [worktree] = worktreesOf(statuses)
+  assert.equal(worktree?.anchor.anchorId, anchor.anchorId)
+  assert.equal(worktree?.open, true)
+  assert.equal(statuses.find(status => status.anchor.kind === 'directory')?.anchor.anchorPath, repo)
+})
+
+test('a local checkout is remembered by git rather than by the plugin', async () => {
+  const repo = await localRepository('survivor')
+  const created = await localManager().manager.create({
+    nodeId: LOCAL_NODE_ID, repoPath: repo, name: 'login',
+  })
+
+  // A manager that has never seen the first one — a restart, or another
+  // deployment over the same host — still finds the checkout, because git is
+  // where a local worktree is recorded.
+  const [later] = worktreesOf(await localManager().manager.list())
+  assert.equal(later?.anchor.anchorId, created.anchorId)
+  assert.equal(later?.anchor.branch, 'worktree/login')
+})
+
+test('a checkout cut by hand is listed like one the panel made', async () => {
+  const repo = await localRepository('handmade')
+  const elsewhere = join(root, 'handmade-elsewhere')
+  await run('git', ['-C', repo, 'worktree', 'add', '-b', 'handmade', elsewhere])
+  await repos.upsert({ nodeId: LOCAL_NODE_ID, repoPath: repo })
+
+  const [worktree] = worktreesOf(await localManager().manager.list())
+  assert.equal(worktree?.anchor.anchorPath, await realpath(elsewhere))
+  assert.equal(worktree?.anchor.branch, 'handmade')
+})
+
+test('a plain local directory is a row that refuses a worktree', async () => {
+  const plain = await realpath(root)
+  await repos.upsert({ nodeId: LOCAL_NODE_ID, repoPath: plain })
+  const { manager } = localManager()
+
+  const statuses = await manager.list()
+  assert.deepEqual(statuses.map(status => status.anchor.kind), ['directory'])
+  await assert.rejects(
+    () => manager.create({ nodeId: LOCAL_NODE_ID, repoPath: plain, name: 'x' }),
+    /is not a git repository on this machine/,
+  )
+})
+
+test('removing a local worktree drops the checkout and keeps the branch', async () => {
+  const repo = await localRepository('removal')
+  const { manager, closed } = localManager()
+  const anchor = await manager.create({ nodeId: LOCAL_NODE_ID, repoPath: repo, name: 'login' })
+
+  const removal = await manager.remove(anchor.anchorId, { force: false, deleteBranch: false })
+
+  assert.equal(removal.branchDeleted, false)
+  assert.equal(existsSync(anchor.anchorPath), false)
+  assert.deepEqual(closed, [anchor.anchorPath])
+  assert.deepEqual(worktreesOf(await manager.list()), [])
+  const branches = await run('git', ['-C', repo, 'branch', '--list', 'worktree/login'])
+  assert.match(branches.stdout, /worktree\/login/)
+})
+
+test('closing and opening a local worktree moves only its registration', async () => {
+  const repo = await localRepository('registration')
+  const { manager, opened, closed } = localManager()
+  const anchor = await manager.create({ nodeId: LOCAL_NODE_ID, repoPath: repo, name: 'login' })
+
+  await manager.close(anchor.anchorId)
+  assert.deepEqual(closed, [anchor.anchorPath])
+  assert.equal(existsSync(anchor.anchorPath), true, 'closing removes nothing from disk')
+
+  await manager.open(anchor.anchorId)
+  assert.deepEqual(opened, [anchor.anchorPath, anchor.anchorPath])
+})
+
+test('the local repository directory opens and closes as itself', async () => {
+  const repo = await localRepository('directory')
+  const record = await repos.upsert({ nodeId: LOCAL_NODE_ID, repoPath: repo })
+  const { manager, opened, closed } = localManager()
+  const ref = { nodeId: LOCAL_NODE_ID, repoPath: repo }
+
+  const anchor = await manager.openDirectory(ref)
+  assert.equal(anchor.anchorPath, repo, 'a directory maps onto itself here too')
+  assert.deepEqual(opened, [repo])
+  // Opening again is idempotent: there is no second record to create.
+  assert.equal((await manager.openDirectory(ref)).anchorId, anchor.anchorId)
+
+  assert.equal((await manager.closeDirectory(ref))?.anchorId, anchor.anchorId)
+  assert.deepEqual(closed, [repo])
+  assert.equal(await manager.closeDirectory(ref), undefined, 'an unregistered directory is already closed')
+  assert.equal(record.nodeId, LOCAL_NODE_ID)
+})
+
+test('the local machine refuses to remove its repository directory as a worktree', async () => {
+  const repo = await localRepository('refusal')
+  await repos.upsert({ nodeId: LOCAL_NODE_ID, repoPath: repo })
+  const { manager } = localManager()
+  const directory = (await manager.list()).find(status => status.anchor.kind === 'directory')
+
+  await assert.rejects(
+    () => manager.remove(directory!.anchor.anchorId, { force: true, deleteBranch: false }),
+    /is the repository directory, not a worktree/,
+  )
+  assert.equal(existsSync(repo), true)
 })

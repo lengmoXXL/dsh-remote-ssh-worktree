@@ -11,8 +11,8 @@ import { after, beforeEach, test } from 'node:test'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createNodeRegistry, toNodeView } from '../../src/storage/nodes.ts'
-import type { NodeTransport } from '../../src/storage/nodes.ts'
+import { createNodeRegistry, LOCAL_NODE_ID, toNodeView } from '../../src/storage/nodes.ts'
+import type { NodeRecord, NodeRegistry, NodeTransport } from '../../src/storage/nodes.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
 
 let dir: string
@@ -27,13 +27,44 @@ after(async () => {
 
 const fileIn = (name = 'nodes.json'): string => join(dir, name)
 
+/**
+ * The machines a registry still holds a record for.
+ *
+ * The local machine is not one of them: it is built in, so it is present in
+ * every list and absent from every document.
+ * @param registry - the registry to read.
+ * @returns the stored records, in document order.
+ */
+function configured(registry: NodeRegistry): readonly NodeRecord[] {
+  return registry.list().filter(node => node.nodeId !== LOCAL_NODE_ID)
+}
+
 /** A stored machine reached at a fixed address, which the store treats like any other. */
 const direct = (host: string, port = 7801): NodeTransport => ({ kind: 'direct', host, port })
 
-test('a missing document loads as an empty registry', async () => {
+test('a missing document loads as a registry holding only the local machine', async () => {
   const registry = createNodeRegistry({ file: fileIn() })
+  // The document holds no records, because the local machine is not one.
   assert.deepEqual(await registry.load(), [])
-  assert.deepEqual(registry.list(), [])
+  assert.deepEqual(configured(registry), [])
+  assert.deepEqual(registry.list().map(node => node.nodeId), [LOCAL_NODE_ID])
+  assert.equal(registry.get(LOCAL_NODE_ID)?.title, 'Local')
+})
+
+test('the local machine is built in and cannot be configured away', async () => {
+  const registry = createNodeRegistry({ file: fileIn() })
+  await registry.load()
+
+  // Neither writing it nor removing it touches the document: the record a
+  // caller would be overwriting does not exist there.
+  await assert.rejects(
+    () => registry.upsert({ nodeId: LOCAL_NODE_ID, transport: direct('a'), token: 't' }),
+    /built in and cannot be configured/,
+  )
+  assert.equal(await registry.remove(LOCAL_NODE_ID), false)
+  assert.deepEqual(await readFile(fileIn(), 'utf8').catch(() => 'missing'), 'missing')
+  assert.equal(registry.get(LOCAL_NODE_ID)?.transport.kind, 'local')
+  assert.equal(registry.get(LOCAL_NODE_ID)?.token, '')
 })
 
 test('upsert generates an id, persists, and survives a reload', async () => {
@@ -66,7 +97,7 @@ test('upsert with an existing id updates in place and keeps createdAt', async ()
     title: 'Renamed',
   })
 
-  assert.equal(registry.list().length, 1)
+  assert.equal(configured(registry).length, 1)
   assert.equal(updated.createdAt, created.createdAt)
   assert.notEqual(updated.updatedAt, created.updatedAt)
   assert.equal(updated.title, 'Renamed')
@@ -80,7 +111,7 @@ test('remove drops exactly one node and reports whether it existed', async () =>
   const b = await registry.upsert({ transport: direct('b'), token: 't' })
 
   assert.equal(await registry.remove(a.nodeId), true)
-  assert.deepEqual(registry.list().map(node => node.nodeId), [b.nodeId])
+  assert.deepEqual(configured(registry).map(node => node.nodeId), [b.nodeId])
   assert.equal(await registry.remove(a.nodeId), false)
 })
 
@@ -217,5 +248,5 @@ test('a failed save leaves the registry reporting what is on disk', async () => 
   await registry.load()
 
   await assert.rejects(() => registry.upsert({ transport: direct('phantom'), token: 'b' }))
-  assert.deepEqual(registry.list(), [])
+  assert.deepEqual(configured(registry), [])
 })

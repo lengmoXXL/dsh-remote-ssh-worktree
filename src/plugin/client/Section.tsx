@@ -39,12 +39,17 @@ import css from './Section.module.css'
 export type T = (key: RemoteWorktreesKey, params?: Record<string, unknown>) => string
 
 /** How the host reaches a machine's daemon. */
-interface NodeTransport {
-  readonly kind: 'ssh'
-  readonly target: string
-  readonly sshPort?: number
-  readonly identityFile?: string
-}
+type NodeTransport =
+  | {
+    readonly kind: 'ssh'
+    readonly target: string
+    readonly sshPort?: number
+    readonly identityFile?: string
+  }
+  | {
+    /** This host, which needs no daemon and no connection. */
+    readonly kind: 'local'
+  }
 
 /** One machine as the host projects it. */
 interface NodeView {
@@ -439,6 +444,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
             const step = status?.progress === undefined ? undefined : progressText(status.progress)
             const machineOpen = openMachines.includes(node.nodeId)
             const repos = reposOf(node.nodeId)
+            // This host has no destination, no tunnel, no token, and no
+            // connection to make or break: it is where the harness already is.
+            const here = node.transport.kind === 'local'
             return (
               <div key={node.nodeId} className={css.card}>
                 <DisclosureRow
@@ -453,20 +461,26 @@ export function RemoteWorktreesSection(props: SectionProps) {
                   onToggle={() => toggle(openMachines, setOpenMachines, node.nodeId)}
                   collapsedContent={(
                     <span className={css.trailing}>
-                      <span className={css.meta}>{node.transport.target}</span>
+                      {node.transport.kind === 'ssh'
+                        ? <span className={css.meta}>{node.transport.target}</span>
+                        : null}
                       {status?.localPort === undefined
                         ? null
                         : <Tag tone="neutral">{t('forwarding', { port: status.localPort })}</Tag>}
-                      {node.hasToken ? null : <Tag tone="warning">{t('noToken')}</Tag>}
+                      {here || node.hasToken ? null : <Tag tone="warning">{t('noToken')}</Tag>}
                       <StateDot state={badge.dot} />
                       <span className={css.meta}>
-                        {step === undefined ? t(badge.key) : t(step.key, step.params)}
+                        {/* A machine reports its connection; this host reports
+                            that there is nothing to connect to. */}
+                        {here
+                          ? t('status.local')
+                          : step === undefined ? t(badge.key) : t(step.key, step.params)}
                       </span>
                     </span>
                   )}
                 >
                   <div className={css.actions}>
-                    {state === 'ready'
+                    {here ? null : state === 'ready'
                       ? (
                         <Button
                           size="sm"
@@ -493,18 +507,20 @@ export function RemoteWorktreesSection(props: SectionProps) {
                     >
                       {t('addRepository')}
                     </Button>
-                    <Button
-                      size="sm"
-                      icon={<IconTrashOutline16 />}
-                      disabled={busy}
-                      onClick={() => confirm({
-                        titleKey: 'removeMachineTitle',
-                        bodyKey: 'removeMachineBody',
-                        run: () => props.removeNode(node.nodeId),
-                      })}
-                    >
-                      {t('removeMachine')}
-                    </Button>
+                    {here ? null : (
+                      <Button
+                        size="sm"
+                        icon={<IconTrashOutline16 />}
+                        disabled={busy}
+                        onClick={() => confirm({
+                          titleKey: 'removeMachineTitle',
+                          bodyKey: 'removeMachineBody',
+                          run: () => props.removeNode(node.nodeId),
+                        })}
+                      >
+                        {t('removeMachine')}
+                      </Button>
+                    )}
                   </div>
                   <div className={css.repos}>
                     {repos.length === 0

@@ -23,7 +23,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NodeConnections, NodeStatus } from '../models/machines.ts'
 import type { NodeId } from '../storage/nodes.ts'
-import type { NodeRegistry, NodeTransport, NodeView } from '../storage/nodes.ts'
+import type { NodeRecord, NodeRegistry, NodeTransport, NodeView } from '../storage/nodes.ts'
 import { toNodeView } from '../storage/nodes.ts'
 import { asAnchorId } from '../storage/anchors.ts'
 import { asNodeId } from '../storage/nodes.ts'
@@ -31,6 +31,9 @@ import { asRepoId } from '../storage/repos.ts'
 import type { RepoRecord, RepoStore } from '../storage/repos.ts'
 import { NodeRequestError } from '../remote/client.ts'
 import type { WorktreeManager } from '../models/worktrees.ts'
+import type { LocalPathType } from '../local/fs.ts'
+import { listLocalDir, localHome, localPathType, resolveLocalPath } from '../local/fs.ts'
+import { isRepository } from '../local/git.ts'
 
 /** One normalized request, already routed to this API's prefix. */
 export interface ApiRequest {
@@ -157,14 +160,24 @@ function segments(path: string): string[] {
   return path.split('/').filter(segment => segment !== '')
 }
 
+/** One machine's status, as this API reports it. */
+function statusOf(connections: NodeConnections, record: NodeRecord): NodeStatus {
+  // The local machine is reachable by definition: it is where this process
+  // runs, so it has no connection state to report and never a failure.
+  return record.transport.kind === 'local'
+    ? { nodeId: record.nodeId, state: 'ready' }
+    : connections.status(record.nodeId)
+}
+
 /** The status list joined onto the node list, so one response renders a table. */
 function withStatuses(
   registry: NodeRegistry,
   connections: NodeConnections,
 ): { nodes: readonly NodeView[]; statuses: readonly NodeStatus[] } {
+  const records = registry.list()
   return {
-    nodes: registry.list().map(toNodeView),
-    statuses: connections.list(),
+    nodes: records.map(toNodeView),
+    statuses: records.map(record => statusOf(connections, record)),
   }
 }
 
@@ -184,22 +197,42 @@ function requireNode(registry: NodeRegistry, nodeId: NodeId) {
 /**
  * Resolve a caller's path against a machine's own filesystem rules.
  * @param deps - the management dependencies.
- * @param nodeId - the machine to ask.
+ * @param record - the machine to ask.
  * @param path - the caller's path, absolute or starting with `~`.
  * @returns the canonical absolute path on that machine.
  * @throws ApiError 409 when the machine is not connected, 502 when it cannot
  *   resolve the path.
  */
-async function resolveRemotePath(
+async function resolveOnNode(
   deps: ManagementApiDeps,
-  nodeId: NodeId,
+  record: NodeRecord,
   path: string,
 ): Promise<string> {
-  const channel = deps.connections.channel(nodeId)
-  if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
+  if (record.transport.kind === 'local') return await resolveLocalPath(path)
+  const channel = deps.connections.channel(record.nodeId)
+  if (channel === undefined) throw new ApiError(409, `node "${record.nodeId}" is not connected`)
   const resolved = await channel.request('fs.resolve', { path })
   if (resolved.canonicalPath === undefined) throw new ApiError(502, 'the daemon returned no path')
   return resolved.canonicalPath
+}
+
+/**
+ * Read what one path is on a machine.
+ * @param deps - the management dependencies.
+ * @param record - the machine to ask.
+ * @param path - the canonical absolute path to probe.
+ * @returns the entry's type, or undefined when nothing is there.
+ * @throws ApiError 409 when the machine is not connected.
+ */
+async function statOnNode(
+  deps: ManagementApiDeps,
+  record: NodeRecord,
+  path: string,
+): Promise<LocalPathType | undefined> {
+  if (record.transport.kind === 'local') return await localPathType(path)
+  const channel = deps.connections.channel(record.nodeId)
+  if (channel === undefined) throw new ApiError(409, `node "${record.nodeId}" is not connected`)
+  return (await channel.request('fs.stat', { path }))?.type
 }
 
 /**
@@ -214,6 +247,14 @@ async function resolveRemotePath(
  * @returns the record and whether it is a repository right now.
  */
 async function reportRepo(deps: ManagementApiDeps, record: RepoRecord): Promise<RepoReport> {
+  const node = deps.registry.get(record.nodeId)
+  if (node?.transport.kind === 'local') {
+    try {
+      return { repo: record, git: await isRepository(record.repoPath) }
+    } catch (error) {
+      return { repo: record, git: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
   const channel = deps.connections.channel(record.nodeId)
   if (channel === undefined) {
     return { repo: record, git: false, error: `node "${record.nodeId}" is not connected` }
@@ -257,18 +298,16 @@ async function handleRepos(
       // always a 400 rather than whichever existence check runs first.
       const nodeId = asNodeId(requireString(request.body, 'nodeId'))
       const requested = requireString(request.body, 'repoPath')
-      requireNode(deps.registry, nodeId)
-      const repoPath = await resolveRemotePath(deps, nodeId, requested)
-      const channel = deps.connections.channel(nodeId)
-      if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
+      const node = requireNode(deps.registry, nodeId)
+      const repoPath = await resolveOnNode(deps, node, requested)
       // Any directory can be registered: a plain one is opened as a workspace
       // and may become a repository later, so git is not this moment's
       // business. It has to be a directory, though — a file holds no checkout
       // and no workspace.
-      const target = await channel.request('fs.stat', { path: repoPath })
-      if (target === null) throw new ApiError(400, `"${repoPath}" does not exist on that machine`)
-      if (target.type !== 'directory') {
-        throw new ApiError(400, `"${repoPath}" is a ${target.type} on that machine, not a directory`)
+      const target = await statOnNode(deps, node, repoPath)
+      if (target === undefined) throw new ApiError(400, `"${repoPath}" does not exist on that machine`)
+      if (target !== 'directory') {
+        throw new ApiError(400, `"${repoPath}" is a ${target} on that machine, not a directory`)
       }
       const existing = deps.repos.find({ nodeId, repoPath })
       const name = stringField(request.body, 'name')?.trim()
@@ -307,7 +346,7 @@ async function handleRepos(
     // A worktree is work that only exists in that checkout, so forgetting the
     // repository would strand it; a directory workspace is this host's own
     // bookkeeping and goes with the record.
-    const held = deps.worktrees.anchorsIn(ref).filter(anchor => anchor.kind === 'worktree')
+    const held = (await deps.worktrees.anchorsIn(ref)).filter(anchor => anchor.kind === 'worktree')
     if (held.length > 0) {
       throw new ApiError(
         409,
@@ -429,9 +468,15 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
 
     if (action === undefined) {
       if (request.method === 'GET') {
-        return { status: 200, body: { node: toNodeView(record), status: deps.connections.status(nodeId) } }
+        return { status: 200, body: { node: toNodeView(record), status: statusOf(deps.connections, record) } }
       }
       if (request.method === 'DELETE') {
+        // The local machine is not a record: there is nothing to delete, and
+        // answering otherwise would suggest it is gone when the next read
+        // brings it back.
+        if (record.transport.kind === 'local') {
+          throw new ApiError(400, 'the local machine is built in and cannot be removed')
+        }
         deps.connections.disconnect(nodeId)
         const deleted = await deps.registry.remove(nodeId)
         // A repository is only reachable through its machine, so its records
@@ -440,6 +485,9 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
         return { status: 200, body: { deleted } }
       }
       if (request.method === 'PATCH') {
+        if (record.transport.kind === 'local') {
+          throw new ApiError(400, 'the local machine is built in and cannot be changed')
+        }
         // A patch that names a destination replaces it; one that does not keeps
         // the stored one, so re-pointing a machine is a deliberate act.
         const ssh = typeof request.body === 'object' && request.body !== null
@@ -456,26 +504,30 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
       throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
     }
 
-    if (action === 'connect' || action === 'test') {
+    if (action === 'connect' || action === 'test' || action === 'disconnect') {
       if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
-      await deps.connections.connect(record)
-      return { status: 200, body: { status: deps.connections.status(nodeId) } }
-    }
-
-    if (action === 'disconnect') {
-      if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
-      deps.connections.disconnect(nodeId)
-      return { status: 200, body: { status: deps.connections.status(nodeId) } }
+      // Connecting this host, and disconnecting it, are both already true: it
+      // answers without a connection, so neither needs to do anything.
+      if (record.transport.kind !== 'local') {
+        if (action === 'disconnect') deps.connections.disconnect(nodeId)
+        else await deps.connections.connect(record)
+      }
+      return { status: 200, body: { status: statusOf(deps.connections, record) } }
     }
 
     if (action === 'dirs') {
       if (request.method !== 'GET') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+      // A request without a path starts at the machine user's home: the home the
+      // handshake reported for a node, and this user's home for this host.
+      const requested = (request.query.get('path') ?? '').trim()
+      if (record.transport.kind === 'local') {
+        const path = await resolveLocalPath(requested === '' ? localHome() : requested)
+        return { status: 200, body: { path, entries: await listLocalDir(path) } }
+      }
       const channel = deps.connections.channel(nodeId)
       if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
-      // A request without a path starts at the daemon user's home, which the
-      // handshake reported. The daemon itself expands no `~`, so the spelling
-      // never travels: the home it named is asked for verbatim.
-      const requested = (request.query.get('path') ?? '').trim()
+      // The daemon itself expands no `~`, so the spelling never travels: the
+      // home it named is asked for verbatim.
       const path = requested === ''
         ? deps.connections.status(nodeId).info?.homedir ?? '/'
         : requested
@@ -555,6 +607,19 @@ export function registerNodeApi(ctx: Context, deps: ManagementApiDeps): void {
     handler: async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
       const url = new URL(request.url ?? '/', 'http://localhost')
       const path = url.pathname.slice(API_PREFIX.length)
+      let decoded: string
+      try {
+        // Each segment is decoded on its own, after the split, so an encoded
+        // separator cannot invent a segment boundary. A caller percent-encodes
+        // an id — the browser does, because an id is one opaque token — and an
+        // id that arrived encoded would never match anything.
+        decoded = path === ''
+          ? '/'
+          : path.split('/').map(segment => decodeURIComponent(segment)).join('/')
+      } catch {
+        writeResponse(response, { status: 400, body: { error: `${path} is not valid percent-encoding` } })
+        return
+      }
       let body: unknown
       try {
         body = await readJsonBody(request)
@@ -567,7 +632,7 @@ export function registerNodeApi(ctx: Context, deps: ManagementApiDeps): void {
       }
       const result = await handleNodeApi({
         method: request.method ?? 'GET',
-        path: path === '' ? '/' : path,
+        path: decoded,
         query: url.searchParams,
         body,
       }, deps)

@@ -49,6 +49,8 @@ export interface E2eInstance {
   readonly repoPath: string
   /** A directory on the same machine that is not a git repository yet. */
   readonly plainDir: string
+  /** Absolute path of a fixture repository on this host, for the local machine. */
+  readonly localRepo: string
   /** Local directory the remote world maps onto inside the anchor store. */
   readonly home: string
   /** Scratch directory holding the home, the remote root, and artifacts. */
@@ -131,6 +133,9 @@ async function deploy(
   await mkdir(join(remoteRoot, 'plain-dir'), { recursive: true })
   const plainDir = await realpath(join(remoteRoot, 'plain-dir'))
   await writeFile(join(plainDir, 'notes.md'), 'plain\n', 'utf8')
+  // A repository of this host's own, which is what the built-in local machine
+  // manages: the same lifecycle, run where the checkout already is.
+  const localRepo = await createFixtureRepo(join(root, 'local-repo'))
 
   await cp(join(homedir(), '.dsh', 'profiles'), join(home, 'profiles'), { recursive: true })
   const linked = join(home, 'profiles', PROFILE, 'node_modules', 'dsh-remote-ssh-worktree')
@@ -184,6 +189,7 @@ async function deploy(
     nodeId,
     repoPath,
     plainDir,
+    localRepo,
     home,
     root,
     artifacts,

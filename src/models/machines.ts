@@ -157,14 +157,19 @@ interface OpenTransportDeps {
  *
  * An `ssh` record is reached in two steps — ensure the agent is running, then
  * forward the port it published — because the port is kernel-assigned and
- * known only from the machine. A `direct` address is dialled as recorded.
+ * known only from the machine. A `direct` address is dialled as recorded. The
+ * local machine is refused here rather than dialled: it has no transport, and
+ * connecting it means nothing.
  * @param deps - forward budget and the agent-ensuring seams.
- * @returns an opener for both transport kinds.
+ * @returns an opener for the transports that have somewhere to connect to.
  */
 function defaultOpenTransport(
   deps: OpenTransportDeps,
 ): (record: NodeRecord, report: (progress: AgentProgress) => void) => Promise<ResolvedTransport> {
   return async (record, report) => {
+    if (record.transport.kind === 'local') {
+      throw new Error('the local machine needs no connection')
+    }
     if (record.transport.kind === 'direct') {
       return {
         host: record.transport.host,

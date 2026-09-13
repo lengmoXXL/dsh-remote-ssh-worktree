@@ -71,6 +71,11 @@ export function autoconnect(deps: AutoconnectDeps): () => void {
     }
   }
 
-  for (const record of deps.records()) void pass(record)
+  for (const record of deps.records()) {
+    // The local machine is this host: there is nothing to reach, and an attempt
+    // would look for a daemon that does not exist. It never fails either — it
+    // has no connection to fail.
+    if (record.transport.kind !== 'local') void pass(record)
+  }
   return () => { stopped = true }
 }
