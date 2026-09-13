@@ -447,6 +447,11 @@ export function RemoteWorktreesSection(props: SectionProps) {
             // This host has no destination, no tunnel, no token, and no
             // connection to make or break: it is where the harness already is.
             const here = node.transport.kind === 'local'
+            // What the row says in words, when it says anything: the step in
+            // flight, or the state of a machine that is not simply connected.
+            const note = step === undefined
+              ? badge.dot === 'done' ? undefined : t(badge.key)
+              : t(step.key, step.params)
             return (
               <div key={node.nodeId} className={css.card}>
                 <DisclosureRow
@@ -469,13 +474,16 @@ export function RemoteWorktreesSection(props: SectionProps) {
                         : <Tag tone="neutral">{t('forwarding', { port: status.localPort })}</Tag>}
                       {here || node.hasToken ? null : <Tag tone="warning">{t('noToken')}</Tag>}
                       <StateDot state={badge.dot} />
-                      <span className={css.meta}>
-                        {/* A machine reports its connection; this host reports
-                            that there is nothing to connect to. */}
-                        {here
-                          ? t('status.local')
-                          : step === undefined ? t(badge.key) : t(step.key, step.params)}
-                      </span>
+                      {/* A settled machine says what its dot already says, so
+                          it says nothing: this host is always available and a
+                          connected machine is connected. The words stay for
+                          assistive technology, which cannot read a colour, and
+                          they are shown while a step is in flight or a state is
+                          one a dot cannot tell apart — a red dot names no
+                          reason by itself. */}
+                      {note === undefined
+                        ? <span className={css.srOnly}>{t(here ? 'status.local' : badge.key)}</span>
+                        : <span className={css.meta}>{note}</span>}
                     </span>
                   )}
                 >

@@ -45,6 +45,20 @@
   line-height: 1.55;
 }
 .tree { display: flex; flex-direction: column; gap: 8px; }
+/* State a person reads from a dot, kept as words for assistive technology: the
+   dot is aria-hidden, so without this the connection state would have no
+   accessible name at all. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
 .card {
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
