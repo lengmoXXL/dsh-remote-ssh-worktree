@@ -24,7 +24,7 @@
 
 import { agentAssetName, resolveAgentBinary } from './release.ts'
 import type { AgentBinaryOptions } from './release.ts'
-import type { SshCommandResult, SshTarget } from '../ssh.ts'
+import type { SshCommandResult, SshRunOptions, SshTarget } from '../ssh.ts'
 import { runSsh, sshFailure } from '../ssh.ts'
 
 /**
@@ -71,7 +71,7 @@ export interface AgentProgress {
 export type AgentCommandRunner = (
   ssh: SshTarget,
   command: string,
-  options?: { readonly input?: Buffer | string; readonly timeoutMs?: number },
+  options?: SshRunOptions,
 ) => Promise<SshCommandResult>
 
 /** What {@link ensureAgent} needs from its caller. */

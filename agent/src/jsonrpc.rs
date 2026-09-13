@@ -16,7 +16,7 @@ use crate::failure::Failure;
 /// @param value - the message to frame.
 /// @returns the bytes to write.
 pub fn encode(value: &Value) -> Vec<u8> {
-    let body = serde_json::to_vec(value).unwrap_or_else(|_| b"null".to_vec());
+    let body = serde_json::to_vec(value).expect("a JSON value always serializes");
     let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
     frame.extend_from_slice(&body);
     frame

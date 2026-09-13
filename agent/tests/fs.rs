@@ -37,25 +37,21 @@ fn code(result: Result<Value, Failure>) -> &'static str {
 }
 
 #[test]
-fn resolves_through_a_symlink_and_refuses_a_relative_path_without_a_base() {
+fn resolves_through_a_symlink_and_refuses_a_relative_path_without_a_root() {
     let dir = TempDir::new("drw-fs-resolve");
     std::fs::create_dir(dir.join("real")).unwrap();
     std::os::unix::fs::symlink(dir.join("real"), dir.join("link")).unwrap();
 
     let fs = backend(dir.path());
     let resolved = fs
-        .resolve(dir.join("link").to_str().unwrap(), None)
+        .resolve(dir.join("link").to_str().unwrap())
         .unwrap();
     assert_eq!(canonical(&resolved), dir.join("real").to_string_lossy());
 
-    // Without a root or a cwd there is nothing to place a relative path
-    // against, and the daemon never falls back to its own working directory.
+    // Without a root there is nothing to place a relative path against, and the
+    // daemon never falls back to its own working directory.
     let rootless = FsBackend::new(None);
-    assert_eq!(code(rootless.resolve("relative.txt", None)), "FS_IO_ERROR");
-    assert_eq!(
-        code(rootless.resolve("relative.txt", Some("also-relative"))),
-        "FS_IO_ERROR"
-    );
+    assert_eq!(code(rootless.resolve("relative.txt")), "FS_IO_ERROR");
 }
 
 #[test]
@@ -64,7 +60,7 @@ fn resolves_a_missing_target_through_its_deepest_existing_ancestor() {
     std::fs::create_dir(dir.join("sub")).unwrap();
     let fs = backend(dir.path());
     let resolved = fs
-        .resolve(dir.join("sub/deep/file.txt").to_str().unwrap(), None)
+        .resolve(dir.join("sub/deep/file.txt").to_str().unwrap())
         .unwrap();
     assert_eq!(
         canonical(&resolved),
@@ -78,7 +74,7 @@ fn reports_an_absent_target_as_null_rather_than_failing() {
     let fs = backend(dir.path());
     let missing = dir.join("nope").to_string_lossy().into_owned();
     assert!(fs.stat(&missing).unwrap().is_null());
-    assert!(fs.lstat(&missing, None).unwrap().is_null());
+    assert!(fs.lstat(&missing).unwrap().is_null());
 }
 
 #[test]

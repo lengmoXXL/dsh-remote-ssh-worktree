@@ -213,8 +213,6 @@ export type WireStdinMode = 'ignore' | 'pipe' | { readonly data: string }
 export interface WireCollect {
   /** In-memory cap in bytes; overflow keeps the tail. */
   readonly maxBytes: number
-  /** Whole-stream spill cap; absent disables spilling. */
-  readonly spillMaxBytes?: number
 }
 
 /**
@@ -303,15 +301,6 @@ export function asProcId(value: string): ProcId {
   return value as ProcId
 }
 
-/**
- * Admit a string as a terminal id.
- * @param value - a string the daemon minted, or one the wire delivered.
- * @returns the same string, branded.
- */
-export function asTermId(value: string): TermId {
-  return value as TermId
-}
-
 /** One pushed chunk of a raw piped stream. */
 export interface SpPipeFrame {
   /** The process the chunk belongs to. */
@@ -382,9 +371,9 @@ export interface WireMergeOutcome {
 /** Method names, parameters, and results in one map both sides compile against. */
 export interface WireMethods {
   'node.hello': { params: HelloRequest; result: NodeInfo }
-  'fs.resolve': { params: { path: string; cwd?: string }; result: WireTarget }
+  'fs.resolve': { params: { path: string }; result: WireTarget }
   'fs.stat': { params: { path: string }; result: WireStat | null }
-  'fs.lstat': { params: { path: string; cwd?: string }; result: WireLstat | null }
+  'fs.lstat': { params: { path: string }; result: WireLstat | null }
   'fs.listDir': { params: { path: string }; result: readonly WireDirEntry[] }
   'fs.readTextChunk': {
     params: { path: string; offset: number; length: number }

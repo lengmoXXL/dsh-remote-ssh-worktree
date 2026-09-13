@@ -55,7 +55,7 @@ pub async fn serve(listener: TcpListener, shared: Arc<SharedBackends>) {
                 tokio::spawn(async move { serve_connection(stream, shared).await });
             }
             Err(error) => {
-                report("accept", &error.to_string());
+                eprintln!("dsh-remote-agent: accept: {error}");
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             }
         }
@@ -227,9 +227,4 @@ fn arch_name() -> &'static str {
 /// The daemon user's home directory.
 fn home_directory() -> String {
     std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
-}
-
-/// Report a daemon-level failure without ending the process.
-fn report(context: &str, detail: &str) {
-    eprintln!("dsh-remote-agent: {context}: {detail}");
 }

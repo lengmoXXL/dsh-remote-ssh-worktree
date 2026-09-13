@@ -32,7 +32,9 @@ const DIFF_BASIS_MAX_BYTES: u64 = 10 * 1024 * 1024;
 /// Bytes per read when an editing caller needs the whole file.
 const READ_ALL_CHUNK_BYTES: usize = 1 << 20;
 
-/// Defensive cap on one read, matching the plugin's own buffer ceiling.
+/// Ceiling on one read: a request larger than this is refused rather than
+/// allocated, which keeps a hostile length from reserving the whole address
+/// space before any bytes arrive.
 const MAX_READ_BYTES: u64 = 1 << 31;
 
 /// Monotonic suffix source for staging file names.
@@ -58,18 +60,9 @@ impl FsBackend {
         Self { root }
     }
 
-    /// The base a relative path resolves against: the caller's `cwd` when given,
-    /// else the daemon's root.
-    fn base<'a>(&'a self, cwd: Option<&'a str>) -> Option<&'a Path> {
-        match cwd {
-            Some(value) => Some(Path::new(value)),
-            None => self.root.as_deref(),
-        }
-    }
-
     /// Canonicalize a requested path; the caller adopts the result as the target identity.
-    pub fn resolve(&self, path: &str, cwd: Option<&str>) -> Result<Value> {
-        let absolute = absolute_path("resolve", path, self.base(cwd))?;
+    pub fn resolve(&self, path: &str) -> Result<Value> {
+        let absolute = absolute_path("resolve", path, self.root.as_deref())?;
         Ok(json!({ "canonicalPath": canonical_target("resolve", &absolute)?.to_string_lossy() }))
     }
 
@@ -87,8 +80,8 @@ impl FsBackend {
     }
 
     /// Read metadata without following the final symlink.
-    pub fn lstat(&self, path: &str, cwd: Option<&str>) -> Result<Value> {
-        let target = absolute_path("lstat", path, self.base(cwd))?;
+    pub fn lstat(&self, path: &str) -> Result<Value> {
+        let target = absolute_path("lstat", path, self.root.as_deref())?;
         match probe("lstat", &target, false)? {
             None => Ok(Value::Null),
             Some(info) => Ok(json!({
@@ -334,7 +327,7 @@ pub fn absolute_path(verb: &str, path: &str, base: Option<&Path>) -> Result<Path
         _ => Err(Failure::new(
             "FS_IO_ERROR",
             format!(
-                "cannot {verb} \"{path}\": path is relative and no absolute cwd or root is available"
+                "cannot {verb} \"{path}\": path is relative and the daemon has no root to place it against"
             ),
         )),
     }

@@ -107,7 +107,6 @@ impl TerminalBackend {
         }))
     }
 
-    /// Deliver text to the terminal input.
     pub async fn write(&self, term_id: &str, data: &str) -> Result<Value> {
         let terminal = self.require(term_id)?;
         let payload = data.as_bytes().to_vec();
@@ -124,7 +123,6 @@ impl TerminalBackend {
         Ok(json!({}))
     }
 
-    /// Report the current foreground process group.
     pub async fn inspect_foreground(&self, term_id: &str) -> Result<Value> {
         let terminal = self.require(term_id)?;
         match foreground_group_id(terminal.pid).await {

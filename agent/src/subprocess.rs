@@ -39,7 +39,7 @@ use crate::protocol::{
 const GROUP_POLL: Duration = Duration::from_millis(25);
 
 /// One of a child's two captured streams.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 enum Which {
     Out,
     Err,
@@ -98,7 +98,7 @@ impl SubprocessBackend {
         if Path::new(command).is_absolute() {
             return Ok(json!({ "path": canonical_executable(command)? }));
         }
-        if command.contains('/') || command.contains('\\') {
+        if command.contains('/') {
             return Err(Failure::new(
                 "SP_NOT_EXECUTABLE",
                 format!("cannot resolve \"{command}\": a relative path is not an executable name"),
@@ -157,7 +157,14 @@ impl SubprocessBackend {
                 format!("cannot spawn \"{program}\": {error}"),
             )
         })?;
-        let pid = child.id().map_or(0, |value| value as i32);
+        // The child leads its own process group from here on, so a spawn that
+        // reports no id is a failure rather than a process to signal later.
+        let pid = child.id().map(|value| value as i32).ok_or_else(|| {
+            Failure::new(
+                "SP_SPAWN_FAILED",
+                format!("cannot spawn \"{program}\": the child has no process id"),
+            )
+        })?;
         let stdin = child.stdin.take();
         let stdout_pipe = child.stdout.take();
         let stderr_pipe = child.stderr.take();

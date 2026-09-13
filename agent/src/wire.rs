@@ -41,10 +41,7 @@ pub async fn dispatch(method: &str, params: &Value, backends: &Backends) -> Resu
     match method {
         "fs.resolve" => {
             let source = as_record(params, method)?;
-            backends.fs.resolve(
-                require_string(source, "path", method)?,
-                optional_string(source, "cwd", method)?,
-            )
+            backends.fs.resolve(require_string(source, "path", method)?)
         }
         "fs.stat" => {
             let source = as_record(params, method)?;
@@ -52,10 +49,7 @@ pub async fn dispatch(method: &str, params: &Value, backends: &Backends) -> Resu
         }
         "fs.lstat" => {
             let source = as_record(params, method)?;
-            backends.fs.lstat(
-                require_string(source, "path", method)?,
-                optional_string(source, "cwd", method)?,
-            )
+            backends.fs.lstat(require_string(source, "path", method)?)
         }
         "fs.listDir" => {
             let source = as_record(params, method)?;
@@ -489,26 +483,16 @@ fn read_output_mode(value: Option<&Value>, method: &str) -> Result<OutputMode> {
                 .ok_or_else(|| {
                     Failure::invalid_params(
                         method,
-                        "\"stdout\" and \"stderr\" must be \"inherit\" or { maxBytes, spillMaxBytes? }",
+                        "\"stdout\" and \"stderr\" must be \"inherit\" or { maxBytes }",
                     )
                 })?;
-            // `spillMaxBytes` is accepted because the contract carries it, but
-            // this build reports `capability.spill: false` and keeps no spill.
-            if let Some(spill) = record.get("spillMaxBytes") {
-                if spill.as_u64().is_none() {
-                    return Err(Failure::invalid_params(
-                        method,
-                        "\"spillMaxBytes\" must be a safe integer",
-                    ));
-                }
-            }
             Ok(OutputMode::Collect {
                 max_bytes: max_bytes as usize,
             })
         }
         _ => Err(Failure::invalid_params(
             method,
-            "\"stdout\" and \"stderr\" must be \"inherit\" or { maxBytes, spillMaxBytes? }",
+            "\"stdout\" and \"stderr\" must be \"inherit\" or { maxBytes }",
         )),
     }
 }

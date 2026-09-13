@@ -196,8 +196,8 @@ function requireAsset(release: Buffer, releaseUrl: string, name: string): Releas
  */
 function expectedChecksum(sums: string, assetName: string, sumsUrl: string): string {
   for (const line of sums.split('\n')) {
-    // `<hex>␠␠<name>` is the format; a `*` marks binary mode in some tools.
-    const match = /^([0-9a-f]{64})\s+\*?(.+)$/i.exec(line.trim())
+    // `<hex>␠␠<name>`, the format this repository's own release job writes.
+    const match = /^([0-9a-f]{64})\s+(.+)$/i.exec(line.trim())
     if (match !== null && match[2]?.trim() === assetName) return match[1]!.toLowerCase()
   }
   throw new Error(`${sumsUrl} names no "${assetName}"`)
