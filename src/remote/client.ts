@@ -15,7 +15,7 @@
  * recorded address for a `direct` record — is the caller's business, which is
  * what lets one client serve both.
  *
- * @module dsh-workspace/remote/client
+ * @module dsh-remote-workspace/remote/client
  */
 
 import { Socket } from 'node:net'

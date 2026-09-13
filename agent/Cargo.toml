@@ -3,10 +3,10 @@ name = "dsh-remote-agent"
 version = "0.0.1"
 edition = "2021"
 rust-version = "1.75"
-description = "The remote daemon of dsh-workspace: serves one machine's filesystem, processes, git worktrees, and terminals to a DeepSeek Harness plugin over a token-authenticated connection."
+description = "The remote daemon of dsh-remote-workspace: serves one machine's filesystem, processes, git worktrees, and terminals to a DeepSeek Harness plugin over a token-authenticated connection."
 license = "MIT"
-repository = "https://github.com/lengmoXXL/dsh-workspace"
-homepage = "https://github.com/lengmoXXL/dsh-workspace#readme"
+repository = "https://github.com/lengmoXXL/dsh-remote-workspace"
+homepage = "https://github.com/lengmoXXL/dsh-remote-workspace#readme"
 
 [[bin]]
 name = "dsh-remote-agent"

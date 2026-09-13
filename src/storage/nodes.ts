@@ -7,7 +7,7 @@
  * leaves this module drops it, and {@link toNodeView} is the only supported way
  * to produce one.
  *
- * @module dsh-workspace/storage/nodes
+ * @module dsh-remote-workspace/storage/nodes
  */
 
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'

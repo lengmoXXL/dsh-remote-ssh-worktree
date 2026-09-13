@@ -25,7 +25,7 @@
  * different harness checkout, and `RWT_FIREFOX_BIN` at a different browser
  * binary.
  *
- * @module dsh-workspace/tests/browser/workflow
+ * @module dsh-remote-workspace/tests/browser/workflow
  */
 
 import assert from 'node:assert/strict'

@@ -1,4 +1,4 @@
-# dsh-workspace bundle patch.
+# dsh-remote-workspace bundle patch.
 #
 # Two changes over the profile root:
 #
@@ -20,5 +20,5 @@
   disabled: true
 
 - insert:
-    - id: dsh-workspace
-      name: dsh-workspace
+    - id: dsh-remote-workspace
+      name: dsh-remote-workspace

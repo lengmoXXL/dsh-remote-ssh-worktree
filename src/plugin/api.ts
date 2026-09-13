@@ -16,7 +16,7 @@
  * injected dependency, because a non-Web profile (headless, SDK) has no HTTP
  * server and the plugin must still load there.
  *
- * @module dsh-workspace/plugin/api
+ * @module dsh-remote-workspace/plugin/api
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -559,7 +559,7 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
 }
 
 /** The path prefix this plugin owns. */
-const API_PREFIX = '/dsh-workspace'
+const API_PREFIX = '/dsh-remote-workspace'
 
 /** Bound on one management request body. */
 const MAX_BODY_BYTES = 1 << 20

@@ -43,12 +43,12 @@ function binaryDigest(): string {
 
 /** Where a fake release serves one asset's bytes. */
 function assetApi(name: string): string {
-  return `https://api.github.com/repos/lengmoXXL/dsh-workspace/releases/assets/${name}`
+  return `https://api.github.com/repos/lengmoXXL/dsh-remote-workspace/releases/assets/${name}`
 }
 
 /** Where a person would download one asset from. */
 function assetBrowser(name: string): string {
-  return `https://github.com/lengmoXXL/dsh-workspace/releases/download/v${VERSION}/${name}`
+  return `https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/v${VERSION}/${name}`
 }
 
 /** A release metadata body naming the given assets. */
@@ -106,7 +106,7 @@ test('a platform with no release fails naming what the machine reported', () => 
 test('a version is read from the release the tag names', () => {
   assert.equal(
     agentReleaseApi('0.0.1'),
-    'https://api.github.com/repos/lengmoXXL/dsh-workspace/releases/tags/v0.0.1',
+    'https://api.github.com/repos/lengmoXXL/dsh-remote-workspace/releases/tags/v0.0.1',
   )
 })
 

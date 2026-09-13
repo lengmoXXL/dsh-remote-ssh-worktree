@@ -1,10 +1,10 @@
 /**
- * The client half of dsh-workspace.
+ * The client half of dsh-remote-workspace.
  *
  * It owns exactly one surface: a settings section that manages the machines
  * this deployment can reach, the repositories registered on them, and the
  * remote worktrees cut from those repositories. Everything it renders comes
- * from the host's management routes under `/dsh-workspace`, which the
+ * from the host's management routes under `/dsh-remote-workspace`, which the
  * host half registers; the client has no privileged access and no other
  * way in.
  *
@@ -13,7 +13,7 @@
  * `Section`, which attaches it to the document when it is first evaluated. The
  * component itself receives all data and callbacks through its prop shares.
  *
- * @module dsh-workspace/plugin/client
+ * @module dsh-remote-workspace/plugin/client
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -29,12 +29,12 @@ import { en, NS, zh } from './locales.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Remote machine, repository, and worktree management copy. */
-    'dsh-workspace': RemoteWorktreesKey
+    'dsh-remote-workspace': RemoteWorktreesKey
   }
 }
 
 /** The host route prefix the management API is registered under. */
-const API = '/dsh-workspace'
+const API = '/dsh-remote-workspace'
 
 /** How the host reaches a machine's daemon. */
 type NodeTransport =
@@ -201,7 +201,7 @@ function sectionFace(t: Translate): RemoteWorktreesFace {
 }
 
 /** Plugin name used by the client loader and by diagnostics. */
-export const name = 'dsh-workspace-ui'
+export const name = 'dsh-remote-workspace-ui'
 
 /** Client services this plugin needs before it activates. */
 export const inject = ['slots', 'locale']
@@ -211,13 +211,13 @@ export const inject = ['slots', 'locale']
  * @param ctx - the client context this plugin was mounted on.
  */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-workspace: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-remote-workspace: dictionaries')
   // Bound, not called: the seat reads the current language on every use, so a
   // request that fails after a language change is reported in the new one.
   const face = sectionFace(ctx.locale.bind(NS))
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
-    id: 'dsh-workspace',
+    id: 'dsh-remote-workspace',
     order: 30,
     // The nav label is read at render time, so it follows a language change
     // without the shell subscribing to locale state.

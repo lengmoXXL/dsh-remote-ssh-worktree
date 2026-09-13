@@ -10,7 +10,7 @@
  * remote identity alone cannot reconstruct pending calls, output cursors, or
  * process state.
  *
- * @module dsh-workspace/models/machines
+ * @module dsh-remote-workspace/models/machines
  */
 
 import type { NodeChannel } from '../remote/client.ts'

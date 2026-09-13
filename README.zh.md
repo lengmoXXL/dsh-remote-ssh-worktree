@@ -1,4 +1,4 @@
-# dsh-workspace
+# dsh-remote-workspace
 
 一个 DSH 插件：把远端机器上的一个目录放到 Harness 面前——read、write、edit、bash、grep 和终端工具都在那里执行，
 可以是 git worktree，也可以是目录本身——而模型看到的是普通的本地路径。
@@ -25,8 +25,8 @@
 需要 Node 22.19+（或 24+）和 `ssh`。agent 走 Release 下载，所以使用插件不需要 Rust 工具链。
 
 ```sh
-git clone https://github.com/lengmoXXL/dsh-workspace
-cd dsh-workspace && npm install && npm run build
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD"
 dsh --profile web
 ```

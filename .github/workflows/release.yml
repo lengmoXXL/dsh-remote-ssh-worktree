@@ -103,5 +103,5 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             dist/dsh-remote-agent-* dist/SHA256SUMS \
-            --repo lengmoXXL/dsh-workspace \
+            --repo lengmoXXL/dsh-remote-workspace \
             --verify-tag --generate-notes

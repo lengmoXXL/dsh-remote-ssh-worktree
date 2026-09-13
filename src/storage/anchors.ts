@@ -25,7 +25,7 @@
  * workspace before it is a git repository — and stay one after it becomes a
  * repository and worktrees are cut beside it.
  *
- * @module dsh-workspace/storage/anchors
+ * @module dsh-remote-workspace/storage/anchors
  */
 
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'

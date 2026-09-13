@@ -1,4 +1,4 @@
-# dsh-workspace
+# dsh-remote-workspace
 
 A DSH plugin that puts a directory on a remote machine in front of the harness: read, write, edit, bash, grep, and
 terminal tools run there — in a git worktree, or in the directory itself — while the model sees ordinary local paths.
@@ -27,8 +27,8 @@ English | [中文](README.zh.md)
 Needs Node 22.19+ (or 24+) and `ssh`. The agent is a release download, so no Rust toolchain is required to use it.
 
 ```sh
-git clone https://github.com/lengmoXXL/dsh-workspace
-cd dsh-workspace && npm install && npm run build
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD"
 dsh --profile web
 ```

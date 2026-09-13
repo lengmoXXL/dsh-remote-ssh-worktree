@@ -14,7 +14,7 @@
  * state, worktree lifecycle — without requiring an SSH server on this machine;
  * the SSH forward itself is covered by `tests/unit/tunnel.test.ts`.
  *
- * @module dsh-workspace/tests/browser/instance
+ * @module dsh-remote-workspace/tests/browser/instance
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -138,7 +138,7 @@ async function deploy(
   const localRepo = await createFixtureRepo(join(root, 'local-repo'))
 
   await cp(join(homedir(), '.dsh', 'profiles'), join(home, 'profiles'), { recursive: true })
-  const linked = join(home, 'profiles', PROFILE, 'node_modules', 'dsh-workspace')
+  const linked = join(home, 'profiles', PROFILE, 'node_modules', 'dsh-remote-workspace')
   await rm(linked, { force: true })
   await symlink(process.cwd(), linked, 'dir')
 
@@ -179,7 +179,7 @@ async function deploy(
   spawned.push(web)
   capture(web, logs, '[dsh] ')
 
-  const apiBase = `http://127.0.0.1:${String(webPort)}/dsh-workspace`
+  const apiBase = `http://127.0.0.1:${String(webPort)}/dsh-remote-workspace`
   const pageUrl = `http://127.0.0.1:${String(webPort)}/?token=${await waitForToken(web, logs)}`
   await waitForApi(apiBase)
 

@@ -37,7 +37,7 @@
  * swallowed: the worktree is gone either way, and the operator needs to know
  * the branch outlived it.
  *
- * @module dsh-workspace/models/worktrees
+ * @module dsh-remote-workspace/models/worktrees
  */
 
 import { writeFile } from 'node:fs/promises'

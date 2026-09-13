@@ -8,7 +8,7 @@
  * operation expressed in page JavaScript — and `browsingContext.captureScreenshot`
  * supplies the visual evidence.
  *
- * @module dsh-workspace/tests/browser/firefox
+ * @module dsh-remote-workspace/tests/browser/firefox
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'

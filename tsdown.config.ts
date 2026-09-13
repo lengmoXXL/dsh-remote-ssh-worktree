@@ -30,7 +30,7 @@ import { defineConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
 /** The plugin id the loader keys this bundle by; it must match `dsh.client`. */
-const ID = 'dsh-workspace'
+const ID = 'dsh-remote-workspace'
 
 /**
  * Virtual-id wrapper keeping module CSS away from tsdown's own css pipeline.
@@ -107,7 +107,7 @@ const host = defineConfig({
   outExtensions: () => ({ js: '.js' }),
   external: [/^@deepseek-ai\//],
   outputOptions: {
-    banner: '// dsh-workspace host half',
+    banner: '// dsh-remote-workspace host half',
   },
 })
 

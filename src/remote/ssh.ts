@@ -24,7 +24,7 @@
  * naming the command that would accept it, because this forward grants shell
  * access as the remote user.
  *
- * @module dsh-workspace/remote/ssh
+ * @module dsh-remote-workspace/remote/ssh
  */
 
 import { spawn } from 'node:child_process'

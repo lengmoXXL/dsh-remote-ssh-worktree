@@ -20,7 +20,7 @@
  * cached: the bytes are executed on a remote machine, so a truncated or
  * substituted asset must fail here rather than at exec time there.
  *
- * @module dsh-workspace/remote/agent/release
+ * @module dsh-remote-workspace/remote/agent/release
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -28,7 +28,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 /** Repository whose releases carry the agent binaries. */
-const RELEASE_REPOSITORY = 'lengmoXXL/dsh-workspace'
+const RELEASE_REPOSITORY = 'lengmoXXL/dsh-remote-workspace'
 
 /** The release API root every request below hangs off. */
 const API_ROOT = `https://api.github.com/repos/${RELEASE_REPOSITORY}`
