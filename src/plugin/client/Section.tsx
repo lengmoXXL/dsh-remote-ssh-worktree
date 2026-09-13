@@ -1,5 +1,5 @@
 /**
- * The Remote worktrees settings section.
+ * The Remote workspaces settings section.
  *
  * The section renders one tree: a machine, the repositories registered on it,
  * and the worktrees cut from each repository. Every level is a fold, so the
@@ -314,7 +314,7 @@ function WorktreeRow({ entry, busy, onRemove, onToggleOpen, t }: {
 }
 
 /**
- * The Remote worktrees settings section.
+ * The Remote workspaces settings section.
  * @param props - the owner share, the locale seat, and the injected face.
  * @returns the section element.
  */
@@ -540,7 +540,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
                         const directory = directoryOf(repo)
                         // Cutting a worktree needs git, and whether git owns the
                         // directory is a live fact: a plain directory can be
-                        // worked in, and initialized on the machine later.
+                        // worked in, and initialized on the machine later. The
+                        // row stays silent about it; the new-worktree button
+                        // pops the reason while it cannot cut one.
                         const why = entry.error ?? t('notARepository')
                         // Opening a directory the section has never resolved
                         // needs the machine to spell the path; an anchor that
@@ -559,16 +561,13 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               rowClassName={css.row}
                               leadingClassName={css.leading}
                               onToggle={() => toggle(openRepos, setOpenRepos, repo.repoId)}
-                              collapsedContent={entry.git
-                                ? null
-                                : <span className={css.reason} title={why}>{why}</span>}
                             >
                               <div className={css.actions}>
                                 <Button
                                   size="sm"
                                   icon={<IconPlusOutline16 />}
                                   disabled={busy || !entry.git}
-                                  title={entry.git ? undefined : why}
+                                  title={entry.git ? entry.error : why}
                                   onClick={() => setDialog({ kind: 'worktree', repo })}
                                 >
                                   {t('newWorktree')}
@@ -598,33 +597,31 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                   {t('forgetRepository')}
                                 </Button>
                               </div>
-                              <div className={css.worktrees}>
-                                {worktrees.length === 0
-                                  ? (
-                                    <div className={css.empty}>
-                                      {t(entry.git ? 'worktreesEmpty' : 'worktreesEmptyDirectory')}
-                                    </div>
-                                  )
-                                  : worktrees.map(item => (
-                                    <WorktreeRow
-                                      key={item.anchor.anchorId}
-                                      entry={item}
-                                      busy={busy}
-                                      t={t}
-                                      onToggleOpen={() => void mutate(() => (
-                                        item.open
-                                          ? props.closeWorktree(item.anchor.anchorId)
-                                          : props.openWorktree(item.anchor.anchorId)
-                                      ))}
-                                      onRemove={() => confirm({
-                                        titleKey: 'removeWorktreeTitle',
-                                        bodyKey: 'removeWorktreeBody',
-                                        optionKey: 'removeWorktreeBranch',
-                                        run: deleteBranch => props.removeWorktree(item.anchor.anchorId, deleteBranch),
-                                      })}
-                                    />
-                                  ))}
-                              </div>
+                              {worktrees.length === 0 && !entry.git ? null : (
+                                <div className={css.worktrees}>
+                                  {worktrees.length === 0
+                                    ? <div className={css.empty}>{t('worktreesEmpty')}</div>
+                                    : worktrees.map(item => (
+                                      <WorktreeRow
+                                        key={item.anchor.anchorId}
+                                        entry={item}
+                                        busy={busy}
+                                        t={t}
+                                        onToggleOpen={() => void mutate(() => (
+                                          item.open
+                                            ? props.closeWorktree(item.anchor.anchorId)
+                                            : props.openWorktree(item.anchor.anchorId)
+                                        ))}
+                                        onRemove={() => confirm({
+                                          titleKey: 'removeWorktreeTitle',
+                                          bodyKey: 'removeWorktreeBody',
+                                          optionKey: 'removeWorktreeBranch',
+                                          run: deleteBranch => props.removeWorktree(item.anchor.anchorId, deleteBranch),
+                                        })}
+                                      />
+                                    ))}
+                                </div>
+                              )}
                             </DisclosureRow>
                           </div>
                         )

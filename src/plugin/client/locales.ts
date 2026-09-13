@@ -1,5 +1,5 @@
 /**
- * Bilingual copy for the Remote worktrees settings section.
+ * Bilingual copy for the Remote workspaces settings section.
  *
  * The Chinese dictionary is the key source; the English one is checked against
  * its key set, so a key added to one without the other fails the build. The
@@ -14,7 +14,7 @@ export const NS = 'dsh-remote-workspace'
 
 /** Simplified Chinese dictionary and key source. */
 export const zh = {
-  title: '远程 worktree',
+  title: '远程工作区',
   subtitle:
     '管理可以访问的机器、机器上的目录，以及从 git 仓库切出的 worktree。'
     + '切出的 worktree 会成为一个本地工作区，其文件与命令都在那台机器上执行。',
@@ -24,7 +24,6 @@ export const zh = {
   machinesEmpty: '还没有配置机器。添加一台机器后，就能浏览它的仓库并切出 worktree。',
   repositoriesEmpty: '这台机器上还没有登记仓库。',
   worktreesEmpty: '这个仓库还没有 worktree。',
-  worktreesEmptyDirectory: '这个目录还不是 git 仓库；在机器上 git init 之后，就能从它切出 worktree。',
 
   'status.ready': '已连接',
   'status.local': '始终可用',
@@ -98,7 +97,7 @@ export type RemoteWorktreesKey = keyof typeof zh
 
 /** English dictionary, checked against the Chinese key set. */
 export const en = {
-  title: 'Remote worktrees',
+  title: 'Remote workspaces',
   subtitle:
     'Manage the machines this deployment can reach, the directories on them, '
     + 'and the worktrees cut from the git repositories among them. A worktree '
@@ -109,7 +108,6 @@ export const en = {
   machinesEmpty: 'No machines yet. Add one to browse its repositories and cut worktrees from them.',
   repositoriesEmpty: 'No repositories registered on this machine yet.',
   worktreesEmpty: 'No worktrees in this repository yet.',
-  worktreesEmptyDirectory: 'This directory is not a git repository yet; once it is initialized on the machine, worktrees can be cut from it.',
 
   'status.ready': 'Connected',
   'status.local': 'always available',

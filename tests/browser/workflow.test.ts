@@ -89,6 +89,18 @@ function present(...keys: Key[]): string {
   return `[${needles}].some(text => document.body.innerText.includes(text))`
 }
 
+/**
+ * An expression that holds when a disabled button pops one of these labels.
+ *
+ * The reason a control cannot act is its hover text rather than a line on the
+ * row, so the row is silent and only the refused button carries the words.
+ */
+function popped(...keys: Key[]): string {
+  const needles = keys.flatMap(key => [zh[key], en[key]]).map(text => JSON.stringify(text)).join(',')
+  return `[...document.querySelectorAll('button[disabled]')]`
+    + `.some(button => [${needles}].includes(button.title))`
+}
+
 /** The open form's controls and path field, which the picker is driven with. */
 const FORM_PARTS = `
   const dialogs = [...document.querySelectorAll('[role="dialog"][aria-label]')]
@@ -270,7 +282,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await clearShellDialogs(page);
     await clickByText(page, /设置|Settings/i)
     await clearShellDialogs(page)
-    await clickByText(page, /worktree/i)
+    await clickByText(page, anyOf('title'))
     await waitFor(page, present('addMachine', 'refresh'), 'the section toolbar')
     await waitForText(page, 'e2e daemon', 'the seeded machine row')
     await shot('01-section')
@@ -419,7 +431,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     // Both repository rows are on screen, and the plain directory is the one
     // registered second.
     await clickByText(page, /plain-dir/)
-    await waitFor(page, present('notARepository'), 'the row to say it is not a repository')
+    await waitFor(page, popped('notARepository'), 'the refused button to pop the reason')
     // Only the repository registered first can be cut from.
     await waitFor(page, `${enabledCount('newWorktree')} === 1`, 'the plain directory to refuse a worktree')
     await shot('08-plain-directory')

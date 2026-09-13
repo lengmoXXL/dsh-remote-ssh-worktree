@@ -17,8 +17,8 @@ English | [中文](README.zh.md)
 - Works on this machine with no setup at all: the built-in `Local` machine needs no agent and no connection, and manages
   repositories and worktrees here exactly as it does on a machine reached over SSH.
 - Cuts `worktree/<name>` from any repository on it, and registers the checkout as a DSH workspace.
-- Opens a plain directory as a workspace too, before it is a repository; `git init` it later and worktrees can be cut
-  from it without registering anything again.
+- Opens a registered directory as a workspace in its own right, repository or not; `git init` a plain one later and
+  worktrees can be cut from it without registering anything again.
 - Runs read, write, edit, bash, grep, and terminal tools on that machine unchanged.
 - Removes a worktree without losing work: the checkout goes, the branch stays unless you ask for it.
 
@@ -35,7 +35,7 @@ dsh --profile web
 
 ## Use it
 
-**Settings → Remote worktrees.** Add a machine by its SSH destination and a token — any string, it is the daemon's
+**Settings → Remote workspaces.** Add a machine by its SSH destination and a token — any string, it is the daemon's
 shared secret. The plugin connects on load and retries a few times per machine; one that stays unreachable is left
 failed, with a Connect button to try again.
 
