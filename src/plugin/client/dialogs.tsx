@@ -356,9 +356,8 @@ export function AddRepoDialog({ nodeId, busy, onClose, onSubmit, listDirs, t }: 
   )
 }
 
-export function NewWorktreeDialog({ open, repo, busy, onClose, onSubmit, t }: {
-  open: boolean
-  repo: RepoRecord | undefined
+export function NewWorktreeDialog({ repo, busy, onClose, onSubmit, t }: {
+  repo: RepoRecord
   busy: boolean
   onClose: () => void
   onSubmit: (draft: { repoId: RepoId; name: string }) => Promise<void>
@@ -367,14 +366,7 @@ export function NewWorktreeDialog({ open, repo, busy, onClose, onSubmit, t }: {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
 
-  useEffect(() => {
-    if (!open) return
-    setName('')
-    setError(undefined)
-  }, [open])
-
   const submit = async (): Promise<void> => {
-    if (repo === undefined) return
     setError(undefined)
     try {
       await onSubmit({ repoId: repo.repoId, name: name.trim() })
@@ -386,10 +378,10 @@ export function NewWorktreeDialog({ open, repo, busy, onClose, onSubmit, t }: {
 
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       title={t('newWorktree')}
-      {...repo === undefined ? {} : { description: repo.repoPath }}
+      description={repo.repoPath}
       closeLabel={t('close')}
       footer={(
         <>

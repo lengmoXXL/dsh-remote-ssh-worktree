@@ -98,8 +98,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsdown": "^0.23.0",
-    "typescript": "^5.6.3",
-    "vscode-jsonrpc": "^8.2.0"
+    "typescript": "^5.6.3"
   },
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.1",
@@ -133,7 +132,7 @@
     "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.1"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
     "build": "tsdown",
     "build:agent": "cargo build --release --manifest-path agent/Cargo.toml",
     "pretest": "npm run build",

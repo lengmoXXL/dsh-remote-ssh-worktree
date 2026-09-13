@@ -78,7 +78,6 @@ interface NodeStatus {
   readonly localPort?: number
   /** The step in flight, while the attempt is still running. */
   readonly progress?: AgentProgress
-  readonly error?: string
 }
 
 /**
@@ -119,10 +118,6 @@ interface AnchorRecord {
   readonly kind: 'worktree' | 'directory'
   readonly repoPath: string
   readonly name: string
-  /** Only a worktree is on a branch. */
-  readonly branch?: string
-  readonly anchorPath: string
-  readonly remoteRoot: string
 }
 
 /** One anchor, with whether it is currently openable. */
@@ -653,52 +648,53 @@ export function RemoteWorktreesSection(props: SectionProps) {
         />
       ) : null}
 
-      <NewWorktreeDialog
-        open={dialog?.kind === 'worktree'}
-        repo={dialog?.kind === 'worktree' ? dialog.repo : undefined}
-        busy={busy}
-        onClose={() => setDialog(undefined)}
-        onSubmit={draft => submit(() => props.createWorktree(draft))}
-        t={t}
-      />
+      {dialog?.kind === 'worktree' ? (
+        <NewWorktreeDialog
+          repo={dialog.repo}
+          busy={busy}
+          onClose={() => setDialog(undefined)}
+          onSubmit={draft => submit(() => props.createWorktree(draft))}
+          t={t}
+        />
+      ) : null}
 
-      <Modal
-        open={confirmation !== undefined}
-        onClose={() => setConfirmation(undefined)}
-        title={confirmation === undefined ? '' : t(confirmation.titleKey)}
-        closeLabel={t('close')}
-        footer={(
-          <>
-            <Button onClick={() => setConfirmation(undefined)}>{t('cancel')}</Button>
-            <Button
-              variant="primary"
-              disabled={busy}
-              onClick={() => {
-                const pending = confirmation
-                const option = confirmedOption
-                setConfirmation(undefined)
-                if (pending !== undefined) void mutate(() => pending.run(option))
-              }}
-            >
-              {t('remove')}
-            </Button>
-          </>
-        )}
-      >
-        <div className={css.confirm}>
-          <p className={css.subtitle}>
-            {confirmation === undefined ? null : t(confirmation.bodyKey)}
-          </p>
-          {confirmation?.optionKey === undefined ? null : (
-            <Switch
-              checked={confirmedOption}
-              onChange={setConfirmedOption}
-              label={t(confirmation.optionKey)}
-              disabled={busy}
-            />
+      {confirmation === undefined ? null : (
+        <Modal
+          open
+          onClose={() => setConfirmation(undefined)}
+          title={t(confirmation.titleKey)}
+          closeLabel={t('close')}
+          footer={(
+            <>
+              <Button onClick={() => setConfirmation(undefined)}>{t('cancel')}</Button>
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => {
+                  const pending = confirmation
+                  const option = confirmedOption
+                  setConfirmation(undefined)
+                  void mutate(() => pending.run(option))
+                }}
+              >
+                {t('remove')}
+              </Button>
+            </>
           )}
-        </div>
-      </Modal>
+        >
+          <div className={css.confirm}>
+            <p className={css.subtitle}>{t(confirmation.bodyKey)}</p>
+            {confirmation.optionKey === undefined ? null : (
+              <Switch
+                checked={confirmedOption}
+                onChange={setConfirmedOption}
+                label={t(confirmation.optionKey)}
+                disabled={busy}
+              />
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

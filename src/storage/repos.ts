@@ -141,11 +141,10 @@ function isRepoRecord(value: unknown): value is RepoRecord {
 /**
  * The name to show for a path no caller named.
  * @param repoPath - absolute POSIX path of the checkout.
- * @returns the last path segment, or the whole path when it has none.
+ * @returns the last path segment.
  */
 export function defaultRepoName(repoPath: string): string {
-  const base = posix.basename(repoPath)
-  return base === '' || base === '/' ? repoPath : base
+  return posix.basename(repoPath)
 }
 
 /**

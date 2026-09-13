@@ -151,21 +151,6 @@ export async function fillDialogInputByPlaceholder(
 }
 
 /**
- * Click a control when it is present, and report whether it was.
- * @param page - the page to act on.
- * @param pattern - matched against the control's text, aria-label, and title.
- * @returns true when something matched and was clicked.
- */
-export async function clickIfPresent(page: FirefoxPage, pattern: RegExp): Promise<boolean> {
-  try {
-    await clickByText(page, pattern)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
  * Wait until an expression evaluates truthy.
  * @param page - the page to poll.
  * @param expression - boolean-valued page expression.
@@ -251,13 +236,4 @@ export async function waitForEnabled(page: FirefoxPage, pattern: RegExp, label: 
         .some(el => pattern.test(labelOf(el)) && shown(el) && el.disabled !== true)
     })()
   `, label)
-}
-
-/**
- * Read the visible text of the page.
- * @param page - the page to read.
- * @returns the body's inner text.
- */
-export async function bodyText(page: FirefoxPage): Promise<string> {
-  return await page.evaluate<string>('document.body.innerText')
 }

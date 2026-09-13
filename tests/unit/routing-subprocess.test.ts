@@ -45,7 +45,6 @@ function fakeDaemon(options: {
   onCall?: (method: string, params: unknown) => void
 }) {
   const calls: { method: string; params: unknown }[] = []
-  const cursors = { stdout: 0, stderr: 0 }
   const chunks = { stdout: options.stdout ?? [], stderr: options.stderr ?? [] }
 
   let pipeHandler: ((frame: SpPipeFrame) => void) | undefined
@@ -80,7 +79,6 @@ function fakeDaemon(options: {
             if (end > fromByte) text += entry
             offset = end
           }
-          cursors[stream] = total
           return Promise.resolve({
             data: Buffer.from(text, 'utf8').toString('base64'),
             nextOffset: total,
@@ -232,14 +230,12 @@ test('terminate before the daemon answers still terminates', async () => {
 })
 
 test('an offline node is refused before any process is created', () => {
-  const { channel } = fakeDaemon({})
   const offline = createRoutingSubprocessRuntime({
     localProc: unusedLocal,
     anchors: () => anchors,
     channel: () => undefined,
   })
   assert.throws(() => offline.spawn(spec('/srv/app/login')), /is not connected/)
-  void channel
 })
 
 test('an ambiguous remote cwd is refused, never guessed', () => {

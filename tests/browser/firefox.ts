@@ -33,15 +33,6 @@ export interface FirefoxPage {
    */
   evaluate<T = unknown>(expression: string): Promise<T>
   /**
-   * Send text to whatever holds the focus, one key at a time.
-   *
-   * A rich-text editor is a controlled component: it ignores synthetic input
-   * events, so the only way to type into one is to let the browser deliver the
-   * keys.
-   * @param text - the text to type, one key press per code point.
-   */
-  type(text: string): Promise<void>
-  /**
    * Save a PNG of the current viewport.
    * @param path - absolute file to write.
    */
@@ -170,17 +161,6 @@ function page(
         resultOwnership: 'none',
       })
       return unwrap(reply.result) as T
-    },
-
-    async type(text) {
-      const actions = [...text].flatMap(character => ([
-        { type: 'keyDown', value: character },
-        { type: 'keyUp', value: character },
-      ]))
-      await connection.send('input.performActions', {
-        context,
-        actions: [{ type: 'key', id: 'keyboard', actions }],
-      })
     },
 
     async screenshot(path) {

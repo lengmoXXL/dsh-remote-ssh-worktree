@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { after, beforeEach, test } from 'node:test'
+import { afterEach, beforeEach, test } from 'node:test'
 import { existsSync } from 'node:fs'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -40,7 +40,7 @@ beforeEach(async () => {
   await repos.load()
 })
 
-after(async () => {
+afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 

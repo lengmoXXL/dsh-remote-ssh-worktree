@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { after, beforeEach, test } from 'node:test'
+import { afterEach, beforeEach, test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
@@ -35,7 +35,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'drw-api-'))
 })
 
-after(async () => {
+afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -434,15 +434,7 @@ function daemon(overrides: Readonly<Record<string, (params: never) => unknown>> 
 async function connected(channel: NodeChannel) {
   const context = await setup({
     connect: () => Promise.resolve({
-      info: {
-        protocol: 1,
-        agentVersion: '0.0.1',
-        platform: 'linux',
-        arch: 'x64',
-        node: 'v22.19.0',
-        homedir: '/home/dev',
-        capability: { pty: false, spill: false, ripgrep: null },
-      },
+      info: DAEMON_INFO,
       channel,
       close: () => {},
     }),
@@ -544,7 +536,6 @@ test('opening a directory maps it onto itself as a workspace', async () => {
   assert.deepEqual(anchors.list().map(entry => entry.kind), ['directory'])
   assert.equal(registered.has(String(anchors.list()[0]?.anchorId)), true, 'and it is open')
 
-  // Opening twice registers the same directory instead of adding a second anchor.
   await handleNodeApi(request('POST', `/repos/${repo.repoId}/open`), deps)
   assert.equal(anchors.list().length, 1)
 })

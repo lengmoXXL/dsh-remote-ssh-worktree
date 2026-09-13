@@ -87,10 +87,8 @@ setup, so it happens here, and the session that follows just works in it.
                               └──────────────────────────────┘
 ```
 
-`remote/` turns a machine's daemon into an SDK; `storage/` keeps what has to survive a restart; `models/` is the business
-semantics built on both; `plugin/` is the only layer that knows DSH. Imports only ever point downward, and `src/index.ts`
-is the one file that assembles the layers. The settings section is the other half — it runs in the browser and reaches
-the host through its management API.
+Imports only ever point downward, and `src/index.ts` is the one file that assembles the layers. The settings section is
+the other half — it runs in the browser and reaches the host through its management API.
 
 ## Where the state lives
 

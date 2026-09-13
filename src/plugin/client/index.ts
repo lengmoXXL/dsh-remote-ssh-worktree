@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type { AnchorId, DirListing, NodeId, RemoteWorktreesFace, RepoId, Snapshot } from './Section.tsx'
+import type { DirListing, RemoteWorktreesFace, Snapshot, T as Translate } from './Section.tsx'
 import { RemoteWorktreesSection } from './Section.tsx'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { en, NS, zh } from './locales.ts'
@@ -35,85 +35,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** The host route prefix the management API is registered under. */
 const API = '/dsh-remote-workspace'
-
-/** How the host reaches a machine's daemon. */
-type NodeTransport =
-  | {
-    readonly kind: 'ssh'
-    readonly target: string
-    readonly sshPort?: number
-    readonly identityFile?: string
-  }
-  | {
-    /** This host, which needs no daemon and no connection. */
-    readonly kind: 'local'
-  }
-
-/** One machine as the host projects it. */
-interface NodeView {
-  readonly nodeId: NodeId
-  readonly title: string
-  readonly transport: NodeTransport
-  readonly hasToken: boolean
-}
-
-/** The connection states a machine can report. */
-type NodeState = 'idle' | 'connecting' | 'ready' | 'failed' | 'disconnected'
-
-/** One machine's connection state. */
-interface NodeStatus {
-  readonly nodeId: NodeId
-  readonly state: NodeState
-  /** The local port carrying this machine's traffic, once a forward is up. */
-  readonly localPort?: number
-  /** The step in flight, while a connection attempt is still running. */
-  readonly progress?: {
-    readonly phase: 'checking' | 'reusing' | 'fetching' | 'uploading' | 'starting'
-    readonly version: string
-    readonly asset?: string
-    readonly source?: 'cache' | 'network'
-  }
-  readonly error?: string
-}
-
-/** One registered repository, with whether git owns that directory right now. */
-interface RepoReport {
-  readonly repo: {
-    readonly repoId: RepoId
-    readonly nodeId: NodeId
-    readonly repoPath: string
-    readonly name: string
-  }
-  /** False for a plain directory, which can be opened but not cut from. */
-  readonly git: boolean
-  /** Why the question could not be answered, when it could not. */
-  readonly error?: string
-}
-
-/** One anchor with what this host can say about it. */
-interface WorktreeStatus {
-  readonly anchor: {
-    readonly anchorId: AnchorId
-    readonly nodeId: NodeId
-    /** Whether this maps a worktree's checkout or the repository directory. */
-    readonly kind: 'worktree' | 'directory'
-    readonly repoPath: string
-    readonly name: string
-    /** Only a worktree is on a branch. */
-    readonly branch?: string
-    readonly anchorPath: string
-    readonly remoteRoot: string
-  }
-  /** Whether the anchor holds a workspace registration right now. */
-  readonly open: boolean
-  readonly error?: string
-}
-
-/**
- * Translate this plugin's copy at call time, so a language change is followed
- * without anyone subscribing to locale state.
- */
-type Translate = (key: RemoteWorktreesKey, params?: Record<string, unknown>) => string
 
 /**
  * One JSON request against the management API.
@@ -150,9 +71,9 @@ function sectionFace(t: Translate): RemoteWorktreesFace {
   return {
     async load(): Promise<Snapshot> {
       const [listing, repos, worktrees] = await Promise.all([
-        call<{ nodes: readonly NodeView[]; statuses: readonly NodeStatus[] }>(t, '/nodes'),
-        call<{ repos: readonly RepoReport[] }>(t, '/repos'),
-        call<{ worktrees: readonly WorktreeStatus[] }>(t, '/worktrees'),
+        call<{ nodes: Snapshot['nodes']; statuses: Snapshot['statuses'] }>(t, '/nodes'),
+        call<{ repos: Snapshot['repos'] }>(t, '/repos'),
+        call<{ worktrees: Snapshot['worktrees'] }>(t, '/worktrees'),
       ])
       return { nodes: listing.nodes, statuses: listing.statuses, repos: repos.repos, worktrees: worktrees.worktrees }
     },

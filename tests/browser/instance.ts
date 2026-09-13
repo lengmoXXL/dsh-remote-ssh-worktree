@@ -12,7 +12,7 @@
  * record shape a document written before the SSH transport carries. That keeps
  * the whole management path real — handshake, directory browsing, repository
  * state, worktree lifecycle — without requiring an SSH server on this machine;
- * the SSH forward itself is covered by `tests/unit/tunnel.test.ts`.
+ * the SSH forward itself is covered by `tests/unit/ssh.test.ts`.
  *
  * @module dsh-remote-workspace/tests/browser/instance
  */
@@ -59,8 +59,6 @@ export interface E2eInstance {
   readonly artifacts: string
   /** Port the daemon listens on. */
   readonly daemonPort: number
-  /** The daemon's shared secret. */
-  readonly token: string
   /** Everything the two processes wrote, for a failure report. */
   logs(): string
   /** Process-group leader of the daemon and of the web process, in that order. */
@@ -194,7 +192,6 @@ async function deploy(
     root,
     artifacts,
     daemonPort,
-    token,
     logs: () => logs.join(''),
     pids: [daemon.pid, web.pid].filter((pid): pid is number => pid !== undefined),
     async stop(options = {}) {

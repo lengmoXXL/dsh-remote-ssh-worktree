@@ -36,7 +36,6 @@ import { test } from 'node:test'
 import { promisify } from 'node:util'
 import { en, zh } from '../../src/plugin/client/locales.ts'
 import {
-  bodyText,
   clickByText,
   clickInDialog,
   fillDialogInput,
@@ -537,7 +536,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     if (browser !== undefined && deployment !== undefined) {
       await browser.screenshot(join(deployment.artifacts, 'failure.png')).catch(() => {})
       console.error('--- section text ---')
-      console.error((await bodyText(browser).catch(() => '(unreadable)')).slice(0, 1200))
+      console.error((await browser.evaluate<string>('document.body.innerText').catch(() => '(unreadable)')).slice(0, 1200))
       console.error('--- instance logs (tail) ---')
       console.error(deployment.logs().slice(-4000))
     }

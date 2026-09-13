@@ -23,7 +23,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NodeConnections, NodeStatus } from '../models/machines.ts'
 import type { NodeId } from '../storage/nodes.ts'
-import type { NodeRecord, NodeRegistry, NodeTransport, NodeView } from '../storage/nodes.ts'
+import type { NodeRecord, NodeRegistry, NodeTransport } from '../storage/nodes.ts'
 import { toNodeView } from '../storage/nodes.ts'
 import { asAnchorId } from '../storage/anchors.ts'
 import { asNodeId } from '../storage/nodes.ts'
@@ -155,11 +155,6 @@ function requireTransport(body: unknown): NodeTransport {
   }
 }
 
-/** Split a path below the prefix into its segments. */
-function segments(path: string): string[] {
-  return path.split('/').filter(segment => segment !== '')
-}
-
 /** One machine's status, as this API reports it. */
 function statusOf(connections: NodeConnections, record: NodeRecord): NodeStatus {
   // The local machine is reachable by definition: it is where this process
@@ -167,18 +162,6 @@ function statusOf(connections: NodeConnections, record: NodeRecord): NodeStatus 
   return record.transport.kind === 'local'
     ? { nodeId: record.nodeId, state: 'ready' }
     : connections.status(record.nodeId)
-}
-
-/** The status list joined onto the node list, so one response renders a table. */
-function withStatuses(
-  registry: NodeRegistry,
-  connections: NodeConnections,
-): { nodes: readonly NodeView[]; statuses: readonly NodeStatus[] } {
-  const records = registry.list()
-  return {
-    nodes: records.map(toNodeView),
-    statuses: records.map(record => statusOf(connections, record)),
-  }
 }
 
 /**
@@ -437,21 +420,29 @@ async function handleWorktrees(
  */
 export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps): Promise<ApiResponse> {
   try {
-    const parts = segments(request.path)
+    const parts = request.path.split('/').filter(segment => segment !== '')
     const head = parts[0]
 
     if (head === 'worktrees') return await handleWorktrees(request, parts.slice(1), deps)
     if (head === 'repos') return await handleRepos(request, parts.slice(1), deps)
-
-    const [, rawNodeId, action] = parts
-    const nodeId = rawNodeId === undefined ? undefined : asNodeId(rawNodeId)
-
     if (head !== 'nodes') {
       throw new ApiError(404, `unknown endpoint ${request.method} ${request.path}`)
     }
 
+    const [, rawNodeId, action] = parts
+    const nodeId = rawNodeId === undefined ? undefined : asNodeId(rawNodeId)
+
     if (nodeId === undefined) {
-      if (request.method === 'GET') return { status: 200, body: withStatuses(deps.registry, deps.connections) }
+      if (request.method === 'GET') {
+        const records = deps.registry.list()
+        return {
+          status: 200,
+          body: {
+            nodes: records.map(toNodeView),
+            statuses: records.map(record => statusOf(deps.connections, record)),
+          },
+        }
+      }
       if (request.method === 'POST') {
         const title = stringField(request.body, 'title')
         const record = await deps.registry.upsert({
@@ -504,7 +495,7 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
       throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
     }
 
-    if (action === 'connect' || action === 'test' || action === 'disconnect') {
+    if (action === 'connect' || action === 'disconnect') {
       if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
       // Connecting this host, and disconnecting it, are both already true: it
       // answers without a connection, so neither needs to do anything.

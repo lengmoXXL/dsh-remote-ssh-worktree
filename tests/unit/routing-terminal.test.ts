@@ -162,14 +162,12 @@ test('terminate ends the output and settles the handle', async () => {
 })
 
 test('a disconnected node is refused before any terminal is allocated', async () => {
-  const { channel } = fakeTerminalDaemon({})
   const offline = createRoutingSubprocessRuntime({
     localProc: unusedLocal,
     anchors: () => anchors,
     channel: () => undefined,
   })
   await assert.rejects(() => offline.spawnTerminal(spec('/srv/app/login')), /is not connected/)
-  void channel
 })
 
 test('a local terminal is delegated untouched', async () => {

@@ -287,6 +287,10 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
   let nodes: NodeRecord[] = []
   let loaded = false
 
+  const requireLoaded = (): void => {
+    if (!loaded) throw new Error('node registry used before load()')
+  }
+
   const document: DocumentSpec<NodeRecord> = {
     file: deps.file,
     version: DOCUMENT_VERSION,
@@ -304,20 +308,20 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
     },
 
     list() {
-      if (!loaded) throw new Error('node registry read before load()')
+      requireLoaded()
       // The local machine leads every list: it is the one machine a deployment
       // always has, and the one a person reaches for first.
       return [localNode(), ...nodes]
     },
 
     get(nodeId) {
-      if (!loaded) throw new Error('node registry read before load()')
+      requireLoaded()
       if (nodeId === LOCAL_NODE_ID) return localNode()
       return nodes.find(node => node.nodeId === nodeId)
     },
 
     async upsert(draft) {
-      if (!loaded) throw new Error('node registry written before load()')
+      requireLoaded()
       if (draft.nodeId === LOCAL_NODE_ID) {
         throw new Error('the local machine is built in and cannot be configured')
       }
@@ -342,7 +346,7 @@ export function createNodeRegistry(deps: NodeRegistryDeps): NodeRegistry {
     },
 
     async remove(nodeId) {
-      if (!loaded) throw new Error('node registry written before load()')
+      requireLoaded()
       // Not an error: the local machine is simply not a document entry, so
       // nothing was removed. Refusing it here keeps a caller from believing a
       // machine went away when the next read brings it back.

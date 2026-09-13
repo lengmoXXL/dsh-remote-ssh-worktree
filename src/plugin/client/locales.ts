@@ -69,7 +69,6 @@ export const zh = {
   hintWorktreeName: '分支名会变成 worktree/<名称>，名称不可重复。',
   optional: '可选',
 
-  pickDirectory: '浏览目录',
   pickerEmpty: '这个目录下没有子目录。',
   pickerNoMatch: '没有匹配的子目录。',
   pickerUp: '上一层',
@@ -153,7 +152,6 @@ export const en = {
   hintWorktreeName: 'The branch becomes worktree/<name>; the name must be unique.',
   optional: 'optional',
 
-  pickDirectory: 'Browse',
   pickerEmpty: 'No subdirectories here.',
   pickerNoMatch: 'No subdirectories match.',
   pickerUp: 'Parent directory',

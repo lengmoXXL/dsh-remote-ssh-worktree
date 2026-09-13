@@ -16,7 +16,7 @@
  * @module dsh-remote-workspace/plugin/routing/fs
  */
 
-import type { FileSystem, FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import type { FileSystem, FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { TARGET_KEY_PREFIX, isFsErrorCode } from '../../remote/protocol.ts'
@@ -412,7 +412,11 @@ export function createRoutingFileSystem(deps: RoutingFileSystemDeps): FileSystem
         const outcome = await requireChannel(deps, parsed.nodeId).request('fs.writeText', {
           path: parsed.remotePath,
           content,
-          ...expected === undefined ? {} : { expected: toWireIntent(expected) },
+          ...expected === undefined ? {} : {
+            expected: expected.kind === 'createIfAbsent'
+              ? { kind: 'createIfAbsent' as const }
+              : { kind: 'replaceIfVersion' as const, version: expected.version as string },
+          },
         })
         return {
           operation: outcome.operation,
@@ -456,11 +460,4 @@ export function createRoutingFileSystem(deps: RoutingFileSystemDeps): FileSystem
   }
 
   return router
-}
-
-/** Project a seam write intent onto the wire form. */
-function toWireIntent(intent: FsWriteIntent) {
-  return intent.kind === 'createIfAbsent'
-    ? { kind: 'createIfAbsent' as const }
-    : { kind: 'replaceIfVersion' as const, version: intent.version as string }
 }

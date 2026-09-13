@@ -220,7 +220,6 @@ export interface WorktreeManager {
   closeDirectory(ref: RepoRef): Promise<DirectoryAnchor | undefined>
 }
 
-/** The remote path a managed checkout lives at. */
 /** The path a managed checkout is created at, on whichever machine owns it. */
 function managedWorktreePath(repoPath: string, name: string): string {
   return posix.join(repoPath, WORKTREE_DIR, name)
@@ -232,11 +231,12 @@ function branchFor(name: string): string {
 }
 
 /**
- * Cut a worktree on the node and record its anchor.
+ * Register an anchor as a workspace, best effort.
  * @param deps - the manager's dependencies.
  * @param anchor - the anchor to register as a workspace.
  */
-async function registerWorkspace(deps: WorktreeManagerDeps, anchor: AnchorRecord): Promise<void> {  try {
+async function registerWorkspace(deps: WorktreeManagerDeps, anchor: AnchorRecord): Promise<void> {
+  try {
     await deps.workspace?.register(anchor)
   } catch {
     // The checkout and its anchor are durable on disk; a workspace entry is a
@@ -451,9 +451,7 @@ async function removeLocalWorktree(
  * Make the managed directory invisible to git, on this host.
  *
  * The same file the remote path writes, for the same reason: without it the
- * repository reports itself dirty the moment a worktree exists. It is written
- * after `git worktree add` has created the parent directory, and a pre-existing
- * file is left alone so a user's own ignore rules survive.
+ * repository reports itself dirty the moment a worktree exists.
  * @param repoPath - absolute path of the repository.
  */
 async function ensureIgnoredLocally(repoPath: string): Promise<void> {
@@ -466,9 +464,6 @@ async function ensureIgnoredLocally(repoPath: string): Promise<void> {
 
 /**
  * Register one path as a workspace, so a session can be opened on it.
- *
- * Unlike creation, this is an explicit ask: a registry that is missing or
- * refuses fails the call rather than being swallowed.
  * @param deps - the manager's dependencies.
  * @param anchor - the worktree or directory to open.
  * @returns the anchor that is now open.

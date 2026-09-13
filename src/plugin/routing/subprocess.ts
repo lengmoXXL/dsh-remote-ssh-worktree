@@ -320,7 +320,7 @@ function createRemoteHandle(
       if (startFailure !== undefined) return false
       // The daemon's own wait is the observable fact; the local `done` settles
       // only after the final drain, which is strictly later.
-      await done/* keep */
+      await done
       return signal?.aborted !== true
     },
   }
@@ -434,9 +434,6 @@ async function createRemoteTerminal(
   timer.unref()
   void tick()
 
-  const foreground = (value: { processGroupId: number; inputWaiting: boolean } | null): SubprocessTerminalForeground | undefined =>
-    value === null ? undefined : value
-
   return {
     pid: started.pid,
     output,
@@ -445,7 +442,7 @@ async function createRemoteTerminal(
       await channel.request('term.write', { termId: started.termId, data })
     },
     async inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
-      return foreground(await channel.request('term.inspectForeground', { termId: started.termId }))
+      return await channel.request('term.inspectForeground', { termId: started.termId }) ?? undefined
     },
     async signalForeground(signal: SubprocessTerminalSignal): Promise<number> {
       const result = await channel.request('term.signalForeground', {
@@ -486,6 +483,28 @@ export function createRoutingSubprocessRuntime(
 ): SubprocessRuntimeContract {
   const remoteRipgrep = deps.remoteRipgrep ?? 'rg'
 
+  /**
+   * The machine that owns one cwd, or undefined when this host does.
+   *
+   * A process and a terminal differ only in what they build once the machine is
+   * known, so both dispatch methods resolve the route through here.
+   */
+  const remoteRoute = (cwd: string) => {
+    const route = classifyPath(cwd, undefined, deps.anchors())
+    if (route.kind === 'local') return undefined
+    if (route.kind === 'ambiguous') {
+      throw new Error(
+        `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
+        + 'address it as node:<id>:<path>',
+      )
+    }
+    const channel = deps.channel(route.nodeId)
+    if (channel === undefined) {
+      throw new Error(`remote node "${route.nodeId}" is not connected`)
+    }
+    return { channel, remotePath: route.remotePath }
+  }
+
   return {
     // Executable lookup carries no working directory, so it cannot be routed:
     // a remote spawn resolves its own executable on the node instead.
@@ -494,39 +513,19 @@ export function createRoutingSubprocessRuntime(
     },
 
     spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
-      const route = classifyPath(spec.cwd, undefined, deps.anchors())
-      if (route.kind === 'local') return deps.localProc.spawn(spec)
-      if (route.kind === 'ambiguous') {
-        throw new Error(
-          `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
-          + 'address it as node:<id>:<path>',
-        )
-      }
-      const channel = deps.channel(route.nodeId)
-      if (channel === undefined) {
-        throw new Error(`remote node "${route.nodeId}" is not connected`)
-      }
+      const remote = remoteRoute(spec.cwd)
+      if (remote === undefined) return deps.localProc.spawn(spec)
       return createRemoteHandle(
-        channel,
-        route.remotePath,
+        remote.channel,
+        remote.remotePath,
         { ...spec, argv: rewriteExecutable(spec.argv, remoteRipgrep) },
       )
     },
 
     async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
-      const route = classifyPath(spec.cwd, undefined, deps.anchors())
-      if (route.kind === 'local') return deps.localProc.spawnTerminal(spec)
-      if (route.kind === 'ambiguous') {
-        throw new Error(
-          `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
-          + 'address it as node:<id>:<path>',
-        )
-      }
-      const channel = deps.channel(route.nodeId)
-      if (channel === undefined) {
-        throw new Error(`remote node "${route.nodeId}" is not connected`)
-      }
-      return createRemoteTerminal(channel, route.remotePath, spec)
+      const remote = remoteRoute(spec.cwd)
+      if (remote === undefined) return deps.localProc.spawnTerminal(spec)
+      return createRemoteTerminal(remote.channel, remote.remotePath, spec)
     },
   }
 }

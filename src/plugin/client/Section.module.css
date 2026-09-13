@@ -99,11 +99,6 @@
   white-space: nowrap;
 }
 .dim { color: var(--dsw-alias-label-dimmed); font-size: 12px; }
-.path {
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  word-break: break-all;
-}
 .repos {
   display: flex;
   flex-direction: column;

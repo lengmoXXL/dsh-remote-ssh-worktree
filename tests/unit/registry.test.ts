@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { after, beforeEach, test } from 'node:test'
+import { afterEach, beforeEach, test } from 'node:test'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,7 +21,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'drw-registry-'))
 })
 
-after(async () => {
+afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 

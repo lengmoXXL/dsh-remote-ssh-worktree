@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { after, beforeEach, test } from 'node:test'
+import { afterEach, beforeEach, test } from 'node:test'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,7 +25,7 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'drw-anchors-')))
 })
 
-after(async () => {
+afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 

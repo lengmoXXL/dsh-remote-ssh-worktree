@@ -29,18 +29,18 @@ jobs:
           workspaces: agent
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run build
-      - name: Built artifacts exist
-        run: |
-          test -f lib/index.js
-          test -f lib/index.d.ts
-          test -f lib/client.js
-      # The e2e suite drives the real binary, so build it before testing.
+      # The e2e suite drives the real binary, so build it before testing. The
+      # test run builds the plugin itself through its `pretest` script.
       - run: cargo build --release --manifest-path agent/Cargo.toml
       - name: Test
         run: |
           export DSH_REMOTE_AGENT_BIN="$PWD/agent/target/release/dsh-remote-agent"
           npm test
+      - name: Built artifacts exist
+        run: |
+          test -f lib/index.js
+          test -f lib/index.d.ts
+          test -f lib/client.js
 
   rust:
     strategy:

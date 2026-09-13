@@ -20,8 +20,7 @@
  * the document the first time the factory runs and hands the component the
  * class map. That keeps the component on the same CSS Modules contract the
  * in-repo client packages use — local names, semantic `--dsw-*` tokens, no
- * global leakage — and `clsx` is inlined because it is a browser-only
- * implementation library with no module-table identity to share.
+ * global leakage.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -29,7 +28,7 @@ import { basename, dirname, resolve as resolvePath } from 'node:path'
 import { defineConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
-/** The plugin id the loader keys this bundle by; it must match `dsh.client`. */
+/** The plugin id the web shell keys this bundle by: the package name. */
 const ID = 'dsh-remote-workspace'
 
 /**
@@ -99,13 +98,11 @@ const host = defineConfig({
   // `package.json` names `lib/index.d.ts`, so the declaration must exist.
   dts: true,
   sourcemap: true,
-  // The host half owns `clean` for the shared output directory; the client
-  // half below must not wipe what this one wrote.
   clean: true,
   // `package.json` names `lib/index.js`, which is the convention a profile
   // install expects; the package is `type: module`, so `.js` is already ESM.
   outExtensions: () => ({ js: '.js' }),
-  external: [/^@deepseek-ai\//],
+  deps: { neverBundle: [/^@deepseek-ai\//] },
   outputOptions: {
     banner: '// dsh-remote-workspace host half',
   },
@@ -125,7 +122,7 @@ const client = defineConfig({
   outExtensions: () => ({ js: '.js' }),
   // React and the client stack are the shell's, not ours: a second copy would
   // break hooks and duplicate the renderer.
-  external: [/^react($|\/)/, /^@deepseek-ai\//],
+  deps: { neverBundle: [/^react($|\/)/, /^@deepseek-ai\//] },
   plugins: [cssModulesInline()],
   outputOptions: {
     banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(ID)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;`,

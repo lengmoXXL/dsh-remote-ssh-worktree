@@ -277,8 +277,8 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     return created
   }
 
-  /** Publish a terminal state and drop everything the failure invalidates. */
-  const fail = (entry: Entry, error: unknown): void => {
+  /** Drop everything a connection holds, leaving the entry itself in place. */
+  const clear = (entry: Entry): void => {
     entry.live?.close()
     entry.live = undefined
     entry.pending = undefined
@@ -289,9 +289,24 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     entry.transport = undefined
     entry.localPort = undefined
     entry.progress = undefined
+  }
+
+  /** Publish a terminal state and drop everything the failure invalidates. */
+  const fail = (entry: Entry, error: unknown): void => {
+    clear(entry)
     entry.state = 'failed'
     entry.error = error instanceof Error ? error.message : String(error)
   }
+
+  /** One entry as the status a caller reads. */
+  const statusOf = (nodeId: NodeId, entry: Entry): NodeStatus => ({
+    nodeId,
+    state: entry.state,
+    ...entry.info === undefined ? {} : { info: entry.info },
+    ...entry.localPort === undefined ? {} : { localPort: entry.localPort },
+    ...entry.progress === undefined ? {} : { progress: entry.progress },
+    ...entry.error === undefined ? {} : { error: entry.error },
+  })
 
   return {
     channel(nodeId) {
@@ -300,26 +315,11 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
 
     status(nodeId) {
       const entry = entries.get(nodeId)
-      if (entry === undefined) return { nodeId, state: 'idle' }
-      return {
-        nodeId,
-        state: entry.state,
-        ...entry.info === undefined ? {} : { info: entry.info },
-        ...entry.localPort === undefined ? {} : { localPort: entry.localPort },
-        ...entry.progress === undefined ? {} : { progress: entry.progress },
-        ...entry.error === undefined ? {} : { error: entry.error },
-      }
+      return entry === undefined ? { nodeId, state: 'idle' } : statusOf(nodeId, entry)
     },
 
     list() {
-      return [...entries].map(([nodeId, entry]) => ({
-        nodeId,
-        state: entry.state,
-        ...entry.info === undefined ? {} : { info: entry.info },
-        ...entry.localPort === undefined ? {} : { localPort: entry.localPort },
-        ...entry.progress === undefined ? {} : { progress: entry.progress },
-        ...entry.error === undefined ? {} : { error: entry.error },
-      }))
+      return [...entries].map(([nodeId, entry]) => statusOf(nodeId, entry))
     },
 
     async connect(record) {
@@ -375,30 +375,13 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     disconnect(nodeId) {
       const entry = entries.get(nodeId)
       if (entry === undefined) return
-      entry.live?.close()
-      entry.live = undefined
-      entry.pending = undefined
-      entry.info = undefined
-      entry.transport?.close()
-      entry.transport = undefined
-      entry.localPort = undefined
-      entry.progress = undefined
+      clear(entry)
       entry.error = undefined
       entry.state = 'disconnected'
     },
 
     dispose() {
-      for (const entry of entries.values()) {
-        entry.live?.close()
-        entry.live = undefined
-        entry.pending = undefined
-        entry.info = undefined
-        entry.transport?.close()
-        entry.transport = undefined
-        entry.localPort = undefined
-        entry.progress = undefined
-        entry.state = 'disconnected'
-      }
+      for (const entry of entries.values()) clear(entry)
       entries.clear()
     },
   }
