@@ -351,7 +351,7 @@ async fn require_repository(repo: &Path) -> Result<()> {
 /// Classify a failed `git worktree add` from git's own output.
 fn classify_add(repo: &Path, target: &Path, branch: &str, outcome: &GitOutcome) -> Failure {
     // The branch message also says "already exists", so it is matched first.
-    if says_any(outcome, &["a branch named"]) && says(outcome, "already exists") {
+    if says(outcome, "a branch named") && says(outcome, "already exists") {
         return Failure::new(
             "GIT_BRANCH_EXISTS",
             format!(

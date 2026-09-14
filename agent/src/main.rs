@@ -13,7 +13,7 @@
 //! @module dsh-remote-agent/main
 
 use std::io::Write;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::str::FromStr;
@@ -140,7 +140,7 @@ async fn run(argv: &[String]) -> Result<(), CliError> {
         agent_version: state::AGENT_VERSION.to_string(),
     });
     tokio::spawn(serve(listener, shared));
-    println!("dsh-remote-agent ready {}", format_address(&address));
+    println!("dsh-remote-agent ready {address}");
     let _ = std::io::stdout().flush();
 
     let mut terminate = signal(SignalKind::terminate())
@@ -271,12 +271,4 @@ fn read_root(path: &str) -> Result<PathBuf, CliError> {
         )));
     }
     Ok(canonical)
-}
-
-/// Render one bound address, bracketing an IPv6 literal.
-fn format_address(address: &SocketAddr) -> String {
-    match address {
-        SocketAddr::V4(value) => format!("{}:{}", value.ip(), value.port()),
-        SocketAddr::V6(value) => format!("[{}]:{}", value.ip(), value.port()),
-    }
 }
