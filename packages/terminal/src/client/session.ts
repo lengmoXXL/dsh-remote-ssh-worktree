@@ -11,8 +11,6 @@
  * not when it is hidden — is what finally tears the entry down. The socket
  * closing is what makes the host kill the shell, so nothing outlives the tab.
  *
- * The host is asked for nothing but a terminal in a Session's workspace: the
- * directory, the machine, and the shell all resolve there.
  *
  * @module dsh-terminal/client/session
  */
@@ -30,7 +28,7 @@ export type TerminalState =
   /** Allocated on the host, but the shell has not answered yet. */
   | { readonly kind: 'opening' }
   /** A live shell. */
-  | { readonly kind: 'live'; readonly cwd: string; readonly pid: number; readonly fixedSize: boolean }
+  | { readonly kind: 'live'; readonly cwd: string; readonly fixedSize: boolean }
   /** The shell exited. */
   | { readonly kind: 'ended'; readonly code: number | null; readonly signal: string | null }
   /** The socket went away without the shell reporting an exit. */
@@ -136,7 +134,6 @@ function create(mount: TerminalMount): Entry {
   const element = document.createElement('div')
   // The local is declared beside this file; the CSS Modules indexer cannot prove it.
   element.className = css.surface!
-  element.dataset['dshTerminal'] = 'surface'
   mount.host.appendChild(element)
 
   const term = new Terminal({
@@ -203,7 +200,7 @@ function create(mount: TerminalMount): Entry {
     }
     switch (frame.t) {
       case 'ready':
-        emit(entry, { kind: 'live', cwd: frame.cwd, pid: frame.pid, fixedSize: entry.fixedSize })
+        emit(entry, { kind: 'live', cwd: frame.cwd, fixedSize: entry.fixedSize })
         return
       case 'size':
         entry.fixedSize = !frame.live
@@ -296,12 +293,4 @@ export function restartTerminal(tabId: string): void {
   entries.set(tabId, replacement)
   replacement.fit.fit()
   replacement.term.focus()
-}
-
-/**
- * Empty one terminal's screen and scrollback, leaving the shell running.
- * @param tabId - the Sidebar tab record's id.
- */
-export function clearTerminal(tabId: string): void {
-  entries.get(tabId)?.term.clear()
 }

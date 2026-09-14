@@ -59,8 +59,8 @@ export function TerminalBody({ useTabInfo, sessionId, t }: TerminalBodyProps): R
 
   const gone = state.kind === 'ended' || state.kind === 'failed' || state.kind === 'closed'
   return (
-    <div className={css.pane} data-dsh-terminal={state.kind}>
-      <div className={css.screen} ref={screen} data-dsh-terminal-screen />
+    <div className={css.pane}>
+      <div className={css.screen} ref={screen} />
       <div className={css.bar}>
         <span className={css.path} title={state.kind === 'live' ? state.cwd : undefined}>
           {statusText(state, t)}

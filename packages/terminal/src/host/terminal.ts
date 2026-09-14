@@ -168,9 +168,7 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
     if (current === undefined) return
     if (applied !== undefined && applied.cols === next.cols && applied.rows === next.rows) return
     applied = next
-    // A provider that refuses the resize is not a failure — a node may still be
-    // running an agent from before terminals could be resized — so the browser
-    // is told the size is stale instead.
+    // A refusal is not a failure: the browser is told the size is stale.
     const live = await current.resize(next.cols, next.rows).then(() => true, () => false)
     post({ t: 'size', cols: next.cols, rows: next.rows, live })
   }

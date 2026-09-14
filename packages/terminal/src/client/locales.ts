@@ -28,7 +28,6 @@ export const zh = {
   'note.fixedSize': '这台机器上的终端不支持调整大小',
 
   'action.restart': '重新打开',
-  'action.clear': '清空',
 }
 
 /** Every key this namespace owns. */
@@ -49,5 +48,4 @@ export const en = {
   'note.fixedSize': 'Terminals on this machine cannot be resized',
 
   'action.restart': 'Restart',
-  'action.clear': 'Clear',
 } satisfies Record<TerminalKey, string>

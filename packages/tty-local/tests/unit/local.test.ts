@@ -71,13 +71,13 @@ test('a resize reaches the pty while its shell is running', async () => {
 
 test('the caller environment is layered onto this process', async () => {
   const handle = await provider().spawn({
-    argv: ['/bin/sh', '-c', 'echo "value=$DRW_TTY_TEST"'],
+    argv: ['/bin/sh', '-c', 'echo "value=$DRW_TTY_TEST inherited=${PATH:+set}"'],
     cwd: '/tmp',
     env: { DRW_TTY_TEST: 'layered' },
     cols: 80,
     rows: 24,
   })
-  await watcher(handle).until('value=layered')
+  await watcher(handle).until('value=layered inherited=set')
   await handle.done
 })
 
@@ -93,6 +93,7 @@ test('terminate ends a long-running program, and a later call is a no-op', async
   const outcome = await handle.done
   assert.notEqual(outcome.signal, null, 'the program ended by signal rather than on its own')
   await handle.terminate()
+  assert.deepEqual(await handle.done, outcome, 'a later release leaves the settled outcome alone')
 })
 
 test('a program that cannot start is reported through the outcome', async () => {
@@ -105,5 +106,8 @@ test('a program that cannot start is reported through the outcome', async () => 
     rows: 24,
   })
   const outcome = await handle.done
-  assert.notEqual(outcome.exitCode, 0)
+  assert.ok(
+    outcome.exitCode !== null && outcome.exitCode !== 0,
+    `expected a failing exit code, got ${JSON.stringify(outcome)}`,
+  )
 })

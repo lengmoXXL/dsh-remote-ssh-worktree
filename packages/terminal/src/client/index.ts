@@ -27,10 +27,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import { TERMINAL_ID, TERMINAL_KIND } from '../shared/wire.ts'
 import { en, NS, zh, type TerminalKey } from './locales.ts'
 import { TerminalBody } from './TerminalBody.tsx'
 import { TerminalGlyph } from './glyphs.tsx'
+
+/** The tab type this plugin contributes to the right Sidebar. */
+const TERMINAL_KIND = 'terminal'
+
+/** That type's implementation identity, and the key its body registers under. */
+const TERMINAL_ID = 'dsh-terminal'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {

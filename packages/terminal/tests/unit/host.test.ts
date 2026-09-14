@@ -160,7 +160,7 @@ function fakeSocket(): FakeSocket {
 }
 
 /** A host context whose terminal seam is the given provider. */
-function ttyContext(spawn: (request: TtySpawnRequest) => Promise<TtyHandle>, cwd = '/w/live'): Context {
+function ttyContext(spawn: (request: TtySpawnRequest) => Promise<TtyHandle>, cwd: string): Context {
   return {
     sessions: { get: () => ({ header: { cwd } }) },
     get: () => undefined,
@@ -191,7 +191,7 @@ async function opened(options: {
     browser.socket,
   )
   browser.send({ t: 'open', sessionId: 'session-1', cols: options.cols ?? 80, rows: options.rows ?? 24 })
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   return { terminal, browser, requests }
 }
 
@@ -222,7 +222,7 @@ test('an unknown Session is answered with an error frame rather than a terminal'
     browser.socket,
   )
   browser.send({ t: 'open', sessionId: 'session-1', cols: 80, rows: 24 })
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   assert.equal(requests.length, 0, 'nothing is allocated for a Session nobody knows')
   // The browser reads the refusal's words, so the frame carries the reason
   // rather than the typed code the host branches on.
@@ -235,7 +235,7 @@ test('an unknown Session is answered with an error frame rather than a terminal'
 test('keystrokes reach the terminal and its output reaches the browser', async () => {
   const { terminal, browser } = await opened()
   browser.send({ t: 'input', data: 'ls\r' })
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(terminal.writes, ['ls\r'])
   terminal.emit('total 0\n')
   assert.ok(browser.sent.some(entry => Buffer.isBuffer(entry) && entry.toString('utf8') === 'total 0\n'))
@@ -244,7 +244,7 @@ test('keystrokes reach the terminal and its output reaches the browser', async (
 test('a resize the provider accepts is reported live', async () => {
   const { terminal, browser } = await opened()
   browser.send({ t: 'resize', cols: 100, rows: 30 })
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(terminal.resizes, [[100, 30]])
   assert.deepEqual(browser.frames.at(-1), { t: 'size', cols: 100, rows: 30, live: true })
 })
@@ -252,7 +252,7 @@ test('a resize the provider accepts is reported live', async () => {
 test('a resize the provider refuses is reported stale instead of failing the terminal', async () => {
   const { terminal, browser } = await opened({ refuseResize: true })
   browser.send({ t: 'resize', cols: 100, rows: 30 })
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(terminal.resizes, [])
   assert.deepEqual(browser.frames.at(-1), { t: 'size', cols: 100, rows: 30, live: false })
 })
@@ -260,14 +260,14 @@ test('a resize the provider refuses is reported stale instead of failing the ter
 test('a browser that goes away releases the terminal', async () => {
   const { terminal, browser } = await opened()
   browser.close()
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   assert.equal(terminal.terminations(), 1)
 })
 
 test('a terminal that exits says so and closes the socket', async () => {
   const { terminal, browser } = await opened()
   terminal.exit({ exitCode: 0, signal: null })
-  await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(browser.frames.at(-1), { t: 'exit', code: 0, signal: null })
   assert.equal(browser.closed()?.code, 1000)
 })

@@ -113,8 +113,9 @@ async function quiet(): Promise<void> {
  * Wait for a promise while keeping the event loop awake.
  *
  * The provider's poll timer is deliberately unref'd — a terminal must not hold
- * the host open by itself — so a case that merely awaited `done` would let the
- * loop drain before the next poll fired, and the wait would never finish.
+ * the host open by itself — and on Node 22 and 24 the test runner cancels a case
+ * whose promise is still pending when the loop drains, which is how this file
+ * failed on CI before the wait held a timer of its own.
  * @param promise - what is being waited on.
  * @param timeoutMs - how long to wait before failing.
  * @returns what the promise resolved to.
@@ -143,6 +144,7 @@ test('what the daemon retains is published in order, and the exit settles the ha
   const handle = await createRemoteTty(wire, { ...request, graceMs: 300 })
   const output = watcher(handle)
   await output.until('hello world')
+  assert.equal(output.seen(), 'hello world', 'the chunks arrive in the order the daemon wrote them')
   assert.deepEqual(await settled(handle.done), { exitCode: 0, signal: null })
 
   // The spawn carried what the caller asked for, under the resolved directory.

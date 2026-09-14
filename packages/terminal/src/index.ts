@@ -46,7 +46,6 @@ export interface Config {
   graceMs?: number
 }
 
-/** Validated plugin config. Every default lives in {@link apply}. */
 export const Config: z<Config> = z.object({
   shell: z.string(),
   shellArgs: z.array(z.string()),

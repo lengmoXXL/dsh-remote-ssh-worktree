@@ -19,12 +19,6 @@
 /** Where the host serves the terminal socket. */
 export const SOCKET_PATH = '/dsh-terminal/ws'
 
-/** The tab type this plugin contributes to the right Sidebar. */
-export const TERMINAL_KIND = 'terminal'
-
-/** That type's implementation identity, and the key its body registers under. */
-export const TERMINAL_ID = 'dsh-terminal'
-
 /** Open one terminal in a Session's workspace. The first frame a browser sends. */
 export interface OpenFrame {
   readonly t: 'open'
