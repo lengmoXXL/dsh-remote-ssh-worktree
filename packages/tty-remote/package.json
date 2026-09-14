@@ -1,0 +1,51 @@
+{
+  "name": "dsh-tty-remote",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Remote terminal provider for DeepSeek Harness: a PTY a node daemon owns, driven over the harness wire.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lengmoXXL/dsh-remote-workspace.git",
+    "directory": "packages/tty-remote"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "pty",
+    "remote",
+    "terminal"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dsh-tty": "0.0.1",
+    "tsdown": "^0.23.0",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "dsh-tty": "0.0.1"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsdown",
+    "pretest": "npm run build",
+    "test": "node --test --experimental-strip-types tests/unit/*.test.ts"
+  },
+  "sideEffects": false
+}

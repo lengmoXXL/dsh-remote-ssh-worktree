@@ -2,9 +2,9 @@
  * One browser socket, one PTY.
  *
  * The bridge owns the whole correspondence: it resolves the Session's
- * workspace, allocates the terminal through `ctx.subprocess` — which is what
- * makes a routed workspace run its shell on the node that owns it, with no
- * knowledge of machines here — pumps output back as binary frames, and kills
+ * workspace, allocates the terminal through `ctx.tty` — which is what makes a
+ * routed workspace run its shell on the node that owns it, with no knowledge
+ * of machines here — pumps output back as binary frames, and kills
  * the terminal when the socket goes away. Nothing outlives the socket, so a
  * browser that is closed, reloaded, or disconnected leaves no shell behind.
  *
@@ -17,10 +17,9 @@
 
 import { Buffer } from 'node:buffer'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
+import type { TtyHandle } from 'dsh-tty'
 import { WebSocket, type RawData } from 'ws'
 import type { ClientFrame, HostFrame, OpenFrame } from '../shared/wire.ts'
-import { resizeTerminal } from './resize.ts'
 import { resolveWorkspace } from './workspace.ts'
 
 /** How this deployment starts a shell. */
@@ -74,12 +73,12 @@ function describe(error: unknown): string {
 
 /**
  * Serve one terminal over one accepted socket.
- * @param ctx - the host context carrying `ctx.subprocess`.
+ * @param ctx - the host context carrying `ctx.tty`.
  * @param settings - how to start a shell.
  * @param socket - the accepted browser socket.
  */
 export function attachTerminal(ctx: Context, settings: TerminalSettings, socket: WebSocket): void {
-  let handle: SubprocessTerminalHandle | undefined
+  let handle: TtyHandle | undefined
   let opening = false
   let closed = false
   /** The size the browser last asked for; the spawn uses it even if it changed mid-allocation. */
@@ -102,7 +101,7 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
   }
 
   /** Stream terminal output to the browser, one chunk in flight. */
-  const pump = (terminal: SubprocessTerminalHandle): void => {
+  const pump = (terminal: TtyHandle): void => {
     terminal.output.on('data', (chunk: Buffer) => {
       if (socket.readyState !== WebSocket.OPEN) return
       terminal.output.pause()
@@ -130,7 +129,7 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
     opening = true
     try {
       const cwd = await resolveWorkspace(ctx, frame.sessionId)
-      const terminal = await ctx.subprocess.spawnTerminal({
+      const terminal = await ctx.tty.spawn({
         argv: [settings.shell, ...settings.shellArgs],
         cwd,
         env: { ...settings.env },
@@ -169,9 +168,10 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
     if (current === undefined) return
     if (applied !== undefined && applied.cols === next.cols && applied.rows === next.rows) return
     applied = next
-    // A provider that cannot resize is not a failure — the execution world may
-    // simply not offer it — so the browser is told the size is stale instead.
-    const live = await resizeTerminal(current, next.cols, next.rows).catch(() => false)
+    // A provider that refuses the resize is not a failure — a node may still be
+    // running an agent from before terminals could be resized — so the browser
+    // is told the size is stale instead.
+    const live = await current.resize(next.cols, next.rows).then(() => true, () => false)
     post({ t: 'size', cols: next.cols, rows: next.rows, live })
   }
 

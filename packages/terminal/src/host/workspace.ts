@@ -10,7 +10,7 @@
  * The resulting path is what a terminal is started with, and it is also what
  * makes the machine choice for free: a workspace routed to a
  * dsh-remote-workspace node is named by its local anchor path, so the routing
- * subprocess runtime resolves that path to the node and runs the shell there.
+ * terminal provider resolves that path to the node and runs the shell there.
  * Nothing here needs to know which machines exist.
  *
  * @module dsh-terminal/host/workspace

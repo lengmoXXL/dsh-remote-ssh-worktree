@@ -12,11 +12,11 @@
 
 会话自己的工作区目录。浏览器只发一个会话身份，不发路径：host 从该会话的
 header 解析出工作区（和其他所有按工作区取数的读取方完全一致），再通过
-`ctx.subprocess` 分配终端。
+`ctx.tty` 分配终端。
 
 这一个接缝就是全部的远程故事。被
 [dsh-remote-workspace](https://github.com/lengmoXXL/dsh-remote-workspace)
-路由的工作区，其名字就是本地 anchor 路径，路由版的 subprocess 运行时会把该
+路由的工作区，其名字就是本地 anchor 路径，路由版的终端 provider 会把该
 路径解析到对应节点，并在**那台机器上**起 shell——同一条代码路径，这里完全
 不需要知道有哪些机器。没有装路由插件时，所有工作区就都是本地的。
 
@@ -39,10 +39,10 @@ PTY。关掉浏览器标签页不会留下任何 shell。
 面板量出来的尺寸驱动 PTY：`ResizeObserver` 调 `fit()`，每次变化都把新尺寸
 发给 host。
 
-`SubprocessTerminalHandle` 没有 resize 这个动词，所以该能力发布在接缝旁边、
-由调用方探测。本地由 provider 通过它持有的 node-pty 进程调整；在节点上则
-需要 `term.resize`，远程 agent 在 **0.0.2** 才有。还在跑 0.0.1 的节点会保持
-终端打开时的尺寸，状态栏会直说这件事，而不是让一个不更新的布局自己去解释。
+`resize` 是终端接缝（`ctx.tty`）自己的动词，host 直接调用，不需要先问是哪一种
+provider 作答：本地 provider 设置 PTY 的窗口尺寸，节点上的终端则走 `term.resize`，
+远程 agent 在 **0.0.2** 才有。拒绝调整的 provider——还在跑 0.0.1 的节点——会让终端
+保持在打开时的尺寸，状态栏会直说这件事，而不是让一个不更新的布局自己去解释。
 
 ## 沙箱
 

@@ -81,10 +81,10 @@ export interface ErrorFrame {
 /**
  * How a resize settled.
  *
- * `live` is false when the execution world cannot resize an allocated PTY:
- * the remote daemon's terminal primitive has no resize verb, so a terminal on
- * a node keeps the size it was opened with. Saying so is the difference
- * between a stale layout and a bug report.
+ * `live` is false when the provider refused the resize: a node may still run
+ * an agent from before `term.resize` existed, so its terminals keep the size
+ * they were opened with. Saying so is the difference between a stale layout
+ * and a bug report.
  */
 export interface SizeFrame {
   readonly t: 'size'

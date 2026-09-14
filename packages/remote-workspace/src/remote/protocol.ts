@@ -301,6 +301,15 @@ export function asProcId(value: string): ProcId {
   return value as ProcId
 }
 
+/**
+ * Admit a string as a terminal session id.
+ * @param value - a string the daemon minted, or one the wire delivered.
+ * @returns the same string, branded.
+ */
+export function asTermId(value: string): TermId {
+  return value as TermId
+}
+
 /** One pushed chunk of a raw piped stream. */
 export interface SpPipeFrame {
   /** The process the chunk belongs to. */

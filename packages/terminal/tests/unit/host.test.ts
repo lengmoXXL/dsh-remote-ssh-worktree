@@ -1,13 +1,20 @@
 /**
- * The host half's two decisions, away from a socket: which directory a Session
- * opens in, and whether a terminal can be resized.
+ * The host half's decisions away from a real socket: which directory a Session
+ * opens in, and what one browser socket makes the terminal seam do — allocate,
+ * carry bytes both ways, resize, and release.
+ *
+ * The seam is faked at its own boundary, so these cases prove the bridge's half
+ * of the contract: what it asks for, which frames it answers with, and what it
+ * does when the provider refuses a resize.
  */
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { PassThrough } from 'node:stream'
+import { WebSocket } from 'ws'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
-import { resizeTerminal } from '../../src/host/resize.ts'
+import type { TtyHandle, TtyOutcome, TtySpawnRequest } from 'dsh-tty'
+import { attachTerminal, type TerminalSettings } from '../../src/host/terminal.ts'
 import { resolveWorkspace, TerminalFailure } from '../../src/host/workspace.ts'
 
 /** A context carrying only what the workspace resolver reads. */
@@ -23,6 +30,14 @@ function hostContext(options: {
       ? { stat: () => Promise.resolve(options.stored) }
       : undefined,
   } as unknown as Context
+}
+
+/** How the bridge starts a shell, for every case below. */
+const settings: TerminalSettings = {
+  shell: '/bin/sh',
+  shellArgs: ['-l'],
+  env: { TERM: 'xterm-256color' },
+  graceMs: 3000,
 }
 
 test('a live Session answers with its own workspace', async () => {
@@ -49,31 +64,210 @@ test('an empty Session identity is refused before anything is read', async () =>
   await assert.rejects(resolveWorkspace(ctx, '  '), TerminalFailure)
 })
 
-test('a provider that publishes resize is used', async () => {
-  const calls: number[][] = []
-  const handle = {
-    resize: (cols: number, rows: number) => {
-      calls.push([cols, rows])
-    },
-  } as unknown as SubprocessTerminalHandle
-  assert.equal(await resizeTerminal(handle, 120, 40), true)
-  assert.deepEqual(calls, [[120, 40]])
-})
+/** One terminal the bridge allocated, with the knobs a case drives. */
+interface FakeTerminal {
+  readonly handle: TtyHandle
+  readonly writes: string[]
+  readonly resizes: number[][]
+  terminations(): number
+  exit(outcome: TtyOutcome): void
+  emit(chunk: string): void
+}
 
-test('a local provider is resized through the node-pty process it keeps', async () => {
-  const calls: number[][] = []
-  const handle = {
-    terminal: {
-      resize: (cols: number, rows: number) => {
-        calls.push([cols, rows])
+/**
+ * A terminal handle a case answers for.
+ * @param refuseResize - whether the provider refuses a resize, the way a node
+ *   running an agent from before `term.resize` existed does.
+ * @returns the handle and the observations a case makes on it.
+ */
+function fakeTerminal(refuseResize = false): FakeTerminal {
+  const output = new PassThrough()
+  const writes: string[] = []
+  const resizes: number[][] = []
+  let terminations = 0
+  let settle: (outcome: TtyOutcome) => void = () => {}
+  const done = new Promise<TtyOutcome>((resolve) => { settle = resolve })
+  return {
+    writes,
+    resizes,
+    terminations: () => terminations,
+    exit: outcome => settle(outcome),
+    emit: (chunk) => { output.write(Buffer.from(chunk, 'utf8')) },
+    handle: {
+      pid: 4242,
+      output,
+      done,
+      async write(data) { writes.push(data) },
+      async resize(cols, rows) {
+        if (refuseResize) throw new Error('the daemon does not answer term.resize')
+        resizes.push([cols, rows])
       },
+      async terminate() { terminations += 1 },
     },
-  } as unknown as SubprocessTerminalHandle
-  assert.equal(await resizeTerminal(handle, 60, 20), true)
-  assert.deepEqual(calls, [[60, 20]])
+  }
+}
+
+/** A browser socket the bridge can send on, and a case can drive. */
+interface FakeSocket {
+  readonly socket: WebSocket
+  readonly sent: readonly (string | Buffer)[]
+  readonly frames: readonly unknown[]
+  closed(): { readonly code: number; readonly reason: string } | undefined
+  send(frame: unknown): void
+  close(): void
+}
+
+/**
+ * A socket that records what the bridge sent and replays what a case sends.
+ * @returns the socket and the observations a case makes on it.
+ */
+function fakeSocket(): FakeSocket {
+  const sent: (string | Buffer)[] = []
+  const listeners = new Map<string, ((...args: never[]) => void)[]>()
+  let closed: { code: number; reason: string } | undefined
+  return {
+    sent,
+    get frames() {
+      return sent.filter(entry => typeof entry === 'string')
+        .map(entry => JSON.parse(entry as string) as unknown)
+    },
+    closed: () => closed,
+    send: (frame) => {
+      for (const handler of listeners.get('message') ?? []) {
+        (handler as (data: string, isBinary: boolean) => void)(JSON.stringify(frame), false)
+      }
+    },
+    close: () => {
+      for (const handler of listeners.get('close') ?? []) handler()
+    },
+    socket: {
+      readyState: WebSocket.OPEN,
+      on(event: string, handler: (...args: never[]) => void) {
+        const list = listeners.get(event) ?? []
+        list.push(handler)
+        listeners.set(event, list)
+        return this
+      },
+      send(data: unknown, callback?: () => void) {
+        sent.push(data as string | Buffer)
+        callback?.()
+      },
+      close(code: number, reason: string) {
+        closed = { code, reason }
+      },
+    } as unknown as WebSocket,
+  }
+}
+
+/** A host context whose terminal seam is the given provider. */
+function ttyContext(spawn: (request: TtySpawnRequest) => Promise<TtyHandle>, cwd = '/w/live'): Context {
+  return {
+    sessions: { get: () => ({ header: { cwd } }) },
+    get: () => undefined,
+    tty: { spawn },
+  } as unknown as Context
+}
+
+/** Serve one open frame and return everything the case observes. */
+async function opened(options: {
+  readonly refuseResize?: boolean
+  readonly cwd?: string
+  readonly cols?: number
+  readonly rows?: number
+} = {}): Promise<{
+  terminal: FakeTerminal
+  browser: FakeSocket
+  requests: TtySpawnRequest[]
+}> {
+  const terminal = fakeTerminal(options.refuseResize ?? false)
+  const requests: TtySpawnRequest[] = []
+  const browser = fakeSocket()
+  attachTerminal(
+    ttyContext(async (request) => {
+      requests.push(request)
+      return terminal.handle
+    }, options.cwd ?? '/w/live'),
+    settings,
+    browser.socket,
+  )
+  browser.send({ t: 'open', sessionId: 'session-1', cols: options.cols ?? 80, rows: options.rows ?? 24 })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  return { terminal, browser, requests }
+}
+
+test('a terminal is allocated through the seam in the Session workspace', async () => {
+  const { browser, requests } = await opened({ cols: 120, rows: 40 })
+  assert.deepEqual(requests, [{
+    argv: ['/bin/sh', '-l'],
+    cwd: '/w/live',
+    env: { TERM: 'xterm-256color' },
+    cols: 120,
+    rows: 40,
+    graceMs: 3000,
+  }])
+  assert.deepEqual(browser.frames, [{ t: 'ready', pid: 4242, cwd: '/w/live' }])
 })
 
-test('a terminal with no resize capability reports the fact instead of failing', async () => {
-  const handle = {} as unknown as SubprocessTerminalHandle
-  assert.equal(await resizeTerminal(handle, 80, 24), false)
+test('an unknown Session is answered with an error frame rather than a terminal', async () => {
+  const terminal = fakeTerminal()
+  const requests: TtySpawnRequest[] = []
+  const browser = fakeSocket()
+  attachTerminal(
+    {
+      sessions: { get: () => undefined },
+      get: () => undefined,
+      tty: { spawn: async (request: TtySpawnRequest) => { requests.push(request); return terminal.handle } },
+    } as unknown as Context,
+    settings,
+    browser.socket,
+  )
+  browser.send({ t: 'open', sessionId: 'session-1', cols: 80, rows: 24 })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.equal(requests.length, 0, 'nothing is allocated for a Session nobody knows')
+  // The browser reads the refusal's words, so the frame carries the reason
+  // rather than the typed code the host branches on.
+  const frames = browser.frames as { readonly t: string; readonly message?: string }[]
+  assert.equal(frames.length, 1)
+  assert.equal(frames[0]?.t, 'error')
+  assert.match(frames[0]?.message ?? '', /session-1/)
+})
+
+test('keystrokes reach the terminal and its output reaches the browser', async () => {
+  const { terminal, browser } = await opened()
+  browser.send({ t: 'input', data: 'ls\r' })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.deepEqual(terminal.writes, ['ls\r'])
+  terminal.emit('total 0\n')
+  assert.ok(browser.sent.some(entry => Buffer.isBuffer(entry) && entry.toString('utf8') === 'total 0\n'))
+})
+
+test('a resize the provider accepts is reported live', async () => {
+  const { terminal, browser } = await opened()
+  browser.send({ t: 'resize', cols: 100, rows: 30 })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.deepEqual(terminal.resizes, [[100, 30]])
+  assert.deepEqual(browser.frames.at(-1), { t: 'size', cols: 100, rows: 30, live: true })
+})
+
+test('a resize the provider refuses is reported stale instead of failing the terminal', async () => {
+  const { terminal, browser } = await opened({ refuseResize: true })
+  browser.send({ t: 'resize', cols: 100, rows: 30 })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.deepEqual(terminal.resizes, [])
+  assert.deepEqual(browser.frames.at(-1), { t: 'size', cols: 100, rows: 30, live: false })
+})
+
+test('a browser that goes away releases the terminal', async () => {
+  const { terminal, browser } = await opened()
+  browser.close()
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.equal(terminal.terminations(), 1)
+})
+
+test('a terminal that exits says so and closes the socket', async () => {
+  const { terminal, browser } = await opened()
+  terminal.exit({ exitCode: 0, signal: null })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.deepEqual(browser.frames.at(-1), { t: 'exit', code: 0, signal: null })
+  assert.equal(browser.closed()?.code, 1000)
 })

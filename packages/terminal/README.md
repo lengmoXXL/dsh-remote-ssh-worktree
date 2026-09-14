@@ -14,13 +14,14 @@ nothing about the column is special-cased for this plugin.
 A shell in the Session's own workspace directory. The browser sends a Session
 identity and never a path: the host resolves the workspace from that Session's
 header, exactly as every other workspace-scoped reader does, and allocates the
-terminal through `ctx.subprocess`.
+terminal through `ctx.tty`.
 
 That one seam is the whole remote story. A workspace routed by
 [dsh-remote-workspace](https://github.com/lengmoXXL/dsh-remote-workspace) is
-named by its local anchor path, so the routing subprocess runtime resolves that
+named by its local anchor path, so the routing terminal provider resolves that
 path to its node and starts the shell **there** — same code path, no knowledge
-of machines here. With no router composed, every workspace is simply local.
+of machines here. With no router composed, every workspace is simply local, and
+`dsh-tty-local` is what answers.
 
 The shell is the machine's own login shell, resolved on whichever machine owns
 the workspace: argv is `/bin/sh -c 'exec "${SHELL:-/bin/sh}" -l'`, so a
@@ -43,12 +44,12 @@ behind.
 The panel's measured box drives the PTY: a `ResizeObserver` fits xterm, and the
 new size is sent to the host on every change.
 
-`SubprocessTerminalHandle` has no resize verb, so the capability is published
-beside the seam and probed. Locally the provider resizes through the node-pty
-process it keeps. On a node it needs `term.resize`, which the remote agent
-gained in **0.0.2** — a node still running 0.0.1 keeps whatever size its
-terminal was opened with, and the status line says so rather than leaving a
-stale layout unexplained.
+`resize` is a verb of the terminal seam (`ctx.tty`), so the host applies it
+without asking what kind of provider answered: the local one sets the PTY's
+window size, and a node's terminal is resized through `term.resize`, which the
+remote agent gained in **0.0.2**. A provider that refuses — a node still running
+0.0.1 — leaves the terminal at the size it was opened with, and the status line
+says so rather than leaving a stale layout unexplained.
 
 ## Sandboxing
 

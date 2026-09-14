@@ -26,6 +26,8 @@ import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import type { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
+import type { TtyRuntime } from 'dsh-tty'
+import { LocalTtyRuntime } from 'dsh-tty-local'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import z from '@deepseek-ai/schemastery'
 import { homedir } from 'node:os'
@@ -37,6 +39,7 @@ import { registerNodeApi } from './plugin/api.ts'
 import { createRoutingFileSystem } from './plugin/routing/fs.ts'
 import { createRoutingShellExecutor } from './plugin/routing/shell.ts'
 import { createRoutingSubprocessRuntime } from './plugin/routing/subprocess.ts'
+import { createRoutingTty } from './plugin/routing/tty.ts'
 import { AGENT_VERSION } from './remote/agent/install.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS } from './remote/ssh.ts'
 import { createAnchorStore } from './storage/anchors.ts'
@@ -239,6 +242,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       })
       return ctx.provide('shell', router as unknown as ShellExecutor)
     })
+  })
+
+  // The terminal router composes the local PTY provider and answers for a
+  // node's directories with the daemon's own terminals. The local provider is
+  // the node-pty one rather than the subprocess seam because a terminal is a
+  // view whose size a person changes while the shell keeps running, and only a
+  // provider that holds the PTY can carry that.
+  const ttyScope = ctx.isolate('tty')
+  ttyScope.plugin(LocalTtyRuntime)
+  ttyScope.inject(['tty'], (scoped) => {
+    const router = createRoutingTty({
+      localTty: scoped.tty,
+      anchors: () => anchorStore.routes(),
+      channel: nodeId => connections.channel(nodeId),
+    })
+    return ctx.provide('tty', router as unknown as TtyRuntime)
   })
 }
 

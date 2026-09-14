@@ -2,11 +2,10 @@
  * dsh-terminal — a shell in the Web GUI's right Sidebar.
  *
  * The host half owns one thing: a WebSocket that turns into a PTY. It resolves
- * the Session's workspace directory and allocates the shell through
- * `ctx.subprocess`, which is the whole remote story — a workspace routed by
- * dsh-remote-workspace is named by its local anchor path, so the routing
- * subprocess runtime resolves that path to the node and starts the shell
- * there. This plugin never asks which machine owns a directory, and with no
+ * the Session's workspace directory and allocates the shell through `ctx.tty`,
+ * which is the whole remote story — a workspace routed by dsh-remote-workspace
+ * is named by its local anchor path, so the routing terminal provider resolves
+ * that path to the node and starts the shell there. This plugin never asks which machine owns a directory, and with no
  * router composed every workspace is simply local.
  *
  * The terminal is deliberately not confined by the Session's sandbox mode. That
@@ -26,8 +25,8 @@ import { SOCKET_PATH } from './shared/wire.ts'
 /** Plugin name used by the Loader and by diagnostics. */
 export const name = 'dsh-terminal'
 
-/** Services this plugin needs before it activates: the Session store and the process seam. */
-export const inject = ['sessions', 'subprocess']
+/** Services this plugin needs before it activates: the Session store and the terminal seam. */
+export const inject = ['sessions', 'tty']
 
 /** Deployment-varying choices for this plugin. */
 export interface Config {

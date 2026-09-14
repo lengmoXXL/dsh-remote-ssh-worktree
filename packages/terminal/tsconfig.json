@@ -2,10 +2,24 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
-    "types": ["node"],
-    "noPropertyAccessFromIndexSignature": true
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node"
+    ],
+    "noPropertyAccessFromIndexSignature": true,
+    "paths": {
+      "dsh-tty": [
+        "../tty/src/index.ts"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["src/client/**"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "src/client/**"
+  ]
 }
