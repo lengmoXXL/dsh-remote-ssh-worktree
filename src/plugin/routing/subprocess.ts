@@ -54,6 +54,25 @@ export type SubprocessRuntimeContract = Pick<
   'resolveExecutable' | 'spawn' | 'spawnTerminal'
 >
 
+/**
+ * A remote terminal, plus the resize the seam has no verb for.
+ *
+ * `SubprocessTerminalHandle` stops at allocation, text, foreground groups, and
+ * teardown, so a consumer that wants to keep a PTY in step with its window has
+ * nowhere to ask. This provider publishes the capability beside the seam — the
+ * object is still a `SubprocessTerminalHandle`, and a consumer probes for
+ * `resize` — which is what `dsh-terminal` does.
+ */
+export interface RemoteTerminalHandle extends SubprocessTerminalHandle {
+  /**
+   * Ask the daemon to adopt a new terminal size. The kernel signals the
+   * foreground process group itself when the size actually changes.
+   * @param cols - column count.
+   * @param rows - row count.
+   */
+  resize(cols: number, rows: number): Promise<void>
+}
+
 /** What the routing subprocess runtime needs from its owner. */
 export interface RoutingSubprocessDeps {
   /** The composed factory implementation serving every local cwd. */
@@ -376,7 +395,7 @@ async function createRemoteTerminal(
   channel: NodeChannel,
   remoteCwd: string,
   spec: SubprocessTerminalSpawnSpec,
-): Promise<SubprocessTerminalHandle> {
+): Promise<RemoteTerminalHandle> {
   const started = await channel.request('term.spawn', {
     argv: [...spec.argv],
     cwd: remoteCwd,
@@ -438,6 +457,9 @@ async function createRemoteTerminal(
     done,
     async write(data: string): Promise<void> {
       await channel.request('term.write', { termId: started.termId, data })
+    },
+    async resize(cols: number, rows: number): Promise<void> {
+      await channel.request('term.resize', { termId: started.termId, cols, rows })
     },
     async inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
       return await channel.request('term.inspectForeground', { termId: started.termId }) ?? undefined

@@ -36,7 +36,7 @@ import { runSsh, sshFailure } from '../ssh.ts'
  * this together with the release tag and `agent/Cargo.toml`, which a unit test
  * keeps in step.
  */
-export const AGENT_VERSION = '0.0.1'
+export const AGENT_VERSION = '0.0.2'
 
 /** A started agent, and where a forward can reach it. */
 export interface AgentEndpoint {

@@ -20,6 +20,7 @@ import { connectNode } from '../../src/remote/client.ts'
 import type { ConnectedNode } from '../../src/remote/client.ts'
 import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
+import type { RemoteTerminalHandle } from '../../src/plugin/routing/subprocess.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
 
 const TOKEN = 'terminal-token-0123456789'
@@ -150,6 +151,26 @@ test('the terminal runs in the remote working directory', async (t) => {
   const marker = remoteRoot.slice(remoteRoot.lastIndexOf('/') + 1)
   const seen = await until(handle, 'pwd\n', output => output.includes(marker), 'the working directory')
   assert.match(seen, new RegExp(marker))
+
+  await handle.terminate()
+  await handle.done
+})
+
+test('a resize reaches the node and changes the pty window size', async (t) => {
+  if (skipWithoutPty(t)) return
+  const handle = await runtime().spawnTerminal({
+    argv: ['/bin/sh', '-i'],
+    cwd: anchorRoot,
+    rows: 24,
+    cols: 80,
+    graceMs: 1000,
+  })
+
+  await (handle as RemoteTerminalHandle).resize(120, 40)
+  // `stty size` reads the terminal's own window size, so the answer is the
+  // node's kernel's, not this proxy's bookkeeping.
+  const seen = await until(handle, 'stty size\n', output => /\b40 120\b/u.test(output), 'the resized window size')
+  assert.match(seen, /\b40 120\b/u)
 
   await handle.terminate()
   await handle.done

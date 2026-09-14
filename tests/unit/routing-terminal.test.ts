@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { SubprocessRuntime, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import type { RemoteTerminalHandle } from '../../src/plugin/routing/subprocess.ts'
 import type { NodeChannel } from '../../src/remote/client.ts'
 import type { AnchorRoute } from '../../src/storage/anchors.ts'
 import { createRoutingSubprocessRuntime } from '../../src/plugin/routing/subprocess.ts'
@@ -124,6 +125,17 @@ test('write reaches the terminal untouched', async () => {
 
   const write = calls.find(call => call.method === 'term.write')
   assert.deepEqual(write?.params, { termId: 't1', data: 'ls\n' })
+  await handle.terminate()
+})
+
+test('resize reaches the daemon as the terminal method', async () => {
+  const { channel, calls } = fakeTerminalDaemon({})
+  const handle = await runtime(channel).spawnTerminal(spec('/srv/app/login'))
+  // The capability the seam has no verb for, published beside it.
+  await (handle as RemoteTerminalHandle).resize(120, 40)
+
+  const resize = calls.find(call => call.method === 'term.resize')
+  assert.deepEqual(resize?.params, { termId: 't1', cols: 120, rows: 40 })
   await handle.terminate()
 })
 

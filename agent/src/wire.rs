@@ -232,6 +232,14 @@ pub async fn dispatch(method: &str, params: &Value, backends: &Backends) -> Resu
                 )
                 .await
         }
+        "term.resize" => {
+            let source = as_record(params, method)?;
+            backends.term.resize(
+                require_string(source, "termId", method)?,
+                read_dimension(source, "cols", method)?,
+                read_dimension(source, "rows", method)?,
+            )
+        }
         "term.inspectForeground" => {
             let source = as_record(params, method)?;
             backends
@@ -408,8 +416,8 @@ fn read_terminal_spec(params: &Value, method: &str) -> Result<TerminalSpawnSpec>
         argv: read_argv(source, method)?,
         cwd: require_string(source, "cwd", method)?.to_string(),
         env: read_environment(source.get("env"), method)?,
-        rows: require_integer(source, "rows", method, 1)?.min(u64::from(u16::MAX)) as u16,
-        cols: require_integer(source, "cols", method, 1)?.min(u64::from(u16::MAX)) as u16,
+        rows: read_dimension(source, "rows", method)?,
+        cols: read_dimension(source, "cols", method)?,
         grace_ms: read_grace(source, method)?,
     })
 }
@@ -424,6 +432,11 @@ fn read_grace(source: &Map<String, Value>, method: &str) -> Result<u64> {
         ));
     }
     Ok(grace_ms)
+}
+
+/// Read one terminal dimension: a positive count a `winsize` can hold.
+fn read_dimension(source: &Map<String, Value>, field: &str, method: &str) -> Result<u16> {
+    Ok(require_integer(source, field, method, 1)?.min(u64::from(u16::MAX)) as u16)
 }
 
 /// Read a non-empty argv array.

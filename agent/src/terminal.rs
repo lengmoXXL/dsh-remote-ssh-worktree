@@ -123,6 +123,12 @@ impl TerminalBackend {
         Ok(json!({}))
     }
 
+    /// Adopt a new size for one terminal's window.
+    pub fn resize(&self, term_id: &str, cols: u16, rows: u16) -> Result<Value> {
+        self.require(term_id)?.resize(cols, rows)?;
+        Ok(json!({}))
+    }
+
     pub async fn inspect_foreground(&self, term_id: &str) -> Result<Value> {
         let terminal = self.require(term_id)?;
         match foreground_group_id(terminal.pid).await {
@@ -242,6 +248,50 @@ impl ManagedTerminal {
                 ));
             }
             written += count as usize;
+        }
+        Ok(())
+    }
+
+    /// Adopt a new window size for this terminal.
+    ///
+    /// The size lives on the terminal itself, so it is set through the master
+    /// descriptor. The kernel signals the foreground process group when the
+    /// size actually changed, which is how a full-screen program redraws; a
+    /// terminal whose size is already the requested one is left silent.
+    fn resize(&self, cols: u16, rows: u16) -> Result<()> {
+        if self
+            .outcome
+            .lock()
+            .expect("terminal outcome poisoned")
+            .is_some()
+        {
+            return Err(Failure::new(
+                "SP_TERMINAL_FAILED",
+                format!("terminal {} has exited", self.pid),
+            ));
+        }
+        let guard = self.master.lock().expect("terminal master poisoned");
+        let Some(fd) = *guard else {
+            return Err(Failure::new(
+                "SP_TERMINAL_FAILED",
+                format!("terminal {} has exited", self.pid),
+            ));
+        };
+        let winsize = libc::winsize {
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        if unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &winsize) } != 0 {
+            return Err(Failure::new(
+                "SP_TERMINAL_FAILED",
+                format!(
+                    "cannot resize terminal {}: {}",
+                    self.pid,
+                    std::io::Error::last_os_error()
+                ),
+            ));
         }
         Ok(())
     }

@@ -106,6 +106,30 @@ async fn a_repeated_terminate_joins_the_same_teardown() {
 }
 
 #[tokio::test]
+async fn a_resize_reaches_the_kernel_window_size() {
+    let fixture = TempDir::new("drw-term-resize");
+    let term = TerminalBackend::new();
+    let id = term_id(term.spawn(spec(fixture.path(), &["/bin/sh"])).unwrap());
+
+    term.resize(&id, 120, 40).unwrap();
+    // `stty size` reads the terminal's own window size, so its answer is the
+    // kernel's, not this backend's bookkeeping.
+    term.write(&id, "stty size\n").await.unwrap();
+    output_contains(&term, &id, "40 120").await;
+
+    term.terminate(&id).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_resize_of_an_unknown_terminal_is_reported() {
+    let term = TerminalBackend::new();
+    assert_eq!(
+        term.resize("nope", 80, 24).unwrap_err().code,
+        "SP_NO_SUCH_TERMINAL"
+    );
+}
+
+#[tokio::test]
 async fn refuses_a_program_that_does_not_exist() {
     let fixture = TempDir::new("drw-term-missing");
     let term = TerminalBackend::new();

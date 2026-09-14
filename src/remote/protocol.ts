@@ -427,6 +427,10 @@ export interface WireMethods {
     result: WireOutputRead
   }
   'term.write': { params: { termId: TermId; data: string }; result: Record<string, never> }
+  'term.resize': {
+    params: { termId: TermId; cols: number; rows: number }
+    result: Record<string, never>
+  }
   'term.inspectForeground': {
     params: { termId: TermId }
     result: WireTerminalForeground | null
