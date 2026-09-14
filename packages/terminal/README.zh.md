@@ -14,24 +14,16 @@ Web GUI 右侧边栏里的终端：每个会话一个 xterm.js 标签页，开�
 
 ## 安装
 
-以一行 Loader 条目挂载。
-
-作为 bundle：
-
-```jsonc
-// ~/.dsh/profiles/web/package.json
-{
-  "dsh": { "profile": { "bundles": ["…", "dsh-terminal"] } },
-  "dependencies": { "dsh-terminal": "link:/path/to/dsh-remote-workspace/packages/terminal" }
-}
-```
-
 ```sh
-dsh plugin --profile web install
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
+dsh plugin --profile web add "$PWD/packages/terminal"
 ```
 
-开发时也可以通过 profile 的 patch 层挂载
-（`$DSH_HOME/profiles/<name>/cordis.patch.yml`，实时监听，无需重启）：
+再把 `dsh-terminal` 写进 profile 的 `bundles`，然后重启服务。
+
+开发时改用 profile 的 patch 层挂载 host 半边，无需重启
+（`$DSH_HOME/profiles/<name>/cordis.patch.yml`，实时监听）：
 
 ```yaml
 - insert:

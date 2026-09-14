@@ -10,18 +10,20 @@
 | [`terminal`](packages/terminal) | 右侧边栏的终端标签页，开在当前会话的工作区——本机或节点上。 |
 | [`tty`](packages/tty) · [`tty-local`](packages/tty-local) · [`tty-remote`](packages/tty-remote) | 终端接缝及其两个 provider。只有自行挂载 provider 的部署才需要它们。 |
 
-## 加入到部署
+## 安装
+
+```sh
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
+dsh plugin --profile web add "$PWD/packages/remote-workspace" "$PWD/packages/terminal"
+```
+
+`dsh plugin` 把参数转发给 profile 目录里的 pnpm，两个包因此被链接进 `~/.dsh/profiles/web`。
+再把它们写进该 profile 的 `bundles`，然后重启服务：
 
 ```jsonc
 // ~/.dsh/profiles/web/package.json
-{
-  "dependencies": {
-    "dsh-remote-workspace": "link:/path/to/repo/packages/remote-workspace",
-    "dsh-terminal": "link:/path/to/repo/packages/terminal"
-  }
-}
+{ "dsh": { "profile": { "bundles": ["…", "dsh-remote-workspace", "dsh-terminal"] } } }
 ```
-
-再在 profile 的 `bundles` 或 `cordis.patch.yml` 里点名相应插件，然后重启服务。
 
 MIT

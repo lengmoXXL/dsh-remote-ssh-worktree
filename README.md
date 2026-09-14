@@ -10,18 +10,20 @@ English | [中文](README.zh.md)
 | [`terminal`](packages/terminal) | A terminal tab in the right Sidebar, opened in the Session's workspace — on this host or on a node. |
 | [`tty`](packages/tty) · [`tty-local`](packages/tty-local) · [`tty-remote`](packages/tty-remote) | The terminal seam and its two providers. Only a deployment that mounts providers itself needs these. |
 
-## Add to a deployment
+## Install
+
+```sh
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
+dsh plugin --profile web add "$PWD/packages/remote-workspace" "$PWD/packages/terminal"
+```
+
+`dsh plugin` forwards its arguments to pnpm in the profile directory, so both packages are linked into
+`~/.dsh/profiles/web`. Then name them in that profile's `bundles` and restart the server:
 
 ```jsonc
 // ~/.dsh/profiles/web/package.json
-{
-  "dependencies": {
-    "dsh-remote-workspace": "link:/path/to/repo/packages/remote-workspace",
-    "dsh-terminal": "link:/path/to/repo/packages/terminal"
-  }
-}
+{ "dsh": { "profile": { "bundles": ["…", "dsh-remote-workspace", "dsh-terminal"] } } }
 ```
-
-Name each plugin in the profile's `bundles` or in its `cordis.patch.yml`, then restart the server.
 
 MIT

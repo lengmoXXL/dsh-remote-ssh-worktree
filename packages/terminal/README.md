@@ -17,24 +17,16 @@ English | [中文](README.zh.md)
 
 ## Install
 
-Mount it as one Loader row.
-
-As a bundle:
-
-```jsonc
-// ~/.dsh/profiles/web/package.json
-{
-  "dsh": { "profile": { "bundles": ["…", "dsh-terminal"] } },
-  "dependencies": { "dsh-terminal": "link:/path/to/dsh-remote-workspace/packages/terminal" }
-}
-```
-
 ```sh
-dsh plugin --profile web install
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
+dsh plugin --profile web add "$PWD/packages/terminal"
 ```
 
-Or, while developing it, through the profile's patch layer
-(`$DSH_HOME/profiles/<name>/cordis.patch.yml`, watched live — no restart):
+Then name `dsh-terminal` in the profile's `bundles` and restart the server.
+
+While developing it, the profile's patch layer mounts the host half instead, without a restart
+(`$DSH_HOME/profiles/<name>/cordis.patch.yml`, watched live):
 
 ```yaml
 - insert:
@@ -42,7 +34,7 @@ Or, while developing it, through the profile's patch layer
       name: dsh-terminal
 ```
 
-Use one of the two: naming it in `bundles` *and* inserting it by hand mounts the row twice. After a rebuild, reload
+Use one route only: naming it in `bundles` *and* inserting it by hand mounts the row twice. After a rebuild, reload
 the page — an open page keeps the client bundle it loaded.
 
 ## Config

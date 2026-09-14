@@ -21,9 +21,10 @@ English | [中文](README.zh.md)
 ```sh
 git clone https://github.com/lengmoXXL/dsh-remote-workspace
 cd dsh-remote-workspace && npm install && npm run build
-dsh plugin --profile web add "$PWD"
-dsh --profile web
+dsh plugin --profile web add "$PWD/packages/remote-workspace"
 ```
+
+Then name `dsh-remote-workspace` in the profile's `bundles` and boot it with `dsh --profile web`.
 
 ## What you can do
 

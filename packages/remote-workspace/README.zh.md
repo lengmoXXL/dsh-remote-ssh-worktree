@@ -21,9 +21,10 @@
 ```sh
 git clone https://github.com/lengmoXXL/dsh-remote-workspace
 cd dsh-remote-workspace && npm install && npm run build
-dsh plugin --profile web add "$PWD"
-dsh --profile web
+dsh plugin --profile web add "$PWD/packages/remote-workspace"
 ```
+
+再把 `dsh-remote-workspace` 写进 profile 的 `bundles`，用 `dsh --profile web` 启动。
 
 ## 能做什么
 
