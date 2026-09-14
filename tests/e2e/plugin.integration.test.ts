@@ -30,7 +30,7 @@ import { asAnchorId } from '../../src/storage/anchors.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
 
 /** The remote root the seeded anchor claims. It must not overlap the local fixture. */
-const REMOTE_ROOT = '/srv/remote-app/.dsh-worktrees/worktree/login'
+const REMOTE_ROOT = '/srv/checkouts/remote-app/login'
 
 let dir: string
 let anchorPath: string

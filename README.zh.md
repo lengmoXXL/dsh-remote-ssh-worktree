@@ -16,6 +16,7 @@
 - 通过 SSH 连接机器——`user@host` 或 `~/.ssh/config` 里的别名，机器上不需要手动装任何东西。
 - 本机开箱可用：内置的 `Local` 不需要 agent、不需要连接，管仓库和 worktree 的方式和 SSH 机器完全一样。
 - 从机器上任意仓库切出 `worktree/<名称>`，把该 checkout 注册成 DSH 工作区。
+- 机器上已经存在的 worktree（git 列出的任意检出）也能直接纳入面板打开；关闭时只解除登记，机器上的检出原样保留。
 - 登记的目录本身就能直接开成工作区，不管它是不是 git 仓库；还不是仓库的目录在机器上 `git init` 之后，不用重新登记就能从它切 worktree。
 - read、write、edit、bash、grep 和终端工具都在那台机器上原样执行。
 - 删 worktree 不会弄丢活儿：checkout 消失，分支默认保留，除非你明确要求连分支一起删。
@@ -85,6 +86,9 @@ token。远程机器用同一套表单和同一批操作，目标加 token 就�
 
 `$DSH_HOME/remote-worktrees/` 下有 `nodes.json`、`repos.json`、每个远端目录对应的锚点目录，以及按平台下载的
 agent 构建。卸载插件不会删掉这个目录；删掉它等于忘掉所有机器。
+
+切出的检出不在这个目录里：每台机器把它们放在自己的 `~/.dsh/worktrees/<仓库>/<名称>` 下，除非配置了
+`worktreeRoot` 指定别的根目录。
 
 ## 许可证
 

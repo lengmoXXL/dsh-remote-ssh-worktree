@@ -32,7 +32,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { NS } from './locales.ts'
-import { AddMachineDialog, AddRepoDialog, NewWorktreeDialog, reasonOf } from './dialogs.tsx'
+import { AddMachineDialog, AddRepoDialog, NewWorktreeDialog, OpenWorktreeDialog, reasonOf } from './dialogs.tsx'
 import css from './Section.module.css'
 
 /** The locale seat this section reads, including its template parameters. */
@@ -125,8 +125,23 @@ interface WorktreeStatus {
   readonly anchor: AnchorRecord
   /** Whether the anchor holds a workspace registration right now. */
   readonly open: boolean
+  /**
+   * Whether the plugin cut this checkout itself. A managed checkout is the
+   * plugin's to remove; one it adopted from the machine is only ever released.
+   */
+  readonly managed: boolean
   /** Why the host could not read the machine, when it could not. */
   readonly error?: string
+}
+
+/** One checkout the repository's machine already has. */
+export interface ExistingWorktree {
+  readonly path: string
+  readonly name: string
+  /** Branch the checkout sits on; empty when it is detached. */
+  readonly branch: string
+  /** Whether the plugin already holds it in the panel. */
+  readonly registered: boolean
 }
 
 /** One entry of a remote directory listing. */
@@ -178,8 +193,14 @@ export interface RemoteWorktreesFace {
   listDirs(nodeId: NodeId, path: string): Promise<DirListing>
   /** Cut a worktree from a registered repository. */
   createWorktree(draft: { repoId: RepoId; name: string }): Promise<void>
+  /** Every checkout the repository's machine already has, besides its own. */
+  existingWorktrees(repoId: RepoId): Promise<readonly ExistingWorktree[]>
+  /** Take an existing checkout under management and open it; git is untouched. */
+  adoptWorktree(repoId: RepoId, path: string): Promise<void>
   /** Remove a worktree; `deleteBranch` also drops the branch it was cut on. */
   removeWorktree(anchorId: AnchorId, deleteBranch: boolean): Promise<void>
+  /** Stop managing a checkout, leaving it on the machine untouched. */
+  releaseWorktree(anchorId: AnchorId): Promise<void>
   /** Register a worktree as a workspace, so a session can open on it. */
   openWorktree(anchorId: AnchorId): Promise<void>
   /** Drop a worktree's workspace registration, leaving the machine untouched. */
@@ -206,6 +227,7 @@ type Dialog =
   | { readonly kind: 'machine' }
   | { readonly kind: 'repo'; readonly nodeId: NodeId }
   | { readonly kind: 'worktree'; readonly repo: RepoRecord }
+  | { readonly kind: 'existing'; readonly repo: RepoRecord }
   | undefined
 
 /** The state dot and label one connection state renders as. */
@@ -271,10 +293,11 @@ const PROGRESS_POLL_MS = 250
  * because the settings column is narrow; it keeps its name for assistive
  * technology and for hover.
  */
-function WorktreeRow({ entry, busy, onRemove, onToggleOpen, t }: {
+function WorktreeRow({ entry, busy, onRemove, onRelease, onToggleOpen, t }: {
   entry: WorktreeStatus
   busy: boolean
   onRemove: () => void
+  onRelease: () => void
   onToggleOpen: () => void
   t: T
 }) {
@@ -295,14 +318,28 @@ function WorktreeRow({ entry, busy, onRemove, onToggleOpen, t }: {
         >
           {entry.open ? t('closeWorktree') : t('openWorktree')}
         </Button>
-        <Button
-          size="sm"
-          icon={<IconTrashOutline16 />}
-          disabled={busy}
-          aria-label={t('removeWorktree')}
-          title={t('removeWorktree')}
-          onClick={onRemove}
-        />
+        {entry.managed ? (
+          <Button
+            size="sm"
+            icon={<IconTrashOutline16 />}
+            disabled={busy}
+            aria-label={t('removeWorktree')}
+            title={t('removeWorktree')}
+            onClick={onRemove}
+          />
+        ) : (
+          // A checkout the plugin did not cut is never deleted through it: this
+          // only drops the plugin's own record, and the checkout stays put.
+          <Button
+            size="sm"
+            disabled={busy}
+            aria-label={t('releaseWorktree')}
+            title={t('releaseWorktree')}
+            onClick={onRelease}
+          >
+            {t('releaseWorktree')}
+          </Button>
+        )}
       </span>
     </div>
   )
@@ -569,6 +606,14 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                 </Button>
                                 <Button
                                   size="sm"
+                                  disabled={busy || !entry.git}
+                                  title={entry.git ? entry.error : why}
+                                  onClick={() => setDialog({ kind: 'existing', repo })}
+                                >
+                                  {t('adoptWorktree')}
+                                </Button>
+                                <Button
+                                  size="sm"
                                   disabled={busy || cannotOpen}
                                   title={cannotOpen ? entry.error : undefined}
                                   onClick={() => void mutate(() => (
@@ -613,6 +658,11 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                           optionKey: 'removeWorktreeBranch',
                                           run: deleteBranch => props.removeWorktree(item.anchor.anchorId, deleteBranch),
                                         })}
+                                        onRelease={() => confirm({
+                                          titleKey: 'releaseWorktreeTitle',
+                                          bodyKey: 'releaseWorktreeBody',
+                                          run: () => props.releaseWorktree(item.anchor.anchorId),
+                                        })}
                                       />
                                     ))}
                                 </div>
@@ -654,6 +704,17 @@ export function RemoteWorktreesSection(props: SectionProps) {
           busy={busy}
           onClose={() => setDialog(undefined)}
           onSubmit={draft => submit(() => props.createWorktree(draft))}
+          t={t}
+        />
+      ) : null}
+
+      {dialog?.kind === 'existing' ? (
+        <OpenWorktreeDialog
+          repo={dialog.repo}
+          busy={busy}
+          onClose={() => setDialog(undefined)}
+          onSubmit={path => submit(() => props.adoptWorktree(dialog.repo.repoId, path))}
+          listExisting={props.existingWorktrees}
           t={t}
         />
       ) : null}

@@ -53,6 +53,8 @@ export interface E2eInstance {
   readonly localRepo: string
   /** Local directory the remote world maps onto inside the anchor store. */
   readonly home: string
+  /** Home directory both processes see, which is where checkouts land. */
+  readonly userHome: string
   /** Scratch directory holding the home, the remote root, and artifacts. */
   readonly root: string
   /** Directory artifacts such as screenshots are written to. */
@@ -114,6 +116,7 @@ async function deploy(
   spawned: ChildProcess[],
 ): Promise<E2eInstance> {
   const home = join(root, 'home')
+  const userHomeDir = join(root, 'user-home')
   const remoteRoot = join(root, 'remote-root')
   const artifacts = join(root, 'artifacts')
   const daemonPort = await freePort()
@@ -123,7 +126,16 @@ async function deploy(
 
   await mkdir(artifacts, { recursive: true })
   await mkdir(remoteRoot, { recursive: true })
+  // Both processes take this as `$HOME`, so a machine's default worktree root
+  // (`~/.dsh/worktrees`) lands inside the scratch directory instead of the
+  // operator's own home. Resolved, because a real home is: the scratch `/var`
+  // is a link, and git records the checkouts it creates under the real path.
+  await mkdir(userHomeDir, { recursive: true })
+  const userHome = await realpath(userHomeDir)
   const repoPath = await createFixtureRepo(join(remoteRoot, 'demo-repo'))
+  // A checkout this plugin never cut, outside the root it cuts into: the panel
+  // can only reach it by adopting what git lists.
+  await run('git', ['worktree', 'add', '-b', 'worktree/hand', join(remoteRoot, 'hand-cut')], { cwd: repoPath })
   // Beside the repository, a directory nobody has initialized: the plugin has
   // to accept it as a plain directory and keep accepting it after `git init`.
   // Resolved for the same reason the repository path is: a management response
@@ -163,7 +175,7 @@ async function deploy(
     '--listen', `127.0.0.1:${String(daemonPort)}`,
     '--token-file', tokenFile,
     '--root', remoteRoot,
-  ], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  ], { detached: true, env: { ...process.env, HOME: userHome }, stdio: ['ignore', 'pipe', 'pipe'] })
   spawned.push(daemon)
   capture(daemon, logs, '[daemon] ')
   await waitForPort(daemonPort)
@@ -171,7 +183,7 @@ async function deploy(
   const web = spawn(process.execPath, [PNPM, 'dsh', 'web', '--port', String(webPort), '--no-open'], {
     cwd: checkout,
     detached: true,
-    env: { ...process.env, DSH_HOME: home },
+    env: { ...process.env, DSH_HOME: home, HOME: userHome },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   spawned.push(web)
@@ -189,6 +201,7 @@ async function deploy(
     plainDir,
     localRepo,
     home,
+    userHome,
     root,
     artifacts,
     daemonPort,

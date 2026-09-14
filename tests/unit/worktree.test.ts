@@ -70,12 +70,10 @@ function stubChannel(answers: Record<string, unknown> = {}) {
 
 /** A manager over one stub channel, plus the calls it recorded. */
 function managerWith(answers: Record<string, unknown>, nodeId = 'n1'): { manager: WorktreeManager; calls: { method: string; params: unknown }[] } {
-  // `create` also resolves the repository path and makes the managed directory
-  // invisible to git, so every script answers those calls unless a case
-  // overrides them.
+  // `create` also resolves the repository path, so every script answers that
+  // unless a case overrides it.
   const { channel, calls } = stubChannel({
     'fs.resolve': (params: { path: string }) => ({ canonicalPath: params.path }),
-    'fs.writeText': {},
     ...answers,
   })
   return {
@@ -84,6 +82,7 @@ function managerWith(answers: Record<string, unknown>, nodeId = 'n1'): { manager
       repos,
       channel: id => (id === nodeId ? channel : undefined),
       isLocalNode: () => false,
+      worktreeRoot: () => CHECKOUT_ROOT,
     }),
     calls,
   }
@@ -103,7 +102,6 @@ function managerWithWorkspace(answers: Record<string, unknown>): {
 } {
   const { channel, calls } = stubChannel({
     'fs.resolve': (params: { path: string }) => ({ canonicalPath: params.path }),
-    'fs.writeText': {},
     ...answers,
   })
   const opened: string[] = []
@@ -118,6 +116,7 @@ function managerWithWorkspace(answers: Record<string, unknown>): {
       repos,
       channel: id => (id === 'n1' ? channel : undefined),
       isLocalNode: () => false,
+      worktreeRoot: () => CHECKOUT_ROOT,
       workspace: {
         register: anchor => { opened.push(anchor.anchorPath); live.add(anchor.anchorPath); return Promise.resolve() },
         unregister: anchor => { closed.push(anchor.anchorPath); live.delete(anchor.anchorPath); return Promise.resolve() },
@@ -129,9 +128,12 @@ function managerWithWorkspace(answers: Record<string, unknown>): {
 
 const draft = { nodeId: asNodeId('n1'), repoPath: '/srv/app', name: 'login' }
 
+/** The root managed checkouts are cut under in these cases. */
+const CHECKOUT_ROOT = '/srv/checkouts'
+
 test('create cuts the checkout and records an anchor at the reported path', async () => {
   const { manager, calls } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
 
   const anchor = await manager.create(draft)
@@ -142,27 +144,19 @@ test('create cuts the checkout and records an anchor at the reported path', asyn
       method: 'git.worktreeAdd',
       params: {
         repoPath: '/srv/app',
-        worktreePath: '/srv/app/.dsh-worktrees/worktree/login',
+        worktreePath: '/srv/checkouts/app/login',
         branch: 'worktree/login',
       },
     },
-    {
-      method: 'fs.writeText',
-      params: {
-        path: '/srv/app/.dsh-worktrees/.gitignore',
-        content: '*\n',
-        expected: { kind: 'createIfAbsent' },
-      },
-    },
   ])
-  assert.equal(anchor.remoteRoot, '/srv/app/.dsh-worktrees/worktree/login')
+  assert.equal(anchor.remoteRoot, '/srv/checkouts/app/login')
   assert.equal(anchor.branch, 'worktree/login')
   assert.equal(anchors.list().length, 1)
 })
 
 test('an explicit base revision travels to git', async () => {
   const { manager, calls } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   await manager.create({ ...draft, baseRef: 'origin/main' })
   const add = calls.find(call => call.method === 'git.worktreeAdd')
@@ -172,7 +166,7 @@ test('an explicit base revision travels to git', async () => {
 test('create cuts under the canonical repository path the daemon reports', async () => {
   const { manager, calls } = managerWith({
     'fs.resolve': { canonicalPath: '/srv/app' },
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
 
   const anchor = await manager.create({ ...draft, repoPath: '/srv/app/' })
@@ -180,7 +174,7 @@ test('create cuts under the canonical repository path the daemon reports', async
   const add = calls.find(call => call.method === 'git.worktreeAdd')
   assert.deepEqual(add?.params, {
     repoPath: '/srv/app',
-    worktreePath: '/srv/app/.dsh-worktrees/worktree/login',
+    worktreePath: '/srv/checkouts/app/login',
     branch: 'worktree/login',
   })
   assert.equal(anchor.repoPath, '/srv/app', 'the anchor carries the same spelling the guards look up')
@@ -188,7 +182,7 @@ test('create cuts under the canonical repository path the daemon reports', async
 
 test('create records the repository the worktree came from', async () => {
   const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   await manager.create(draft)
 
@@ -198,7 +192,7 @@ test('create records the repository the worktree came from', async () => {
 test('create keeps the name a person gave an already-registered repository', async () => {
   await repos.upsert({ nodeId: asNodeId('n1'), repoPath: '/srv/app', name: 'the app' })
   const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   await manager.create(draft)
 
@@ -231,7 +225,7 @@ test('an offline node fails with a typed error and records nothing', async () =>
 
 test('list answers from local records without asking the node', async () => {
   const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   await manager.create(draft)
 
@@ -246,31 +240,37 @@ test('list answers from local records without asking the node', async () => {
 
 test('list reports an offline node per anchor instead of failing the whole listing', async () => {
   const { manager: online } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   await online.create(draft)
 
-  const offline = createWorktreeManager({ anchors, repos, channel: () => undefined, isLocalNode: () => false })
+  const offline = createWorktreeManager({
+    anchors,
+    repos,
+    channel: () => undefined,
+    isLocalNode: () => false,
+    worktreeRoot: () => CHECKOUT_ROOT,
+  })
   const statuses = await offline.list()
   assert.match(String(statuses[0]?.error), /is not connected/)
 })
 
 test('remove drops the checkout first and the anchor second', async () => {
   const { manager, calls } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': {},
   })
   const anchor = await manager.create(draft)
   const removal = await manager.remove(anchor.anchorId, { force: true, deleteBranch: false })
 
-  assert.deepEqual(calls.map(call => call.method), ['fs.resolve', 'git.worktreeAdd', 'fs.writeText', 'git.worktreeRemove'])
+  assert.deepEqual(calls.map(call => call.method), ['fs.resolve', 'git.worktreeAdd', 'git.worktreeRemove'])
   assert.equal(removal.branchDeleted, false)
   assert.deepEqual(anchors.list(), [])
 })
 
 test('removing with deleteBranch also deletes the branch', async () => {
   const { manager, calls } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': {},
     'git.branchDelete': {},
   })
@@ -286,7 +286,7 @@ test('removing with deleteBranch also deletes the branch', async () => {
 
 test('a branch that outlives its checkout is reported, not hidden', async () => {
   const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': {},
     'git.branchDelete': new NodeRequestError({ code: 'GIT_DIRTY', message: 'branch is not fully merged' }),
   })
@@ -300,7 +300,7 @@ test('a branch that outlives its checkout is reported, not hidden', async () => 
 
 test('a refused checkout removal keeps the anchor, because the content is still there', async () => {
   const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': new NodeRequestError({ code: 'GIT_DIRTY', message: 'contains modified files' }),
   })
   const anchor = await manager.create(draft)
@@ -315,8 +315,7 @@ test('removal unregisters the workspace while the anchor directory is still ther
   // store — the exact state a person cannot clear from the section.
   const { channel } = stubChannel({
     'fs.resolve': (params: { path: string }) => ({ canonicalPath: params.path }),
-    'fs.writeText': {},
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
     'git.worktreeRemove': {},
   })
   const seen: boolean[] = []
@@ -325,6 +324,7 @@ test('removal unregisters the workspace while the anchor directory is still ther
     repos,
     channel: id => (id === 'n1' ? channel : undefined),
     isLocalNode: () => false,
+    worktreeRoot: () => CHECKOUT_ROOT,
     workspace: {
       register: () => Promise.resolve(),
       unregister: anchor => { seen.push(existsSync(anchor.anchorPath)); return Promise.resolve() },
@@ -341,7 +341,7 @@ test('removal unregisters the workspace while the anchor directory is still ther
 
 test('closing and opening a worktree move only its workspace registration', async () => {
   const { manager, opened, closed } = managerWithWorkspace({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   const anchor = await manager.create(draft)
   // Creation registers the workspace, so the checkout starts open.
@@ -408,7 +408,7 @@ test('opening a directory without a workspace registry says so', async () => {
 
 test('opening without a workspace registry says so instead of failing silently', async () => {
   const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/app/.dsh-worktrees/worktree/login', branch: 'worktree/login', head: 'abc', main: false },
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
   })
   const anchor = await manager.create(draft)
   await assert.rejects(() => manager.open(anchor.anchorId), /no workspace registry/)
@@ -416,9 +416,79 @@ test('opening without a workspace registry says so instead of failing silently',
 
 test('an unknown anchor is refused before any remote call', async () => {
   const { manager, calls } = managerWith({})
-  await assert.rejects(() => manager.open(asAnchorId('nope')), /no anchor/)
-  await assert.rejects(() => manager.close(asAnchorId('nope')), /no anchor/)
+  await assert.rejects(() => manager.open(asAnchorId('nope')), /no worktree/)
+  await assert.rejects(() => manager.close(asAnchorId('nope')), /no worktree/)
+  await assert.rejects(() => manager.release(asAnchorId('nope')), /no worktree/)
   assert.deepEqual(calls, [])
+})
+
+test('a checkout git already lists can be adopted without touching git', async () => {
+  const { manager, calls, opened } = managerWithWorkspace({
+    'git.worktreeList': [{ path: '/srv/elsewhere/login', branch: 'worktree/login', head: 'abc', main: false }],
+  })
+  const ref = { nodeId: asNodeId('n1'), repoPath: '/srv/app' }
+  const anchor = await manager.adopt(ref, '/srv/elsewhere/login')
+
+  assert.equal(anchor.kind, 'worktree')
+  assert.equal(anchor.remoteRoot, '/srv/elsewhere/login')
+  assert.equal(anchor.branch, 'worktree/login')
+  assert.equal(anchor.name, 'login')
+  assert.deepEqual(opened, [anchor.anchorPath], 'adopting opens it as a workspace')
+  // Every call was a read: adoption records what is there, it never writes.
+  assert.deepEqual(calls.map(call => call.method), ['fs.resolve', 'git.worktreeList'])
+  const rows = worktreesOf(await manager.list())
+  assert.equal(rows[0]?.managed, false, 'an adopted checkout is not the plugin\'s to remove')
+})
+
+test('adopting a path git does not list is refused', async () => {
+  const { manager } = managerWith({ 'git.worktreeList': [] })
+  await assert.rejects(
+    () => manager.adopt({ nodeId: asNodeId('n1'), repoPath: '/srv/app' }, '/srv/elsewhere/login'),
+    /is not a worktree of/,
+  )
+})
+
+test('adopting one this host already holds only opens it again', async () => {
+  const { manager } = managerWithWorkspace({
+    'git.worktreeList': [{ path: '/srv/elsewhere/login', branch: 'worktree/login', head: 'abc', main: false }],
+  })
+  const ref = { nodeId: asNodeId('n1'), repoPath: '/srv/app' }
+  const first = await manager.adopt(ref, '/srv/elsewhere/login')
+  const again = await manager.adopt(ref, '/srv/elsewhere/login')
+
+  assert.equal(again.anchorId, first.anchorId)
+  assert.equal(anchors.list().length, 1, 'no second record for one checkout')
+})
+
+test('a managed checkout is flagged, and releasing it leaves the machine alone', async () => {
+  const { manager, calls, closed } = managerWithWorkspace({
+    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
+  })
+  const anchor = await manager.create(draft)
+  assert.equal(worktreesOf(await manager.list())[0]?.managed, true)
+
+  calls.length = 0
+  await manager.release(anchor.anchorId)
+
+  assert.deepEqual(calls, [], 'releasing asks the machine nothing')
+  assert.deepEqual(anchors.list(), [], 'the record is gone')
+  assert.deepEqual(closed, [anchor.anchorPath], 'and its workspace went with it')
+})
+
+test('existing lists what git has, in order, minus the repository itself', async () => {
+  const { manager } = managerWith({
+    'git.worktreeList': [
+      { path: '/srv/app', branch: 'main', head: 'abc', main: true },
+      { path: '/srv/elsewhere/login', branch: 'worktree/login', head: 'abc', main: false },
+      { path: '/srv/elsewhere/detached', branch: null, head: 'abc', main: false },
+    ],
+  })
+  const listed = await manager.existing({ nodeId: asNodeId('n1'), repoPath: '/srv/app' })
+
+  assert.deepEqual(listed, [
+    { path: '/srv/elsewhere/login', name: 'login', branch: 'worktree/login', registered: false },
+    { path: '/srv/elsewhere/detached', name: 'detached', branch: '', registered: false },
+  ])
 })
 
 /** The worktree rows of a listing, narrowed so their branch is readable. */
@@ -454,6 +524,7 @@ function localManager(): {
     repos,
     channel: () => undefined,
     isLocalNode: () => true,
+    worktreeRoot: () => join(root, 'checkouts'),
     workspace: {
       register: anchor => { opened.push(anchor.anchorPath); live.add(anchor.anchorPath); return Promise.resolve() },
       unregister: anchor => { closed.push(anchor.anchorPath); live.delete(anchor.anchorPath); return Promise.resolve() },
@@ -468,7 +539,9 @@ test('a local worktree is cut here and listed by its own checkout path', async (
   const { manager, opened } = localManager()
   const anchor = await manager.create({ nodeId: LOCAL_NODE_ID, repoPath: repo, name: 'login' })
 
-  const checkout = join(repo, '.dsh-worktrees', 'worktree', 'login')
+  // Git records the checkout under its resolved spelling, and this suite's
+  // scratch root is reached through a symlink (`/var` on macOS is one).
+  const checkout = join(await realpath(root), 'checkouts', 'local-repo', 'login')
   // No anchor stands in for the checkout: the workspace path *is* the checkout,
   // which is what makes a local session an ordinary local session.
   assert.equal(anchor.anchorPath, checkout)

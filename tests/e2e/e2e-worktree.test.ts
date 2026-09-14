@@ -13,7 +13,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { startAgent } from './harness.ts'
 import type { TestAgent } from './harness.ts'
@@ -33,11 +33,24 @@ const TOKEN = 'worktree-token-0123456789'
 
 let repoPath: string
 let dataDir: string
+let checkoutRoot: string
 let server: TestAgent
 let node: ConnectedNode
 let anchors: AnchorStore
 let repos: RepoStore
 let worktrees: WorktreeManager
+
+/**
+ * The path one named checkout is cut at.
+ *
+ * Checkouts live under the configured root, keyed by the repository's own name,
+ * never inside the repository.
+ * @param name - the worktree name.
+ * @returns the absolute checkout path.
+ */
+function checkoutPath(name: string): string {
+  return join(checkoutRoot, basename(repoPath), name)
+}
 
 /** Run git in the fixture repository with a fixed identity. */
 async function git(args: string[], cwd = repoPath): Promise<string> {
@@ -53,6 +66,7 @@ async function git(args: string[], cwd = repoPath): Promise<string> {
 before(async () => {
   repoPath = await realpath(await mkdtemp(join(tmpdir(), 'drw-wt-repo-')))
   dataDir = await realpath(await mkdtemp(join(tmpdir(), 'drw-wt-data-')))
+  checkoutRoot = join(dataDir, 'checkouts')
 
   await run('git', ['init', '-b', 'main'], { cwd: repoPath })
   await writeFile(join(repoPath, 'README.md'), 'initial\n', 'utf8')
@@ -72,6 +86,14 @@ before(async () => {
     repos,
     channel: nodeId => (nodeId === 'n1' ? node.channel : undefined),
     isLocalNode: () => false,
+    worktreeRoot: () => checkoutRoot,
+    // A deployment composes a workspace registry; this one only has to answer,
+    // because these cases are about what happens on the machine's disk.
+    workspace: {
+      register: () => Promise.resolve(),
+      unregister: () => Promise.resolve(),
+      registered: () => Promise.resolve(false),
+    },
   })
 })
 
@@ -89,7 +111,7 @@ test('creating a worktree cuts a real checkout and records an anchor', async () 
   anchorId = anchor.anchorId
 
   assert.equal(anchor.branch, 'worktree/login')
-  assert.equal(anchor.remoteRoot, join(repoPath, '.dsh-worktrees', 'worktree', 'login'))
+  assert.equal(anchor.remoteRoot, checkoutPath('login'))
   assert.equal(existsSync(anchor.remoteRoot), true)
   assert.equal(existsSync(anchor.anchorPath), true)
   assert.equal(existsSync(join(anchor.anchorPath, '.dsh-remote-worktree.json')), true)
@@ -102,7 +124,7 @@ test('creating a worktree cuts a real checkout and records an anchor', async () 
 })
 
 test('the worktree carries the base revision content', async () => {
-  const content = await readFile(join(repoPath, '.dsh-worktrees', 'worktree', 'login', 'README.md'), 'utf8')
+  const content = await readFile(join(checkoutPath('login'), 'README.md'), 'utf8')
   assert.equal(content, 'initial\n')
 })
 
@@ -116,7 +138,7 @@ test('listing reports each anchor and whether it is open', async () => {
 })
 
 test('a commit in the worktree stays on its branch', async () => {
-  const checkout = join(repoPath, '.dsh-worktrees', 'worktree', 'login')
+  const checkout = checkoutPath('login')
   await writeFile(join(checkout, 'feature.txt'), 'from the worktree\n', 'utf8')
   await git(['add', '.'], checkout)
   await git(['commit', '-m', 'add feature'], checkout)
@@ -125,7 +147,7 @@ test('a commit in the worktree stays on its branch', async () => {
 })
 
 test('a dirty checkout refuses removal until it is forced', async () => {
-  const checkout = join(repoPath, '.dsh-worktrees', 'worktree', 'login')
+  const checkout = checkoutPath('login')
   await writeFile(join(checkout, 'README.md'), 'locally modified\n', 'utf8')
 
   await assert.rejects(
@@ -139,7 +161,7 @@ test('a forced removal drops the checkout and the anchor but keeps the branch', 
   const removal = await worktrees.remove(anchorId, { force: true, deleteBranch: false })
 
   assert.equal(removal.branchDeleted, false)
-  assert.equal(existsSync(join(repoPath, '.dsh-worktrees', 'worktree', 'login')), false)
+  assert.equal(existsSync(checkoutPath('login')), false)
   assert.deepEqual(anchors.list(), [])
   assert.equal(await git(['branch', '--list', '--format=%(refname:short)', 'worktree/login']), 'worktree/login')
 })
@@ -150,4 +172,35 @@ test('remove with deleteBranch takes the branch with the checkout', async () => 
 
   assert.equal(removal.branchDeleted, true)
   assert.equal(await git(['branch', '--list', '--format=%(refname:short)', 'worktree/signup']), '')
+})
+
+test('a checkout cut by hand can be opened and released, and stays put', async () => {
+  const ref = { nodeId: asNodeId('n1'), repoPath }
+  // Outside the configured root: a checkout this plugin never cut.
+  const handCut = join(dataDir, 'hand-cut')
+  await git(['worktree', 'add', '-b', 'worktree/hand', handCut])
+
+  const entry = (await worktrees.existing(ref)).find(candidate => candidate.path === handCut)
+  assert.ok(entry !== undefined, 'git lists the checkout the plugin never cut')
+  assert.equal(entry.branch, 'worktree/hand')
+  assert.equal(entry.registered, false)
+
+  const anchor = await worktrees.adopt(ref, handCut)
+  assert.equal(anchor.remoteRoot, handCut)
+  assert.equal(anchor.branch, 'worktree/hand')
+  assert.equal(
+    (await worktrees.list()).find(status => status.anchor.anchorId === anchor.anchorId)?.managed,
+    false,
+    'an adopted checkout is not the plugin\'s to remove',
+  )
+
+  await worktrees.release(anchor.anchorId)
+
+  assert.deepEqual(anchors.list(), [], 'the record is gone')
+  assert.equal(existsSync(handCut), true, 'the checkout stays where it is')
+  assert.equal(await git(['branch', '--list', '--format=%(refname:short)', 'worktree/hand']), 'worktree/hand')
+
+  // Leave the fixture repository as the other cases expect to find it.
+  await git(['worktree', 'remove', '--force', handCut])
+  await git(['branch', '-D', 'worktree/hand'])
 })

@@ -40,12 +40,11 @@
  * @module dsh-remote-workspace/models/worktrees
  */
 
-import { writeFile } from 'node:fs/promises'
 import { posix } from 'node:path'
 import type { WireWorktree } from '../remote/protocol.ts'
 import type { AnchorRecord, AnchorStore, DirectoryAnchor, WorktreeAnchor } from '../storage/anchors.ts'
 import type { RepoRecord, RepoStore } from '../storage/repos.ts'
-import type { ChannelLookup, NodeChannel } from '../remote/client.ts'
+import type { ChannelLookup } from '../remote/client.ts'
 import { NodeRequestError } from '../remote/client.ts'
 import type { AnchorId } from '../storage/anchors.ts'
 import { asAnchorId } from '../storage/anchors.ts'
@@ -59,12 +58,6 @@ import {
   removeWorktree,
 } from '../local/git.ts'
 import { localPathType, resolveLocalPath } from '../local/fs.ts'
-
-/** Directory, relative to the repository, that holds every managed checkout. */
-const WORKTREE_ROOT = '.dsh-worktrees'
-
-/** Directory holding the checkouts themselves. */
-const WORKTREE_DIR = `${WORKTREE_ROOT}/worktree`
 
 /** Prefix every managed branch carries. */
 const BRANCH_PREFIX = 'worktree/'
@@ -97,8 +90,28 @@ export interface WorktreeStatus {
   readonly anchor: AnchorRecord
   /** Whether the anchor is registered as a workspace, so a session can open on it. */
   readonly open: boolean
+  /**
+   * Whether this plugin cut the checkout itself.
+   *
+   * A managed checkout sits under the configured worktree root, so removing it
+   * is this plugin's business; one that was adopted from the machine is the
+   * operator's, and is only ever released.
+   */
+  readonly managed: boolean
   /** Why the worktree cannot be used right now, when it cannot. */
   readonly error?: string
+}
+
+/** One checkout the machine's git already knows about. */
+export interface ExistingWorktree {
+  /** Absolute POSIX path of the checkout on that machine. */
+  readonly path: string
+  /** Name the checkout is shown under: its last path segment. */
+  readonly name: string
+  /** Branch the checkout sits on; empty when it is detached. */
+  readonly branch: string
+  /** Whether this plugin already holds it in the panel. */
+  readonly registered: boolean
 }
 
 /** Best-effort workspace registration, so every caller behaves the same way. */
@@ -143,6 +156,15 @@ export interface WorktreeManagerDeps {
    */
   readonly isLocalNode: (nodeId: NodeId) => boolean
   /**
+   * The directory managed checkouts live under on one machine.
+   *
+   * Resolved per node because a machine's home is its own: the default root is
+   * that machine user's `~/.dsh/worktrees`, and a configured absolute path is
+   * used verbatim. A checkout is placed at `<root>/<repository>/<name>`, never
+   * inside the repository, so a worktree never makes its repository dirty.
+   */
+  readonly worktreeRoot: (nodeId: NodeId) => string
+  /**
    * Workspace registration, when the deployment composes a registry. A failure
    * here never fails the git operation: the checkout and its anchor are durable
    * on their own, and the workspace entry is a convenience for opening it.
@@ -161,6 +183,39 @@ export interface WorktreeManager {
   create(draft: WorktreeDraft): Promise<WorktreeAnchor>
   /** Every managed worktree with its node's live state, in anchor order. */
   list(): Promise<readonly WorktreeStatus[]>
+  /**
+   * Every checkout the machine's git knows about for one repository.
+   *
+   * This is how a checkout cut by hand, or before this plugin existed, becomes
+   * visible: git is the record on the machine, and the plugin only holds what
+   * it was asked to hold. The repository's own checkout is left out.
+   * @param ref - the machine and repository path.
+   * @returns the checkouts in git's order, each marked when already held.
+   */
+  existing(ref: RepoRef): Promise<readonly ExistingWorktree[]>
+  /**
+   * Take an existing checkout under management, without touching git.
+   *
+   * The path must be one the machine's own git lists for that repository, so
+   * nothing is adopted on a caller's word alone; the checkout itself stays
+   * exactly where it is, and this host records an anchor and opens it as a
+   * workspace. Adopting one this host already holds just opens it again.
+   * @param ref - the machine and repository path.
+   * @param path - absolute POSIX path of the checkout on that machine.
+   * @returns the anchor that now holds it, registered as a workspace.
+   * @throws when git does not list that path under that repository.
+   */
+  adopt(ref: RepoRef, path: string): Promise<WorktreeAnchor>
+  /**
+   * Stop managing one checkout, leaving it on the machine untouched.
+   *
+   * This is the counterpart of {@link adopt} and the reason it exists: a
+   * checkout nobody asked this plugin to cut must never be deleted through it.
+   * @param anchorId - the anchor handle.
+   * @returns the anchor that was released.
+   * @throws when no such anchor exists.
+   */
+  release(anchorId: AnchorId): Promise<AnchorRecord>
   /**
    * The worktrees cut under one repository.
    *
@@ -221,13 +276,31 @@ export interface WorktreeManager {
 }
 
 /** The path a managed checkout is created at, on whichever machine owns it. */
-function managedWorktreePath(repoPath: string, name: string): string {
-  return posix.join(repoPath, WORKTREE_DIR, name)
+function managedWorktreePath(root: string, repoPath: string, name: string): string {
+  return posix.join(root, posix.basename(repoPath), name)
 }
 
 /** The branch a managed checkout is created on. */
 function branchFor(name: string): string {
   return `${BRANCH_PREFIX}${name}`
+}
+
+/**
+ * Whether this plugin cut one checkout itself.
+ *
+ * Managed checkouts sit under the configured worktree root; anything else was
+ * found on the machine, and must only ever be released. A local root reached
+ * through a symlink (`/var` on macOS is one) spells one directory two ways, and
+ * git reports the resolved one, so the root is resolved before comparing.
+ * @param deps - the manager's dependencies.
+ * @param anchor - the anchor to judge.
+ * @returns true when this plugin is the one that cut it.
+ */
+async function isManaged(deps: WorktreeManagerDeps, anchor: AnchorRecord): Promise<boolean> {
+  if (anchor.kind !== 'worktree') return false
+  const root = deps.worktreeRoot(anchor.nodeId).replace(/\/+$/, '')
+  const prefix = deps.isLocalNode(anchor.nodeId) ? await resolveLocalPath(root) : root
+  return anchor.remoteRoot.startsWith(`${prefix}/`)
 }
 
 /**
@@ -254,30 +327,6 @@ async function unregisterWorkspace(deps: WorktreeManagerDeps, anchor: AnchorReco
     await deps.workspace?.unregister(anchor)
   } catch {
     // A stale registration is harmless; the workspace path no longer resolves.
-  }
-}
-
-/**
- * Make the managed directory invisible to git.
- *
- * Without this the repository reports itself dirty the moment a worktree
- * exists, and `repoState.clean` — the fact the removal guard reads —
- * would be permanently false. The file is written after `git worktree add`
- * has created the parent directory, and a pre-existing file is left alone so a
- * user's own ignore rules survive.
- * @param channel - the live node channel.
- * @param repoPath - absolute POSIX path of the repository.
- */
-async function ensureIgnored(channel: NodeChannel, repoPath: string): Promise<void> {
-  try {
-    await channel.request('fs.writeText', {
-      path: posix.join(repoPath, WORKTREE_ROOT, '.gitignore'),
-      content: '*\n',
-      expected: { kind: 'createIfAbsent' },
-    })
-  } catch (error) {
-    if (error instanceof NodeRequestError && error.data.code === 'FS_NOT_OBSERVED') return
-    throw error
   }
 }
 
@@ -331,7 +380,11 @@ async function localStatuses(deps: WorktreeManagerDeps): Promise<readonly Worktr
   for (const repo of deps.repos.list()) {
     if (!deps.isLocalNode(repo.nodeId)) continue
     const directory = localDirectoryAnchor(repo)
-    statuses.push({ anchor: directory, open: await deps.workspace?.registered(directory) ?? false })
+    statuses.push({
+      anchor: directory,
+      open: await deps.workspace?.registered(directory) ?? false,
+      managed: false,
+    })
     // A directory that is not a repository yet is a legitimate record: it can be
     // opened as a workspace and initialized later, so git is asked every time.
     if (!await isRepository(repo.repoPath).catch(() => false)) continue
@@ -353,7 +406,11 @@ async function localStatuses(deps: WorktreeManagerDeps): Promise<readonly Worktr
         branch: checkout.branch ?? '',
         createdAt: repo.createdAt,
       }
-      statuses.push({ anchor, open: await deps.workspace?.registered(anchor) ?? false })
+      statuses.push({
+        anchor,
+        open: await deps.workspace?.registered(anchor) ?? false,
+        managed: await isManaged(deps, anchor),
+      })
     }
   }
   return statuses
@@ -383,15 +440,18 @@ async function createLocalWorktree(deps: WorktreeManagerDeps, draft: WorktreeDra
     throw new Error(`"${repoPath}" is not a git repository on this machine`)
   }
   const branch = branchFor(draft.name)
-  const worktreePath = managedWorktreePath(repoPath, draft.name)
+  const plannedPath = managedWorktreePath(deps.worktreeRoot(draft.nodeId), repoPath, draft.name)
   await addWorktree({
     repoPath,
-    worktreePath,
+    worktreePath: plannedPath,
     branch,
     ...draft.baseRef === undefined ? {} : { baseRef: draft.baseRef },
   })
-  // The add created the parent directory, so the ignore file can land now.
-  await ensureIgnoredLocally(repoPath)
+  // Git records the checkout under its resolved spelling, and the listing that
+  // later finds this anchor is built from what git reports. A root reached
+  // through a symlink (`/var` on macOS is one) would otherwise leave the record
+  // and the listing naming one directory two ways.
+  const worktreePath = await resolveLocalPath(plannedPath)
 
   const anchor: WorktreeAnchor = {
     anchorId: localAnchorId('worktree', worktreePath, repoPath),
@@ -448,21 +508,6 @@ async function removeLocalWorktree(
 }
 
 /**
- * Make the managed directory invisible to git, on this host.
- *
- * The same file the remote path writes, for the same reason: without it the
- * repository reports itself dirty the moment a worktree exists.
- * @param repoPath - absolute path of the repository.
- */
-async function ensureIgnoredLocally(repoPath: string): Promise<void> {
-  try {
-    await writeFile(posix.join(repoPath, WORKTREE_ROOT, '.gitignore'), '*\n', { flag: 'wx' })
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-  }
-}
-
-/**
  * Register one path as a workspace, so a session can be opened on it.
  * @param deps - the manager's dependencies.
  * @param anchor - the worktree or directory to open.
@@ -505,6 +550,36 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
     return anchor
   }
 
+  /** The machine's own checkouts for one repository, minus its main one. */
+  const listExisting = async (ref: RepoRef): Promise<readonly ExistingWorktree[]> => {
+    if (deps.isLocalNode(ref.nodeId)) {
+      const checkouts = await listWorktrees(ref.repoPath).catch(() => [])
+      // Every local checkout is a row already: the panel reads them from git.
+      return checkouts.slice(1).map(checkout => ({
+        path: checkout.path,
+        name: posix.basename(checkout.path) || checkout.path,
+        branch: checkout.branch ?? '',
+        registered: true,
+      }))
+    }
+    const channel = channelFor(ref.nodeId)
+    const { canonicalPath } = await channel.request('fs.resolve', { path: ref.repoPath })
+    const listed = await channel.request('git.worktreeList', { repoPath: canonicalPath })
+    const held = deps.anchors.list()
+    return listed
+      .filter(entry => !entry.main)
+      .map(entry => ({
+        path: entry.path,
+        name: posix.basename(entry.path) || entry.path,
+        branch: entry.branch ?? '',
+        registered: held.some(anchor => anchor.nodeId === ref.nodeId && anchor.remoteRoot === entry.path),
+      }))
+  }
+
+  /** The anchor a caller's id names, wherever it is recorded. */
+  const entryById = async (anchorId: AnchorId): Promise<AnchorRecord | undefined> =>
+    anchorId.startsWith(LOCAL_ID_PREFIX) ? await localEntry(deps, anchorId) : deps.anchors.get(anchorId)
+
   return {
     async create(draft) {
       if (deps.isLocalNode(draft.nodeId)) return await createLocalWorktree(deps, draft)
@@ -515,16 +590,13 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       // finds the same directory the caller meant.
       const { canonicalPath: repoPath } = await channel.request('fs.resolve', { path: draft.repoPath })
       const branch = branchFor(draft.name)
-      const worktreePath = managedWorktreePath(repoPath, draft.name)
+      const worktreePath = managedWorktreePath(deps.worktreeRoot(draft.nodeId), repoPath, draft.name)
       const worktree: WireWorktree = await channel.request('git.worktreeAdd', {
         repoPath,
         worktreePath,
         branch,
         ...draft.baseRef === undefined ? {} : { baseRef: draft.baseRef },
       })
-
-      // The add created the parent directory, so the ignore file can land now.
-      await ensureIgnored(channel, repoPath)
 
       // The daemon reports where the checkout actually landed and which branch
       // it settled on, which are the facts every later call must use.
@@ -552,14 +624,59 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       const statuses: WorktreeStatus[] = [...await localStatuses(deps)]
       for (const anchor of deps.anchors.list()) {
         const open = await deps.workspace?.registered(anchor) ?? false
+        const managed = await isManaged(deps, anchor)
         // Listing is a local read. The branch a checkout sits on and whether it
         // is dirty belong to the machine's own git, so the only thing worth
         // reporting here is whether the worktree can be reached at all.
         statuses.push(deps.channel(anchor.nodeId) === undefined
-          ? { anchor, open, error: `node "${anchor.nodeId}" is not connected` }
-          : { anchor, open })
+          ? { anchor, open, managed, error: `node "${anchor.nodeId}" is not connected` }
+          : { anchor, open, managed })
       }
       return statuses
+    },
+
+    async existing(ref) {
+      return await listExisting(ref)
+    },
+
+    async adopt(ref, path) {
+      const listed = await listExisting(ref)
+      const entry = listed.find(candidate => candidate.path === path)
+      if (entry === undefined) {
+        throw new Error(`"${path}" is not a worktree of "${ref.repoPath}" on that machine`)
+      }
+      if (deps.isLocalNode(ref.nodeId)) {
+        // A local checkout is already a row here; adopting it only opens it.
+        const local = (await localStatuses(deps)).find(status =>
+          status.anchor.nodeId === ref.nodeId && status.anchor.anchorPath === path)?.anchor
+        if (local === undefined || local.kind !== 'worktree') {
+          throw new Error(`no local checkout "${path}"`)
+        }
+        return await openAsWorkspace(deps, local)
+      }
+      const held = deps.anchors.list().find(
+        (anchor): anchor is WorktreeAnchor =>
+          anchor.kind === 'worktree' && anchor.nodeId === ref.nodeId && anchor.remoteRoot === path,
+      )
+      if (held !== undefined) return await openAsWorkspace(deps, held)
+
+      const anchor = await deps.anchors.create({
+        kind: 'worktree',
+        nodeId: ref.nodeId,
+        name: posix.basename(path) || path,
+        repoPath: ref.repoPath,
+        remoteRoot: path,
+        branch: entry.branch,
+      })
+      try {
+        await openAsWorkspace(deps, anchor)
+      } catch (error) {
+        // An anchor with nothing open behind it is a row nobody asked for, so a
+        // refused registration leaves nothing behind.
+        await deps.anchors.remove(anchor.anchorId)
+        throw error
+      }
+      return { ...anchor, kind: 'worktree', branch: entry.branch }
     },
 
     async anchorsIn(ref) {
@@ -622,19 +739,25 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
     },
 
     async open(anchorId) {
-      const anchor = anchorId.startsWith(LOCAL_ID_PREFIX)
-        ? await localEntry(deps, anchorId)
-        : anchorById(anchorId)
+      const anchor = await entryById(anchorId)
       if (anchor === undefined) throw new Error(`no worktree "${anchorId}" on this machine`)
       return await openAsWorkspace(deps, anchor)
     },
 
     async close(anchorId) {
-      const anchor = anchorId.startsWith(LOCAL_ID_PREFIX)
-        ? await localEntry(deps, anchorId)
-        : anchorById(anchorId)
+      const anchor = await entryById(anchorId)
       if (anchor === undefined) throw new Error(`no worktree "${anchorId}" on this machine`)
       await deps.workspace?.unregister(anchor)
+      return anchor
+    },
+
+    async release(anchorId) {
+      const anchor = await entryById(anchorId)
+      if (anchor === undefined) throw new Error(`no worktree "${anchorId}" on this machine`)
+      // Only this host's bookkeeping goes: a local checkout has no record beyond
+      // its registration, and a machine's checkout is not ours to delete.
+      await deps.workspace?.unregister(anchor)
+      if (!anchorId.startsWith(LOCAL_ID_PREFIX)) await deps.anchors.remove(anchorId)
       return anchor
     },
 

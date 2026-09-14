@@ -368,7 +368,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
       'git on the machine lists the new checkout',
     )
     assert.ok(
-      (await readFile(join(instance.repoPath, '.dsh-worktrees', 'worktree', 'verify', 'README.md'), 'utf8'))
+      (await readFile(join(instance.userHome, '.dsh', 'worktrees', 'demo-repo', 'verify', 'README.md'), 'utf8'))
         .includes('fixture'),
       'the checkout carries the repository content',
     )
@@ -417,6 +417,27 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await waitForPath(join(scratch, '.dsh-remote-worktree.json'), 'absent')
     await waitForBranchGone(instance.repoPath, 'worktree/scratch')
     await waitFor(page, `!document.body.innerText.includes('scratch')`, 'the sidebar to drop the second workspace')
+
+    // A checkout the plugin never cut: it is adopted from the machine's own
+    // list, opened as a workspace, and then closed without being touched.
+    await clickByText(page, exact('adoptWorktree'))
+    await waitForForm(page, exact('adoptWorktree'), 'the open-worktree dialog')
+    await waitForText(page, 'hand-cut', 'the hand-cut checkout to be listed')
+    await clickInDialog(page, /hand-cut/)
+    await waitForFormGone(page, exact('adoptWorktree'), 'the open-worktree dialog to close')
+    await waitForText(page, 'hand-cut', 'the adopted row')
+    await waitFor(page, `document.body.innerText.includes('hand-cut · demo-repo')`, 'the adopted workspace')
+    await shot('07b-adopted-worktree')
+
+    await clickByText(page, exact('releaseWorktree'))
+    await waitForForm(page, anyOf('releaseWorktreeTitle'), 'the release confirmation')
+    await clickInDialog(page, exact('remove'))
+    await waitFor(page, `!document.body.innerText.includes('hand-cut')`, 'the row to go')
+    assert.match(
+      await readFile(join(instance.root, 'remote-root', 'hand-cut', 'README.md'), 'utf8'),
+      /fixture/,
+      'the released checkout is still on the machine',
+    )
 
     // A directory nobody initialized registers, opens as a workspace of its
     // own, and refuses worktrees until someone makes it a repository.
@@ -471,7 +492,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('newWorktree'), 'the initialized directory form to close')
     assert.ok(
-      (await readFile(join(instance.plainDir, '.dsh-worktrees', 'worktree', 'plain', 'notes.md'), 'utf8'))
+      (await readFile(join(instance.userHome, '.dsh', 'worktrees', 'plain-dir', 'plain', 'notes.md'), 'utf8'))
         .includes('plain'),
       'the directory that was not a repository now holds a checkout',
     )
@@ -510,7 +531,7 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('newWorktree'), 'the local new-worktree form to close')
 
-    const localCheckout = join(instance.localRepo, '.dsh-worktrees', 'worktree', 'here')
+    const localCheckout = join(instance.userHome, '.dsh', 'worktrees', 'local-repo', 'here')
     await waitForPath(join(localCheckout, 'README.md'), 'present')
     assert.match(
       await readFile(join(localCheckout, 'README.md'), 'utf8'),

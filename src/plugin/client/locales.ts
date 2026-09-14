@@ -45,9 +45,13 @@ export const zh = {
   addRepository: '添加仓库',
   forgetRepository: '移除仓库',
   newWorktree: '新建 worktree',
+  adoptWorktree: '打开 worktree',
+  adoptEmpty: '这台机器上没有其它 worktree。',
+  adoptRegistered: '已在面板中',
   openWorktree: '打开工作区',
   closeWorktree: '关闭工作区',
   removeWorktree: '移除',
+  releaseWorktree: '关闭 worktree',
 
   fieldTarget: 'SSH 目标',
   fieldSshPort: 'SSH 端口',
@@ -88,6 +92,8 @@ export const zh = {
   removeWorktreeTitle: '移除 worktree？',
   removeWorktreeBody: '会删除机器上的检出目录；勾选后分支也会被删除。未提交的改动会一并丢弃。',
   removeWorktreeBranch: '同时删除分支',
+  releaseWorktreeTitle: '关闭这个 worktree？',
+  releaseWorktreeBody: '只会移除插件里的这条记录并关闭它的工作区；机器上的检出原样保留。',
   noToken: '未设置令牌',
 } satisfies Record<string, string>
 
@@ -128,9 +134,13 @@ export const en = {
   addRepository: 'Add repository',
   forgetRepository: 'Forget repository',
   newWorktree: 'New worktree',
+  adoptWorktree: 'Open worktree',
+  adoptEmpty: 'No other worktrees on this machine.',
+  adoptRegistered: 'Already in the panel',
   openWorktree: 'Open workspace',
   closeWorktree: 'Close workspace',
   removeWorktree: 'Remove',
+  releaseWorktree: 'Close worktree',
 
   fieldTarget: 'SSH destination',
   fieldSshPort: 'SSH port',
@@ -171,5 +181,7 @@ export const en = {
   removeWorktreeTitle: 'Remove this worktree?',
   removeWorktreeBody: 'The checkout is deleted on the machine; tick the option to delete its branch too. Uncommitted changes are discarded.',
   removeWorktreeBranch: 'Also delete its branch',
+  releaseWorktreeTitle: 'Close this worktree?',
+  releaseWorktreeBody: 'Only the plugin\'s record goes, and its workspace is closed with it; the checkout on the machine stays where it is.',
   noToken: 'no token',
 } satisfies Record<RemoteWorktreesKey, string>

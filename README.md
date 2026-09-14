@@ -17,6 +17,8 @@ English | [中文](README.zh.md)
 - Works on this machine with no setup at all: the built-in `Local` machine needs no agent and no connection, and manages
   repositories and worktrees here exactly as it does on a machine reached over SSH.
 - Cuts `worktree/<name>` from any repository on it, and registers the checkout as a DSH workspace.
+- Opens a worktree that already exists on the machine — anything its git lists — and closes it again without touching the
+  checkout.
 - Opens a registered directory as a workspace in its own right, repository or not; `git init` a plain one later and
   worktrees can be cut from it without registering anything again.
 - Runs read, write, edit, bash, grep, and terminal tools on that machine unchanged.
@@ -95,6 +97,9 @@ the other half — it runs in the browser and reaches the host through its manag
 `$DSH_HOME/remote-worktrees/` holds `nodes.json`, `repos.json`, one anchor directory per remote directory this plugin
 addresses, and the agent builds downloaded for each platform. Removing the plugin leaves that directory behind;
 deleting it forgets every machine.
+
+The checkouts themselves are not here: each machine keeps them under its own `~/.dsh/worktrees/<repository>/<name>`,
+unless `worktreeRoot` names another root.
 
 ## License
 

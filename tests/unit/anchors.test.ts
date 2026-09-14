@@ -56,7 +56,7 @@ const draft: AnchorDraft = {
   kind: 'worktree',
   name: 'login',
   repoPath: '/srv/app',
-  remoteRoot: '/srv/app/.dsh-worktrees/worktree/worktree/login',
+  remoteRoot: '/srv/checkouts/app/login',
   branch: 'worktree/login',
 }
 
@@ -156,7 +156,7 @@ test('an anchor written before kinds existed reads as a worktree', async () => {
       nodeId: 'n1',
       name: 'old',
       anchorPath: dir,
-      remoteRoot: '/srv/app/.dsh-worktrees/worktree/old',
+      remoteRoot: '/srv/checkouts/app/old',
       repoPath: '/srv/app',
       branch: 'worktree/old',
       createdAt: '2026-01-01T00:00:00.000Z',

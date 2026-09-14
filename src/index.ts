@@ -28,7 +28,8 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import z from '@deepseek-ai/schemastery'
-import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { join, posix } from 'node:path'
 import { autoconnect } from './models/autoconnect.ts'
 import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './models/machines.ts'
 import { createWorktreeManager, workspaceLabel } from './models/worktrees.ts'
@@ -40,6 +41,7 @@ import { AGENT_VERSION } from './remote/agent/install.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS } from './remote/ssh.ts'
 import { createAnchorStore } from './storage/anchors.ts'
 import { createNodeRegistry } from './storage/nodes.ts'
+import type { NodeId } from './storage/nodes.ts'
 import { createRepoStore } from './storage/repos.ts'
 
 /** Plugin name used by the Loader and by diagnostics. */
@@ -64,6 +66,14 @@ export interface Config {
    */
   remoteRipgrep?: string
   /**
+   * Root directory every managed worktree is cut under, on every machine.
+   *
+   * Defaults to `~/.dsh/worktrees`, resolved against the machine's own home; an
+   * absolute path is used verbatim. A checkout lands at
+   * `<root>/<repository>/<name>`, never inside the repository.
+   */
+  worktreeRoot?: string
+  /**
    * How long the SSH forward may take to start accepting connections, in
    * milliseconds. Defaults to {@link DEFAULT_FORWARD_TIMEOUT_MS}.
    *
@@ -86,9 +96,13 @@ export interface Config {
 export const Config: z<Config> = z.object({
   dataDir: z.string(),
   remoteRipgrep: z.string(),
+  worktreeRoot: z.string(),
   sshForwardTimeoutMs: z.number().step(1).min(1),
   daemonHandshakeTimeoutMs: z.number().step(1).min(1),
 })
+
+/** Root managed worktrees are cut under when the config names none. */
+const DEFAULT_WORKTREE_ROOT = '~/.dsh/worktrees'
 
 /**
  * Mount the plugin.
@@ -125,13 +139,30 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
   })
 
+  // The local machine reads paths and runs git in this process instead of over
+  // a connection, so which nodes those are is settled once.
+  const isLocalNode = (nodeId: NodeId): boolean => registry.get(nodeId)?.transport.kind === 'local'
+
+  const configuredRoot = config.worktreeRoot ?? DEFAULT_WORKTREE_ROOT
+  if (configuredRoot !== '~' && !configuredRoot.startsWith('~/') && !configuredRoot.startsWith('/')) {
+    throw new Error(`worktreeRoot must be absolute, "~", or "~/…": "${configuredRoot}"`)
+  }
+  /** Where managed checkouts live on one machine. */
+  const worktreeRoot = (nodeId: NodeId): string => {
+    if (!configuredRoot.startsWith('~')) return configuredRoot
+    const home = isLocalNode(nodeId) ? homedir() : connections.status(nodeId).info?.homedir
+    if (home === undefined) {
+      throw new Error(`the home directory of "${nodeId}" is unknown; connect that machine first`)
+    }
+    return posix.join(home, configuredRoot.slice(1))
+  }
+
   const worktrees = createWorktreeManager({
     anchors: anchorStore,
     repos,
     channel: nodeId => connections.channel(nodeId),
-    // The local machine reads paths and runs git in this process instead of
-    // over a connection, so the manager is told which nodes those are once.
-    isLocalNode: nodeId => registry.get(nodeId)?.transport.kind === 'local',
+    isLocalNode,
+    worktreeRoot,
     workspace: {
       async register(anchor) {
         // The title is what a person reads in the workspace list, so it names

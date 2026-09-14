@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type { DirListing, RemoteWorktreesFace, Snapshot, T as Translate } from './Section.tsx'
+import type { DirListing, ExistingWorktree, RemoteWorktreesFace, Snapshot, T as Translate } from './Section.tsx'
 import { RemoteWorktreesSection } from './Section.tsx'
 import type { RemoteWorktreesKey } from './locales.ts'
 import { en, NS, zh } from './locales.ts'
@@ -107,6 +107,21 @@ function sectionFace(t: Translate): RemoteWorktreesFace {
     },
     async createWorktree(draft) {
       await call(t, '/worktrees', { method: 'POST', body: JSON.stringify(draft) })
+    },
+    async existingWorktrees(repoId): Promise<readonly ExistingWorktree[]> {
+      const body = await call<{ worktrees: readonly ExistingWorktree[] }>(
+        t, `/repos/${encodeURIComponent(repoId)}/worktrees`,
+      )
+      return body.worktrees
+    },
+    async adoptWorktree(repoId, path) {
+      await call(t, `/repos/${encodeURIComponent(repoId)}/worktrees`, {
+        method: 'POST',
+        body: JSON.stringify({ path }),
+      })
+    },
+    async releaseWorktree(anchorId) {
+      await call(t, `/worktrees/${encodeURIComponent(anchorId)}/release`, { method: 'POST' })
     },
     async removeWorktree(anchorId, deleteBranch) {
       const query = new URLSearchParams({ force: 'true', deleteBranch: String(deleteBranch) })

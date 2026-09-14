@@ -320,6 +320,20 @@ async function handleRepos(
     return { status: 200, body: { closed: await deps.worktrees.closeDirectory(ref) !== undefined } }
   }
 
+  // The checkouts git already knows about for this repository: how one cut by
+  // hand, or before this plugin existed, becomes usable. Adopting one records
+  // it and opens it; the checkout itself is never written to.
+  if (action === 'worktrees') {
+    if (request.method === 'GET') {
+      return { status: 200, body: { worktrees: await deps.worktrees.existing(ref) } }
+    }
+    if (request.method === 'POST') {
+      const anchor = await deps.worktrees.adopt(ref, requireString(request.body, 'path'))
+      return { status: 201, body: { worktree: anchor } }
+    }
+    throw notAllowed
+  }
+
   if (action !== undefined) throw new ApiError(404, `unknown endpoint ${request.method} ${request.path}`)
 
   if (request.method === 'GET') {
@@ -385,10 +399,13 @@ async function handleWorktrees(
     throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
   }
 
-  // Opening and closing are workspace registration, not git: the checkout on
-  // the machine is untouched either way.
-  if (action === 'open' || action === 'close') {
+  // Opening, closing, and releasing are workspace and record bookkeeping, not
+  // git: the checkout on the machine is untouched by all three.
+  if (action === 'open' || action === 'close' || action === 'release') {
     if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+    if (action === 'release') {
+      return { status: 200, body: { worktree: await deps.worktrees.release(anchorId) } }
+    }
     const worktree = action === 'open'
       ? await deps.worktrees.open(anchorId)
       : await deps.worktrees.close(anchorId)

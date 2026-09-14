@@ -71,6 +71,11 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
     channel: nodeId => connections.channel(nodeId),
     // This suite drives machines; the local machine's own cases live beside it.
     isLocalNode: nodeId => registry.get(nodeId)?.transport.kind === 'local',
+    // A stubbed machine takes a fixed POSIX root; the local cases run real git,
+    // so their checkouts stay inside this suite's temp directory.
+    worktreeRoot: nodeId => (registry.get(nodeId)?.transport.kind === 'local'
+      ? join(dir, 'checkouts')
+      : '/srv/checkouts'),
     workspace,
   })
   return {
@@ -417,13 +422,14 @@ async function cutWorktree(overrides: Readonly<Record<string, (params: never) =>
 function daemon(overrides: Readonly<Record<string, (params: never) => unknown>> = {}): NodeChannel {
   return {
     onPipeFrame: () => () => {},
-    request: ((method: string, params: { path: string; repoPath: string }) => {
+    request: ((method: string, params: { path: string; repoPath: string; worktreePath: string }) => {
       const override = overrides[method]
       if (override !== undefined) return Promise.resolve(override(params as never)) as never
       if (method === 'fs.resolve') return Promise.resolve({ canonicalPath: params.path }) as never
       if (method === 'fs.stat') return Promise.resolve({ version: '1', type: 'directory' }) as never
       if (method === 'git.repoState') return Promise.resolve({ branch: 'main', clean: true }) as never
-      if (method === 'git.worktreeAdd') return Promise.resolve({ path: `${params.repoPath}/.dsh-worktrees/worktree/x`, branch: 'worktree/x' }) as never
+      // The daemon reports where the checkout actually landed.
+      if (method === 'git.worktreeAdd') return Promise.resolve({ path: params.worktreePath, branch: 'worktree/x' }) as never
       if (method === 'fs.writeText') return Promise.resolve({}) as never
       return Promise.reject(new Error(`unexpected ${method}`)) as never
     }) as NodeChannel['request'],
@@ -592,7 +598,7 @@ test('forgetting a repository is refused while worktrees still belong to it', as
     kind: 'worktree',
     name: 'x',
     repoPath: '/srv/app',
-    remoteRoot: '/srv/app/.dsh-worktrees/worktree/x',
+    remoteRoot: '/srv/checkouts/app/x',
     branch: 'worktree/x',
   })
 
@@ -731,7 +737,9 @@ test('a local worktree is cut, listed, and removed through the routes', async ()
   )
   assert.equal(created.status, 201)
   const anchor = (created.body as { worktree: { anchorId: string; anchorPath: string } }).worktree
-  assert.equal(anchor.anchorPath, join(repo, '.dsh-worktrees', 'worktree', 'login'))
+  // Git records the checkout under its resolved spelling, and this suite's
+  // scratch directory is reached through a symlink (`/var` on macOS is one).
+  assert.equal(anchor.anchorPath, join(await realpath(dir), 'checkouts', 'route-repo', 'login'))
   assert.deepEqual(repos.list().map(record => record.repoPath), [repo])
 
   const listed = await handleNodeApi(request('GET', '/worktrees'), deps)
@@ -771,4 +779,50 @@ test('a local directory opens as a workspace and closes again', async () => {
   assert.equal(closed.status, 200)
   assert.equal((closed.body as { closed: boolean }).closed, true)
   assert.equal(registered.size, 0)
+})
+
+test('a repository reports the checkouts git already has', async () => {
+  const { deps, repos, nodeId } = await connected(daemon({
+    'git.worktreeList': () => [
+      { path: '/srv/app', branch: 'main', head: 'abc', main: true },
+      { path: '/srv/elsewhere/login', branch: 'worktree/login', head: 'abc', main: false },
+      { path: '/srv/elsewhere/detached', branch: null, head: 'abc', main: false },
+    ],
+  }))
+  const repo = await repos.upsert({ nodeId, repoPath: '/srv/app' })
+
+  const response = await handleNodeApi(request('GET', `/repos/${repo.repoId}/worktrees`), deps)
+
+  assert.equal(response.status, 200)
+  assert.deepEqual((response.body as { worktrees: readonly unknown[] }).worktrees, [
+    { path: '/srv/elsewhere/login', name: 'login', branch: 'worktree/login', registered: false },
+    { path: '/srv/elsewhere/detached', name: 'detached', branch: '', registered: false },
+  ])
+})
+
+test('an existing checkout is adopted and released through the routes', async () => {
+  const { deps, repos, anchors, nodeId } = await connected(daemon({
+    'git.worktreeList': () => [
+      { path: '/srv/app', branch: 'main', head: 'abc', main: true },
+      { path: '/srv/elsewhere/login', branch: 'worktree/login', head: 'abc', main: false },
+    ],
+  }))
+  const repo = await repos.upsert({ nodeId, repoPath: '/srv/app' })
+
+  const adopted = await handleNodeApi(
+    request('POST', `/repos/${repo.repoId}/worktrees`, { path: '/srv/elsewhere/login' }),
+    deps,
+  )
+  assert.equal(adopted.status, 201)
+  const anchor = (adopted.body as { worktree: { anchorId: string; remoteRoot: string; branch: string } }).worktree
+  assert.equal(anchor.remoteRoot, '/srv/elsewhere/login')
+  assert.equal(anchor.branch, 'worktree/login')
+
+  const listed = await handleNodeApi(request('GET', '/worktrees'), deps)
+  const rows = (listed.body as { worktrees: readonly { anchor: { anchorId: string }; managed: boolean }[] }).worktrees
+  assert.equal(rows.find(row => row.anchor.anchorId === anchor.anchorId)?.managed, false)
+
+  const released = await handleNodeApi(request('POST', `/worktrees/${anchor.anchorId}/release`), deps)
+  assert.equal(released.status, 200)
+  assert.deepEqual(anchors.list(), [], 'the record is gone, and git was never asked to change anything')
 })
