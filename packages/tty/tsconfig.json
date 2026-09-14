@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "noPropertyAccessFromIndexSignature": true
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}
