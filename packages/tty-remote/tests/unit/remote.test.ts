@@ -109,6 +109,28 @@ async function quiet(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 150))
 }
 
+/**
+ * Wait for a promise while keeping the event loop awake.
+ *
+ * The provider's poll timer is deliberately unref'd — a terminal must not hold
+ * the host open by itself — so a case that merely awaited `done` would let the
+ * loop drain before the next poll fired, and the wait would never finish.
+ * @param promise - what is being waited on.
+ * @param timeoutMs - how long to wait before failing.
+ * @returns what the promise resolved to.
+ */
+async function settled<T>(promise: Promise<T>, timeoutMs = 2000): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const answer = await Promise.race([
+      promise.then(value => ({ value })),
+      new Promise<undefined>(resolve => { setTimeout(() => resolve(undefined), 10) }),
+    ])
+    if (answer !== undefined) return answer.value
+    if (Date.now() > deadline) throw new Error('the terminal never settled')
+  }
+}
+
 test('what the daemon retains is published in order, and the exit settles the handle', async () => {
   const { wire, calls } = scriptedWire({
     reads: [
@@ -121,7 +143,7 @@ test('what the daemon retains is published in order, and the exit settles the ha
   const handle = await createRemoteTty(wire, { ...request, graceMs: 300 })
   const output = watcher(handle)
   await output.until('hello world')
-  assert.deepEqual(await handle.done, { exitCode: 0, signal: null })
+  assert.deepEqual(await settled(handle.done), { exitCode: 0, signal: null })
 
   // The spawn carried what the caller asked for, under the resolved directory.
   assert.deepEqual(calls[0], {
@@ -133,9 +155,9 @@ test('what the daemon retains is published in order, and the exit settles the ha
   assert.deepEqual(offsets.slice(0, 2), [0, 6])
 
   // Polling stops with the terminal rather than running until the host exits.
-  const settled = calls.length
+  const recorded = calls.length
   await quiet()
-  assert.equal(calls.length, settled)
+  assert.equal(calls.length, recorded)
 })
 
 test('a resize and a write reach the daemon with the terminal it minted', async () => {
@@ -165,14 +187,14 @@ test('releasing a terminal keeps the bytes teardown produced', async () => {
   assert.equal(output.seen(), 'goodbye\n')
   // A terminal the daemon no longer knows reads as no outcome, so the handle
   // settles with the facts it has rather than waiting for exit facts.
-  assert.deepEqual(await handle.done, { exitCode: null, signal: null })
+  assert.deepEqual(await settled(handle.done), { exitCode: null, signal: null })
   assert.equal(calls.filter(call => call.kind === 'terminate').length, 1)
 })
 
 test('a dropped transport settles the terminal instead of polling forever', async () => {
   const { wire } = scriptedWire({ reads: [new Error('socket hang up')] })
   const handle = await createRemoteTty(wire, request)
-  assert.deepEqual(await handle.done, { exitCode: null, signal: null })
+  assert.deepEqual(await settled(handle.done), { exitCode: null, signal: null })
 })
 
 test('a terminal that cannot be allocated fails the caller', async () => {
