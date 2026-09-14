@@ -18,12 +18,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/remote-workspace" "$PWD/packages/terminal"
 ```
 
-`dsh plugin` 把参数转发给 profile 目录里的 pnpm，两个包因此被链接进 `~/.dsh/profiles/web`。
-再把它们写进该 profile 的 `bundles`，然后重启服务：
-
-```jsonc
-// ~/.dsh/profiles/web/package.json
-{ "dsh": { "profile": { "bundles": ["…", "dsh-remote-workspace", "dsh-terminal"] } } }
-```
+`dsh plugin` 把参数转发给 profile 里的 pnpm，并挂载它装好的东西：两个包都声明了 bundle patch，
+会自己加入 profile 的层。重启服务即可加载。
 
 MIT

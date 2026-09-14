@@ -23,7 +23,8 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/terminal"
 ```
 
-Then name `dsh-terminal` in the profile's `bundles` and restart the server.
+The package joins the profile's layers as it is installed, since it declares a bundle patch; restart the server to
+load it.
 
 While developing it, the profile's patch layer mounts the host half instead, without a restart
 (`$DSH_HOME/profiles/<name>/cordis.patch.yml`, watched live):

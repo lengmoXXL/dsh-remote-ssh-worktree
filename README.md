@@ -18,12 +18,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/remote-workspace" "$PWD/packages/terminal"
 ```
 
-`dsh plugin` forwards its arguments to pnpm in the profile directory, so both packages are linked into
-`~/.dsh/profiles/web`. Then name them in that profile's `bundles` and restart the server:
-
-```jsonc
-// ~/.dsh/profiles/web/package.json
-{ "dsh": { "profile": { "bundles": ["…", "dsh-remote-workspace", "dsh-terminal"] } } }
-```
+`dsh plugin` forwards to pnpm in the profile and mounts what it installs: both packages declare a bundle patch,
+so they join the profile's layers on their own. Restart the server to load them.
 
 MIT

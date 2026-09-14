@@ -24,7 +24,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/remote-workspace"
 ```
 
-再把 `dsh-remote-workspace` 写进 profile 的 `bundles`，用 `dsh --profile web` 启动。
+再用 `dsh --profile web` 启动。本包声明了 bundle patch，安装时就会加入 profile 的层。
 
 ## 能做什么
 
