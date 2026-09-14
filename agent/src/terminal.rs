@@ -19,7 +19,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::RawFd;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as AsyncMutex;
@@ -42,6 +42,8 @@ const TERMINAL_NAME: &str = "xterm-256color";
 /// The terminal methods the daemon serves, one per `term.*` wire method.
 pub struct TerminalBackend {
     terminals: Mutex<HashMap<String, Arc<ManagedTerminal>>>,
+    /// Set once the owning connection closed, so a late spawn ends instead.
+    closed: AtomicBool,
     counter: AtomicU64,
 }
 
@@ -52,6 +54,7 @@ impl TerminalBackend {
         Self {
             terminals: Mutex::new(HashMap::new()),
             counter: AtomicU64::new(0),
+            closed: AtomicBool::new(false),
         }
     }
 
@@ -90,10 +93,20 @@ impl TerminalBackend {
         });
         let term_id = unique_id(&self.counter);
         start_watchers(&terminal, master);
+        let published = terminal.clone();
         self.terminals
             .lock()
             .expect("terminal table poisoned")
             .insert(term_id.clone(), terminal);
+        // A terminal allocated just before the connection closed lands here
+        // after the table was drained; it is ended rather than left allocated.
+        if self.closed.load(Ordering::SeqCst) {
+            self.terminals
+                .lock()
+                .expect("terminal table poisoned")
+                .remove(&term_id);
+            published.dispose();
+        }
         Ok(json!({ "termId": term_id, "pid": pid }))
     }
 
@@ -181,6 +194,7 @@ impl TerminalBackend {
 
     /// Kill every terminal session this connection allocated and release its buffers.
     pub fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
         let terminals: Vec<Arc<ManagedTerminal>> = self
             .terminals
             .lock()

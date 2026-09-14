@@ -19,7 +19,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
@@ -59,6 +59,8 @@ impl Which {
 pub struct SubprocessBackend {
     outbound: Outbound,
     processes: Mutex<HashMap<String, Arc<ManagedProcess>>>,
+    /// Set once the owning connection closed, so a late spawn ends instead.
+    closed: AtomicBool,
     counter: AtomicU64,
 }
 
@@ -71,6 +73,7 @@ impl SubprocessBackend {
             outbound,
             processes: Mutex::new(HashMap::new()),
             counter: AtomicU64::new(0),
+            closed: AtomicBool::new(false),
         }
     }
 
@@ -205,6 +208,15 @@ impl SubprocessBackend {
             .lock()
             .expect("process table poisoned")
             .insert(managed.proc_id.clone(), managed.clone());
+        // A spawn dispatched just before the connection closed lands here after
+        // the table was drained: it owns nothing else, so it is ended now.
+        if self.closed.load(Ordering::SeqCst) {
+            self.processes
+                .lock()
+                .expect("process table poisoned")
+                .remove(&managed.proc_id);
+            managed.dispose();
+        }
 
         if let StdinMode::Data(data) = &spec.stdin {
             managed.write_stdin_bytes(data).await?;
@@ -273,6 +285,7 @@ impl SubprocessBackend {
 
     /// Kill every managed range and release every retained buffer.
     pub fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
         let processes: Vec<Arc<ManagedProcess>> = self
             .processes
             .lock()
