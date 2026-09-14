@@ -13,17 +13,16 @@
  * @module dsh-remote-workspace/plugin/client/Section
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   Button,
   DisclosureRow,
   IconBranchOutline16,
+  IconEllipsisOutline16,
   IconFolderOpen16,
   IconGlobeOutline14,
-  IconPlusOutline16,
-  IconRefreshOutline16,
-  IconTrashOutline16,
   IconWarningOutline16,
+  Menu,
   Modal,
   StateDot,
   Switch,
@@ -283,11 +282,73 @@ function progressText(progress: AgentProgress): {
  */
 const PROGRESS_POLL_MS = 250
 
+/** One action one object's menu offers. */
+interface RowAction {
+  readonly id: string
+  readonly label: ReactNode
+  /** Destructive: the menu paints it as such. */
+  readonly danger?: boolean
+  readonly disabled?: boolean
+  readonly run: () => void
+}
+
+/**
+ * One object's actions, folded into a menu so the object keeps one row.
+ *
+ * Every row's trigger reads the same, so the accessible name carries the
+ * object it opens for. The list is portaled, because the settings column
+ * scrolls and would otherwise crop it.
+ */
+function ActionsMenu({ name, busy, actions, t }: {
+  name: string
+  busy: boolean
+  actions: readonly RowAction[]
+  t: T
+}) {
+  const [open, setOpen] = useState(false)
+  const label = `${t('actions')}: ${name}`
+  return (
+    <Menu
+      open={open}
+      align="end"
+      portal
+      compact
+      items={actions.map(action => ({
+        id: action.id,
+        label: action.label,
+        disabled: busy || action.disabled === true,
+        ...action.danger === undefined ? {} : { danger: action.danger },
+      }))}
+      onSelect={(id) => {
+        setOpen(false)
+        actions.find(action => action.id === id)?.run()
+      }}
+      onClose={() => setOpen(false)}
+      anchor={(
+        <Button
+          size="sm"
+          disabled={busy}
+          icon={<IconEllipsisOutline16 />}
+          aria-label={label}
+          title={label}
+          onClick={(event) => {
+            // The row itself toggles on a click, and the trigger sits in its
+            // header: without this, opening the menu would fold the row.
+            event.stopPropagation()
+            setOpen(current => !current)
+          }}
+        />
+      )}
+    />
+  )
+}
+
 /**
  * One worktree row inside an expanded repository.
  *
- * The row names the checkout and whether it is open as a workspace. The branch
- * the checkout sits on belongs to the worktree, so nothing here repeats the
+ * The row names the checkout and whether it is open as a workspace, and folds
+ * its actions into the menu every other row in the tree carries. The branch the
+ * checkout sits on belongs to the worktree, so nothing here repeats the
  * repository's own state from the row above.
  *
  * Opening and closing share one seat, named for what a click does, so the row
@@ -312,39 +373,20 @@ function WorktreeRow({ entry, busy, onRemove, onRelease, onToggleOpen, t }: {
         {entry.error === undefined ? null : <span className={css.dim}>{entry.error}</span>}
       </span>
       <span className={css.trailing}>
-        <Button
-          size="sm"
-          disabled={busy}
-          aria-label={entry.open ? t('closeWorktree') : t('openWorktree')}
-          title={entry.open ? t('closeWorktree') : t('openWorktree')}
-          onClick={onToggleOpen}
-        >
-          {entry.open ? t('closeWorktree') : t('openWorktree')}
-        </Button>
-        {/* Two ways out, on every row: closing drops this plugin's record and
-            its workspace and leaves the checkout where it stands, while
-            removing deletes the checkout itself. Removing is offered even for
-            a checkout the plugin found rather than cut — it is the operator's
-            to delete — and is always behind the confirmation that says so. */}
-        <Button
-          size="sm"
-          disabled={busy}
-          aria-label={t('releaseWorktree')}
-          title={t('releaseWorktree')}
-          onClick={onRelease}
-        >
-          {t('releaseWorktree')}
-        </Button>
-        <Button
-          size="sm"
-          icon={<IconTrashOutline16 />}
-          disabled={busy}
-          aria-label={t('removeWorktree')}
-          title={t('removeWorktree')}
-          onClick={onRemove}
-        >
-          {t('removeWorktree')}
-        </Button>
+        <ActionsMenu
+          name={entry.anchor.name}
+          busy={busy}
+          t={t}
+          actions={[
+            {
+              id: 'toggleOpen',
+              label: entry.open ? t('closeWorktree') : t('openWorktree'),
+              run: onToggleOpen,
+            },
+            { id: 'release', label: t('releaseWorktree'), run: onRelease },
+            { id: 'remove', label: t('removeWorktree'), danger: true, run: onRemove },
+          ]}
+        />
       </span>
     </div>
   )
@@ -450,13 +492,12 @@ export function RemoteWorktreesSection(props: SectionProps) {
       <div className={css.toolbar}>
         <Button
           variant="outline"
-          icon={<IconPlusOutline16 />}
           disabled={busy}
           onClick={() => setDialog({ kind: 'machine' })}
         >
           {t('addMachine')}
         </Button>
-        <Button icon={<IconRefreshOutline16 />} disabled={busy} onClick={() => void refresh()}>
+        <Button disabled={busy} onClick={() => void refresh()}>
           {t('refresh')}
         </Button>
       </div>
@@ -521,52 +562,42 @@ export function RemoteWorktreesSection(props: SectionProps) {
                       {note === undefined
                         ? <span className={css.srOnly}>{t(here ? 'status.local' : badge.key)}</span>
                         : <span className={css.meta}>{note}</span>}
+                      <ActionsMenu
+                        name={node.title}
+                        busy={busy}
+                        t={t}
+                        actions={[
+                          ...here ? [] : [state === 'ready'
+                            ? {
+                              id: 'disconnect',
+                              label: t('disconnect'),
+                              run: () => void mutate(() => props.disconnectNode(node.nodeId)),
+                            }
+                            : {
+                              id: 'connect',
+                              label: t('connect'),
+                              run: () => void mutate(() => props.connectNode(node.nodeId)),
+                            }],
+                          {
+                            id: 'addRepository',
+                            label: t('addRepository'),
+                            run: () => setDialog({ kind: 'repo', nodeId: node.nodeId }),
+                          },
+                          ...here ? [] : [{
+                            id: 'removeMachine',
+                            label: t('removeMachine'),
+                            danger: true,
+                            run: () => confirm({
+                              titleKey: 'removeMachineTitle',
+                              bodyKey: 'removeMachineBody',
+                              run: () => props.removeNode(node.nodeId),
+                            }),
+                          }],
+                        ]}
+                      />
                     </span>
                   )}
                 >
-                  <div className={css.actions}>
-                    {here ? null : state === 'ready'
-                      ? (
-                        <Button
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => void mutate(() => props.disconnectNode(node.nodeId))}
-                        >
-                          {t('disconnect')}
-                        </Button>
-                      )
-                      : (
-                        <Button
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => void mutate(() => props.connectNode(node.nodeId))}
-                        >
-                          {t('connect')}
-                        </Button>
-                      )}
-                    <Button
-                      size="sm"
-                      icon={<IconPlusOutline16 />}
-                      disabled={busy}
-                      onClick={() => setDialog({ kind: 'repo', nodeId: node.nodeId })}
-                    >
-                      {t('addRepository')}
-                    </Button>
-                    {here ? null : (
-                      <Button
-                        size="sm"
-                        icon={<IconTrashOutline16 />}
-                        disabled={busy}
-                        onClick={() => confirm({
-                          titleKey: 'removeMachineTitle',
-                          bodyKey: 'removeMachineBody',
-                          run: () => props.removeNode(node.nodeId),
-                        })}
-                      >
-                        {t('removeMachine')}
-                      </Button>
-                    )}
-                  </div>
                   <div className={css.repos}>
                     {repos.length === 0
                       ? <div className={css.empty}>{t('repositoriesEmpty')}</div>
@@ -578,8 +609,8 @@ export function RemoteWorktreesSection(props: SectionProps) {
                         // Cutting a worktree needs git, and whether git owns the
                         // directory is a live fact: a plain directory can be
                         // worked in, and initialized on the machine later. The
-                        // row stays silent about it; the new-worktree button
-                        // pops the reason while it cannot cut one.
+                        // menu carries that reason beside the control it
+                        // refuses, so the row itself stays silent.
                         const why = entry.error ?? t('notARepository')
                         // Opening a directory the section has never resolved
                         // needs the machine to spell the path; an anchor that
@@ -598,50 +629,67 @@ export function RemoteWorktreesSection(props: SectionProps) {
                               rowClassName={css.row}
                               leadingClassName={css.leading}
                               onToggle={() => toggle(openRepos, setOpenRepos, repo.repoId)}
+                              collapsedContent={(
+                                <span className={css.trailing}>
+                                  <ActionsMenu
+                                    name={repo.name}
+                                    busy={busy}
+                                    t={t}
+                                    actions={[
+                                      {
+                                        id: 'newWorktree',
+                                        // The reason a control cannot act is read
+                                        // here now, beside the control itself.
+                                        label: entry.git
+                                          ? t('newWorktree')
+                                          : <>{t('newWorktree')} <span className={css.dim}>{why}</span></>,
+                                        disabled: !entry.git,
+                                        run: () => setDialog({ kind: 'worktree', repo }),
+                                      },
+                                      {
+                                        id: 'adoptWorktree',
+                                        label: entry.git
+                                          ? t('adoptWorktree')
+                                          : <>{t('adoptWorktree')} <span className={css.dim}>{why}</span></>,
+                                        disabled: !entry.git,
+                                        run: () => setDialog({ kind: 'existing', repo }),
+                                      },
+                                      {
+                                        id: 'directory',
+                                        // Nothing is open when the machine
+                                        // cannot be asked, so the label is the
+                                        // one that would open it, with the
+                                        // reason it cannot.
+                                        label: cannotOpen
+                                          ? (
+                                            <>
+                                              {t('openWorktree')}{' '}
+                                              <span className={css.dim}>{entry.error}</span>
+                                            </>
+                                          )
+                                          : directory?.open === true ? t('closeWorktree') : t('openWorktree'),
+                                        disabled: cannotOpen,
+                                        run: () => void mutate(() => (
+                                          directory?.open === true
+                                            ? props.closeDirectory(repo.repoId)
+                                            : props.openDirectory(repo.repoId)
+                                        )),
+                                      },
+                                      {
+                                        id: 'forgetRepository',
+                                        label: t('forgetRepository'),
+                                        danger: true,
+                                        run: () => confirm({
+                                          titleKey: 'removeRepositoryTitle',
+                                          bodyKey: 'removeRepositoryBody',
+                                          run: () => props.removeRepo(repo.repoId),
+                                        }),
+                                      },
+                                    ]}
+                                  />
+                                </span>
+                              )}
                             >
-                              <div className={css.actions}>
-                                <Button
-                                  size="sm"
-                                  icon={<IconPlusOutline16 />}
-                                  disabled={busy || !entry.git}
-                                  title={entry.git ? entry.error : why}
-                                  onClick={() => setDialog({ kind: 'worktree', repo })}
-                                >
-                                  {t('newWorktree')}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  disabled={busy || !entry.git}
-                                  title={entry.git ? entry.error : why}
-                                  onClick={() => setDialog({ kind: 'existing', repo })}
-                                >
-                                  {t('adoptWorktree')}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  disabled={busy || cannotOpen}
-                                  title={cannotOpen ? entry.error : undefined}
-                                  onClick={() => void mutate(() => (
-                                    directory?.open === true
-                                      ? props.closeDirectory(repo.repoId)
-                                      : props.openDirectory(repo.repoId)
-                                  ))}
-                                >
-                                  {directory?.open === true ? t('closeWorktree') : t('openWorktree')}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  icon={<IconTrashOutline16 />}
-                                  disabled={busy}
-                                  onClick={() => confirm({
-                                    titleKey: 'removeRepositoryTitle',
-                                    bodyKey: 'removeRepositoryBody',
-                                    run: () => props.removeRepo(repo.repoId),
-                                  })}
-                                >
-                                  {t('forgetRepository')}
-                                </Button>
-                              </div>
                               {worktrees.length === 0 && !entry.git ? null : (
                                 <div className={css.worktrees}>
                                   {worktrees.length === 0

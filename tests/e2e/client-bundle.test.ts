@@ -40,10 +40,9 @@ async function readArtifact(path: string): Promise<string> {
 }
 
 
-/** Icons the section imports; every one renders an empty svg. */
+/** Icons the client imports; every one renders an empty svg. */
 const ICON_NAMES = [
-  'IconBranchOutline16', 'IconChevronLeftOutline14', 'IconFolderOpen16', 'IconGlobeOutline14',
-  'IconPlusOutline16', 'IconRefreshOutline16', 'IconRightUpOutline16', 'IconTrashOutline16',
+  'IconBranchOutline16', 'IconEllipsisOutline16', 'IconFolderOpen16', 'IconGlobeOutline14',
   'IconWarningOutline16',
 ] as const
 

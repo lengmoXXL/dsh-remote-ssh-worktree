@@ -92,6 +92,12 @@
 .card .leading {
   margin-right: 8px;
 }
+/* Every row's action cluster ends on one line, so a repository row drops the
+   padding its nested card already carries: without this, each level of nesting
+   pushes its actions another 12px left of the machine's. */
+.card .repos .row {
+  padding-right: 0;
+}
 .meta {
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -116,14 +122,14 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 12px 8px 22px;
+  padding: 6px 0 8px 22px;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
 }
 .worktree {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 5px 8px;
+  padding: 5px 0 5px 8px;
   border-radius: 6px;
 }
 .worktree:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -133,7 +139,6 @@
   color: var(--dsw-alias-label-primary);
   white-space: nowrap;
 }
-.actions { display: flex; align-items: center; gap: 8px; padding: 7px 12px; flex-wrap: wrap; }
 .fields { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .label { color: var(--dsw-alias-label-secondary); font-size: 12px; }

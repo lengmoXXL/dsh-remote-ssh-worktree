@@ -19,6 +19,7 @@ export const zh = {
     '管理可以访问的机器、机器上的目录，以及从 git 仓库切出的 worktree。'
     + '切出的 worktree 会成为一个本地工作区，其文件与命令都在那台机器上执行。',
   refresh: '刷新',
+  actions: '操作',
   addMachine: '添加机器',
   loading: '正在加载…',
   machinesEmpty: '还没有配置机器。添加一台机器后，就能浏览它的仓库并切出 worktree。',
@@ -111,6 +112,7 @@ export const en = {
     + 'and the worktrees cut from the git repositories among them. A worktree '
     + 'becomes a local workspace whose file and shell tools run on that machine.',
   refresh: 'Refresh',
+  actions: 'Actions',
   addMachine: 'Add machine',
   loading: 'Loading…',
   machinesEmpty: 'No machines yet. Add one to browse its repositories and cut worktrees from them.',

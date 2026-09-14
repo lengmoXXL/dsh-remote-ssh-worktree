@@ -14,7 +14,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   Button,
   IconBranchOutline16,
-  IconChevronLeftOutline14,
   IconFolderOpen16,
   IconWarningOutline16,
   Input,
@@ -214,7 +213,6 @@ function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
       <div className={css.pickerBar}>
         <Button
           size="sm"
-          icon={<IconChevronLeftOutline14 />}
           disabled={parent === undefined}
           onClick={() => { if (parent !== undefined) navigate(parent) }}
         >
