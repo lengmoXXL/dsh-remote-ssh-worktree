@@ -1,9 +1,9 @@
 /**
  * The release resolver is where a machine's platform becomes bytes that will
  * be executed there, so its cases are about the ways that can go wrong: naming
- * an asset no release carries, accepting bytes whose hash does not match the
- * release's own sums file, and reading the release through an endpoint that
- * answers with something else.
+ * an archive no release carries, accepting an archive whose hash does not match
+ * the release's own sums file, unpacking one that holds no agent, and reading a
+ * download that answered with something that is not an archive at all.
  */
 
 import assert from 'node:assert/strict'
@@ -12,18 +12,25 @@ import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { gzipSync } from 'node:zlib'
 import type { AgentFetcher } from '../../src/remote/agent/release.ts'
-import { agentAssetName, agentReleaseApi, resolveAgentBinary } from '../../src/remote/agent/release.ts'
+import {
+  agentArchiveUrl,
+  agentAssetName,
+  agentSumsUrl,
+  resolveAgentBinary,
+} from '../../src/remote/agent/release.ts'
 
-const VERSION = '0.0.1'
+const VERSION = '0.0.2'
 const ASSET = 'dsh-remote-agent-linux-x86_64'
+const ARCHIVE = `${ASSET}.tar.gz`
 const BINARY = Buffer.from('the binary bytes')
-const RELEASE_URL = agentReleaseApi(VERSION)
+const ARCHIVE_URL = agentArchiveUrl(VERSION, ASSET)
+const SUMS_URL = agentSumsUrl(VERSION)
 
 /** One request a scripted fetcher answered. */
 interface SeenRequest {
   readonly url: string
-  readonly accept: string
 }
 
 /** A fresh cache directory for one case. */
@@ -31,42 +38,56 @@ async function cacheDir(): Promise<string> {
   return await mkdtemp(join(tmpdir(), 'drw-release-'))
 }
 
-/** A checksum line for one asset. */
-function sumsFor(asset: string, digest: string): Buffer {
-  return Buffer.from(`${digest}  ${asset}\n`)
+/** A checksum line for one release file. */
+function sumsFor(fileName: string, digest: string): Buffer {
+  return Buffer.from(`${digest}  ${fileName}\n`)
 }
 
-/** The digest of the fixture binary. */
-function binaryDigest(): string {
-  return createHash('sha256').update(BINARY).digest('hex')
+/** The digest of the fixture archive. */
+function archiveDigest(archive: Buffer): string {
+  return createHash('sha256').update(archive).digest('hex')
 }
 
-/** Where a fake release serves one asset's bytes. */
-function assetApi(name: string): string {
-  return `https://api.github.com/repos/lengmoXXL/dsh-remote-workspace/releases/assets/${name}`
+/** One tar header block. */
+function tarHeader(name: string, size: number, type: string): Buffer {
+  const block = Buffer.alloc(512)
+  block.write(name, 0, 'utf8')
+  block.write('0000644\0', 100)
+  block.write('0000000\0', 108)
+  block.write('0000000\0', 116)
+  block.write(`${size.toString(8).padStart(11, '0')}\0`, 124)
+  block.write('00000000000\0', 136)
+  // The checksum is the header's own bytes summed with this field read as
+  // spaces; nothing here validates it, but a real tar writes one.
+  block.write('        ', 148)
+  block.write(type, 156)
+  block.write('ustar\0', 257)
+  block.write('00', 263)
+  let sum = 0
+  for (const byte of block) sum += byte
+  block.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148)
+  return block
 }
 
-/** Where a person would download one asset from. */
-function assetBrowser(name: string): string {
-  return `https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/v${VERSION}/${name}`
+/** A gzipped tar holding the given records, padded the way tar pads them. */
+function tarball(entries: readonly { name: string; body: Buffer; type?: string }[]): Buffer {
+  const padded = (body: Buffer): Buffer =>
+    Buffer.concat([body, Buffer.alloc((512 - (body.length % 512)) % 512)])
+  const records = entries.flatMap(entry => [
+    tarHeader(entry.name, entry.body.length, entry.type ?? '0'),
+    padded(entry.body),
+  ])
+  return gzipSync(Buffer.concat([...records, Buffer.alloc(1024)]))
 }
 
-/** A release metadata body naming the given assets. */
-function releaseBody(names: readonly string[]): Buffer {
-  return Buffer.from(JSON.stringify({
-    tag_name: `v${VERSION}`,
-    assets: names.map(name => ({
-      name,
-      url: assetApi(name),
-      browser_download_url: assetBrowser(name),
-    })),
-  }))
+/** The archive a release of this repository publishes for the fixture asset. */
+function releaseArchive(): Buffer {
+  return tarball([{ name: 'dsh-remote-agent', body: BINARY }])
 }
 
 /**
- * A scripted fetcher: the release metadata, then whichever asset bytes the
- * caller supplies.
- * @param bodies - per-asset bodies; an absent entry fails the request.
+ * A scripted fetcher: whichever release files the caller supplies.
+ * @param bodies - per-URL bodies; an absent entry fails the request.
  * @returns the fetcher and the requests it saw.
  */
 function scriptedFetch(bodies: Readonly<Record<string, Buffer | undefined>>): {
@@ -76,16 +97,12 @@ function scriptedFetch(bodies: Readonly<Record<string, Buffer | undefined>>): {
   const seen: SeenRequest[] = []
   return {
     seen,
-    fetch: (url, accept) => {
-      seen.push({ url, accept })
-      if (url === RELEASE_URL) {
-        const names = Object.keys(bodies).filter(name => bodies[name] !== undefined)
-        return Promise.resolve(releaseBody(names))
-      }
-      for (const [name, body] of Object.entries(bodies)) {
-        if (url === assetApi(name) && body !== undefined) return Promise.resolve(body)
-      }
-      return Promise.reject(new Error(`unscripted request to ${url}`))
+    fetch: (url) => {
+      seen.push({ url })
+      const body = bodies[url]
+      return body === undefined
+        ? Promise.reject(new Error(`unscripted request to ${url}`))
+        : Promise.resolve(body)
     },
   }
 }
@@ -103,11 +120,17 @@ test('a platform with no release fails naming what the machine reported', () => 
   assert.throws(() => agentAssetName('Linux', 'riscv64'), /riscv64/)
 })
 
-test('a version is read from the release the tag names', () => {
+test('a version and asset build the release download address, not an API call', () => {
   assert.equal(
-    agentReleaseApi('0.0.1'),
-    'https://api.github.com/repos/lengmoXXL/dsh-remote-workspace/releases/tags/v0.0.1',
+    agentArchiveUrl('0.0.2', ASSET),
+    'https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/v0.0.2/'
+    + 'dsh-remote-agent-linux-x86_64.tar.gz',
   )
+  assert.equal(
+    agentSumsUrl('0.0.2'),
+    'https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/v0.0.2/SHA256SUMS',
+  )
+  assert.equal(ARCHIVE_URL.includes('api.github.com'), false)
 })
 
 test('a cached binary is returned without touching the network', async () => {
@@ -127,42 +150,21 @@ test('a cached binary is returned without touching the network', async () => {
   }
 })
 
-test('a verified download is returned and cached at the versioned path', async () => {
+test('a verified archive is unpacked and its binary cached at the versioned path', async () => {
   const dir = await cacheDir()
   try {
+    const archive = releaseArchive()
     const { fetch, seen } = scriptedFetch({
-      [ASSET]: BINARY,
-      SHA256SUMS: sumsFor(ASSET, binaryDigest()),
+      [ARCHIVE_URL]: archive,
+      [SUMS_URL]: sumsFor(ARCHIVE, archiveDigest(archive)),
     })
     const result = await resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch })
 
+    // The archive is what is downloaded; the binary is what the caller gets and
+    // what the cache holds, because the upload to the machine sends it verbatim.
     assert.deepEqual(result, BINARY)
     assert.deepEqual(await readFile(join(dir, VERSION, ASSET)), BINARY)
-    // The release metadata is asked for as JSON, and both assets as bytes.
-    assert.deepEqual(seen, [
-      { url: RELEASE_URL, accept: 'application/vnd.github+json' },
-      { url: assetApi(ASSET), accept: 'application/octet-stream' },
-      { url: assetApi('SHA256SUMS'), accept: 'application/octet-stream' },
-    ])
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('a release that carries no such asset is refused before anything is downloaded', async () => {
-  const dir = await cacheDir()
-  try {
-    const { fetch, seen } = scriptedFetch({ 'dsh-remote-agent-other-x86_64': BINARY })
-    await assert.rejects(
-      () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
-      (error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        assert.equal(message.includes(RELEASE_URL), true)
-        assert.equal(message.includes(ASSET), true)
-        return true
-      },
-    )
-    assert.deepEqual(seen.map(request => request.url), [RELEASE_URL])
+    assert.deepEqual(seen.map(request => request.url), [ARCHIVE_URL, SUMS_URL])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -172,7 +174,11 @@ test('reports whether the bytes come from the cache or the network', async () =>
   const dir = await cacheDir()
   try {
     const sources: string[] = []
-    const { fetch } = scriptedFetch({ [ASSET]: BINARY, SHA256SUMS: sumsFor(ASSET, binaryDigest()) })
+    const archive = releaseArchive()
+    const { fetch } = scriptedFetch({
+      [ARCHIVE_URL]: archive,
+      [SUMS_URL]: sumsFor(ARCHIVE, archiveDigest(archive)),
+    })
     await resolveAgentBinary({
       version: VERSION,
       assetName: ASSET,
@@ -196,17 +202,39 @@ test('reports whether the bytes come from the cache or the network', async () =>
   }
 })
 
-test('a checksum mismatch refuses the bytes and names the download', async () => {
+test('a metadata record ahead of the agent does not hide it', async () => {
+  const dir = await cacheDir()
+  try {
+    // A PAX header, which a tar writes ahead of the file it describes.
+    const archive = tarball([
+      { name: '././@PaxHeader', body: Buffer.from('30 mtime=0\n'), type: 'x' },
+      { name: './dsh-remote-agent', body: BINARY },
+    ])
+    const { fetch } = scriptedFetch({
+      [ARCHIVE_URL]: archive,
+      [SUMS_URL]: sumsFor(ARCHIVE, archiveDigest(archive)),
+    })
+    const result = await resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch })
+    assert.deepEqual(result, BINARY)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a checksum mismatch refuses the archive and names the download', async () => {
   const dir = await cacheDir()
   try {
     const wrong = createHash('sha256').update('something else').digest('hex')
-    const { fetch } = scriptedFetch({ [ASSET]: BINARY, SHA256SUMS: sumsFor(ASSET, wrong) })
+    const { fetch } = scriptedFetch({
+      [ARCHIVE_URL]: releaseArchive(),
+      [SUMS_URL]: sumsFor(ARCHIVE, wrong),
+    })
     await assert.rejects(
       () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         assert.match(message, /SHA-256 check/)
-        assert.equal(message.includes(assetBrowser(ASSET)), true)
+        assert.equal(message.includes(ARCHIVE_URL), true)
         return true
       },
     )
@@ -217,24 +245,47 @@ test('a checksum mismatch refuses the bytes and names the download', async () =>
   }
 })
 
-test('a failed download names the URL it could not read', async () => {
+test('a failed archive download names the URL it could not read', async () => {
   const dir = await cacheDir()
   try {
-    const sumsUrl = assetApi('SHA256SUMS')
     await assert.rejects(
       () => resolveAgentBinary({
         version: VERSION,
         assetName: ASSET,
         cacheDir: dir,
         fetch: (url) => {
-          if (url === sumsUrl) return Promise.reject(new Error('socket hang up'))
-          if (url === RELEASE_URL) return Promise.resolve(releaseBody([ASSET, 'SHA256SUMS']))
-          return Promise.resolve(BINARY)
+          if (url === ARCHIVE_URL) return Promise.reject(new Error('HTTP 404'))
+          return Promise.resolve(sumsFor(ARCHIVE, 'a'.repeat(64)))
         },
       }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        assert.equal(message.includes(`downloading ${sumsUrl} failed`), true)
+        assert.equal(message.includes(`downloading ${ARCHIVE_URL} failed`), true)
+        assert.match(message, /HTTP 404/)
+        return true
+      },
+    )
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a failed sums download names the URL it could not read', async () => {
+  const dir = await cacheDir()
+  try {
+    await assert.rejects(
+      () => resolveAgentBinary({
+        version: VERSION,
+        assetName: ASSET,
+        cacheDir: dir,
+        fetch: (url) => {
+          if (url === SUMS_URL) return Promise.reject(new Error('socket hang up'))
+          return Promise.resolve(releaseArchive())
+        },
+      }),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        assert.equal(message.includes(`downloading ${SUMS_URL} failed`), true)
         assert.match(message, /socket hang up/)
         return true
       },
@@ -244,19 +295,19 @@ test('a failed download names the URL it could not read', async () => {
   }
 })
 
-test('a sums file that names no such asset is refused', async () => {
+test('a sums file that names no such archive is refused', async () => {
   const dir = await cacheDir()
   try {
     const { fetch } = scriptedFetch({
-      [ASSET]: BINARY,
-      SHA256SUMS: sumsFor('dsh-remote-agent-other-x86_64', 'a'.repeat(64)),
+      [ARCHIVE_URL]: releaseArchive(),
+      [SUMS_URL]: sumsFor('dsh-remote-agent-other-x86_64.tar.gz', 'a'.repeat(64)),
     })
     await assert.rejects(
       () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        assert.equal(message.includes(assetBrowser('SHA256SUMS')), true)
-        assert.equal(message.includes(ASSET), true)
+        assert.equal(message.includes(SUMS_URL), true)
+        assert.equal(message.includes(ARCHIVE), true)
         return true
       },
     )
@@ -265,19 +316,41 @@ test('a sums file that names no such asset is refused', async () => {
   }
 })
 
-test('an answer that is not release JSON is refused by name', async () => {
+test('an archive that carries no agent is refused by name', async () => {
   const dir = await cacheDir()
   try {
+    const archive = tarball([{ name: 'dsh-remote-agent-other', body: BINARY }])
+    const { fetch } = scriptedFetch({
+      [ARCHIVE_URL]: archive,
+      [SUMS_URL]: sumsFor(ARCHIVE, archiveDigest(archive)),
+    })
     await assert.rejects(
-      () => resolveAgentBinary({
-        version: VERSION,
-        assetName: ASSET,
-        cacheDir: dir,
-        fetch: () => Promise.resolve(Buffer.from('<html>not found</html>')),
-      }),
+      () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        assert.equal(message.includes(`${RELEASE_URL} did not answer with release JSON`), true)
+        assert.equal(message.includes(ARCHIVE_URL), true)
+        assert.equal(message.includes('dsh-remote-agent'), true)
+        return true
+      },
+    )
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('an answer that is not a gzipped tar is refused by name', async () => {
+  const dir = await cacheDir()
+  try {
+    const page = Buffer.from('<html>not found</html>')
+    const { fetch } = scriptedFetch({
+      [ARCHIVE_URL]: page,
+      [SUMS_URL]: sumsFor(ARCHIVE, archiveDigest(page)),
+    })
+    await assert.rejects(
+      () => resolveAgentBinary({ version: VERSION, assetName: ASSET, cacheDir: dir, fetch }),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        assert.equal(message.includes(`${ARCHIVE_URL} is not a gzipped tar archive`), true)
         return true
       },
     )

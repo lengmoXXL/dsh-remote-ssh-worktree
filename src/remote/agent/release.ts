@@ -1,49 +1,45 @@
 /**
  * Resolve the agent binary for one machine's platform.
  *
- * The agent is a static Rust binary published on GitHub Releases, so "install
- * the agent" reduces to naming the right asset for `uname` and caching its
- * bytes on the host. The cache is keyed by version and asset, which is what
- * makes a version bump a fresh download and a second machine of the same
- * platform a cache hit.
+ * The agent is a static Rust binary published on GitHub Releases inside a
+ * per-platform `.tar.gz`, so "install the agent" reduces to naming the right
+ * archive for `uname` and caching the binary it holds. The cache is keyed by
+ * version and asset, which is what makes a version bump a fresh download and a
+ * second machine of the same platform a cache hit.
  *
- * Assets are read through the GitHub API rather than the address a browser
- * would use. The API is what `gh` itself downloads through, it serves a public
- * repository anonymously, it answers with the release's own asset list — so a
- * missing asset is a named error instead of an HTML error page — and it is the
- * endpoint that stays reachable on networks which drop the web host. Anonymous
- * reads are rate-limited, which the version-keyed cache keeps to one release
- * lookup and two asset reads per version and host. A private repository would
- * refuse an anonymous read; this build reads public releases.
+ * The archive is read from the release's own download address — the URL a
+ * browser would follow, built from the tag and the asset name — so nothing here
+ * calls the GitHub API: no release metadata, no asset listing, no media type to
+ * negotiate, and no anonymous rate limit to spend. A release that carries no
+ * such archive answers 404 and is reported with the address that failed.
  *
  * Every download is verified against the release's `SHA256SUMS` before it is
- * cached: the bytes are executed on a remote machine, so a truncated or
- * substituted asset must fail here rather than at exec time there.
+ * unpacked and cached: the bytes are executed on a remote machine, so a
+ * truncated or substituted archive must fail here rather than at exec time
+ * there.
  *
  * @module dsh-remote-workspace/remote/agent/release
  */
 
 import { createHash, randomUUID } from 'node:crypto'
+import { gunzipSync } from 'node:zlib'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 /** Repository whose releases carry the agent binaries. */
 const RELEASE_REPOSITORY = 'lengmoXXL/dsh-remote-workspace'
 
-/** The release API root every request below hangs off. */
-const API_ROOT = `https://api.github.com/repos/${RELEASE_REPOSITORY}`
+/** Address one release file is downloaded from, by tag and file name. */
+const DOWNLOAD_ROOT = `https://github.com/${RELEASE_REPOSITORY}/releases/download`
 
-/** Media type the release metadata is requested as. */
-const RELEASE_MEDIA_TYPE = 'application/vnd.github+json'
+/** The regular file every release archive carries: the agent itself. */
+const AGENT_MEMBER = 'dsh-remote-agent'
 
-/** Media type an asset's bytes are requested as. */
-const BINARY_MEDIA_TYPE = 'application/octet-stream'
+/** The sums file every release carries beside its archives. */
+const SUMS_FILE = 'SHA256SUMS'
 
-/** Pinned API revision, so a GitHub change cannot alter what this parses. */
-const API_VERSION = '2022-11-28'
-
-/** The sums asset every release carries beside its binaries. */
-const SUMS_ASSET = 'SHA256SUMS'
+/** Bytes one tar header block holds. */
+const TAR_BLOCK = 512
 
 /** Platform names `uname -s` reports, and the asset token each maps to. */
 const PLATFORMS: Readonly<Record<string, string>> = {
@@ -59,12 +55,12 @@ const ARCHITECTURES: Readonly<Record<string, string>> = {
   arm64: 'aarch64',
 }
 
-/** Downloads one URL, asking for one media type; injectable so tests need no network. */
-export type AgentFetcher = (url: string, accept: string) => Promise<Buffer>
+/** Downloads one URL; injectable so tests need no network. */
+export type AgentFetcher = (url: string) => Promise<Buffer>
 
 /** Options {@link resolveAgentBinary} reads. */
 export interface AgentBinaryOptions {
-  /** Agent build to fetch, e.g. `0.0.1`. */
+  /** Agent build to fetch, e.g. `0.0.2`. */
   readonly version: string
   /** Release asset for the machine's platform, from {@link agentAssetName}. */
   readonly assetName: string
@@ -80,16 +76,6 @@ export interface AgentBinaryOptions {
    * them apart.
    */
   readonly onSource?: (source: 'cache' | 'network') => void
-}
-
-/** One asset of a release, as much of it as this module uses. */
-interface ReleaseAsset {
-  /** Asset name, e.g. `dsh-remote-agent-linux-x86_64`. */
-  readonly name: string
-  /** API URL whose bytes the plugin downloads. */
-  readonly apiUrl: string
-  /** Browser URL for the same bytes, used only in diagnostics. */
-  readonly browserUrl: string
 }
 
 /**
@@ -115,19 +101,34 @@ export function agentAssetName(platform: string, arch: string): string {
   return `dsh-remote-agent-${os}-${cpu}`
 }
 
+/** The release file one asset is published as. */
+function archiveName(assetName: string): string {
+  return `${assetName}.tar.gz`
+}
+
 /**
- * The release API URL one agent version's metadata lives at.
+ * The address one platform's archive is downloaded from.
  * @param version - the agent build.
- * @returns the URL the asset list is read from.
+ * @param assetName - the release asset, from {@link agentAssetName}.
+ * @returns the direct download URL.
  */
-export function agentReleaseApi(version: string): string {
-  return `${API_ROOT}/releases/tags/v${version}`
+export function agentArchiveUrl(version: string, assetName: string): string {
+  return `${DOWNLOAD_ROOT}/v${version}/${archiveName(assetName)}`
+}
+
+/**
+ * The address one version's sums file is downloaded from.
+ * @param version - the agent build.
+ * @returns the direct download URL.
+ */
+export function agentSumsUrl(version: string): string {
+  return `${DOWNLOAD_ROOT}/v${version}/${SUMS_FILE}`
 }
 
 /** Download one URL, or fail with a message that names it. */
-async function download(fetcher: AgentFetcher, url: string, accept: string): Promise<Buffer> {
+async function download(fetcher: AgentFetcher, url: string): Promise<Buffer> {
   try {
-    return await fetcher(url, accept)
+    return await fetcher(url)
   } catch (error) {
     throw new Error(
       `downloading ${url} failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -137,82 +138,91 @@ async function download(fetcher: AgentFetcher, url: string, accept: string): Pro
 }
 
 /** The real HTTPS GET, refusing any non-2xx answer. */
-async function fetchOverHttps(url: string, accept: string): Promise<Buffer> {
-  const response = await fetch(url, {
-    headers: { accept, 'X-GitHub-Api-Version': API_VERSION },
-  })
+async function fetchOverHttps(url: string): Promise<Buffer> {
+  const response = await fetch(url)
   if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
   return Buffer.from(await response.arrayBuffer())
 }
 
+/** One tar header field, read to its NUL or its field boundary and trimmed. */
+function headerText(header: Buffer, start: number, length: number): string {
+  const nul = header.indexOf(0, start)
+  const end = nul === -1 || nul > start + length ? start + length : nul
+  return header.toString('utf8', start, end).trim()
+}
+
+/** The octal byte count of one tar header's data. */
+function headerSize(header: Buffer): number {
+  const text = headerText(header, 124, 12)
+  return text === '' ? 0 : Number.parseInt(text, 8)
+}
+
 /**
- * Read the assets one release metadata answer names.
- * @param release - the release API response body.
- * @param releaseUrl - the URL it came from, for the diagnostic.
- * @returns the usable assets.
- * @throws when the answer is not release JSON.
+ * The agent binary inside one release archive.
+ *
+ * Only what this repository's own release job writes needs to be understood:
+ * one regular file, named {@link AGENT_MEMBER}, packed by `tar -czf`. A tar may
+ * write metadata records ahead of it — a PAX header from a newer tar, a long
+ * name — so every record is stepped over by its own size until the file is
+ * found, rather than assuming it comes first.
+ * @param archive - the `.tar.gz` bytes.
+ * @param sourceUrl - the URL they came from, for the diagnostic.
+ * @returns the member's bytes.
+ * @throws when the archive carries no such member or is not a gzipped tar.
  */
-function releaseAssets(release: Buffer, releaseUrl: string): readonly ReleaseAsset[] {
-  let parsed: unknown
+function archiveMember(archive: Buffer, sourceUrl: string): Buffer {
+  let tar: Buffer
   try {
-    parsed = JSON.parse(release.toString('utf8'))
-  } catch {
-    throw new Error(`${releaseUrl} did not answer with release JSON`)
+    tar = gunzipSync(archive)
+  } catch (error) {
+    // A proxy or a captive portal can answer a download with a readable page
+    // instead of the archive; saying so beats a raw decompressor error.
+    throw new Error(`${sourceUrl} is not a gzipped tar archive`, { cause: error })
   }
-  const assets = (parsed as { assets?: unknown }).assets
-  if (!Array.isArray(assets)) throw new Error(`${releaseUrl} did not answer with a release`)
-  return assets.flatMap(asset => {
-    const record = asset as { name?: unknown; url?: unknown; browser_download_url?: unknown }
-    if (typeof record.name !== 'string' || typeof record.url !== 'string') return []
-    return [{
-      name: record.name,
-      apiUrl: record.url,
-      browserUrl: typeof record.browser_download_url === 'string' ? record.browser_download_url : record.url,
-    }]
-  })
+  for (let offset = 0; offset + TAR_BLOCK <= tar.length;) {
+    const header = tar.subarray(offset, offset + TAR_BLOCK)
+    // Two zero blocks mark the end of the archive.
+    if (header.every(byte => byte === 0)) break
+    const size = headerSize(header)
+    const start = offset + TAR_BLOCK
+    const type = String.fromCharCode(header[156] ?? 0)
+    const name = headerText(header, 0, 100)
+    // NUL and '0' are the regular-file records; every other type is metadata.
+    if ((type === '0' || type === '\0') && name.split('/').pop() === AGENT_MEMBER) {
+      return tar.subarray(start, start + size)
+    }
+    offset = start + Math.ceil(size / TAR_BLOCK) * TAR_BLOCK
+  }
+  throw new Error(`${sourceUrl} carries no "${AGENT_MEMBER}"`)
 }
 
 /**
- * The asset one release carries under a name.
- * @param release - the release API response body.
- * @param releaseUrl - the URL it came from, for the diagnostic.
- * @param name - the asset name to find.
- * @returns the asset.
- * @throws when the release carries no such asset.
- */
-function requireAsset(release: Buffer, releaseUrl: string, name: string): ReleaseAsset {
-  const found = releaseAssets(release, releaseUrl).find(asset => asset.name === name)
-  if (found === undefined) throw new Error(`${releaseUrl} names no "${name}" asset`)
-  return found
-}
-
-/**
- * Read the expected hash for one asset out of a `SHA256SUMS` body.
+ * Read the expected hash for one release file out of a `SHA256SUMS` body.
  * @param sums - the decoded sums file.
- * @param assetName - the asset to look up.
+ * @param fileName - the release file to look up.
  * @param sumsUrl - the URL the sums came from, for the diagnostic.
  * @returns the expected lowercase hex digest.
- * @throws when the sums file names no such asset.
+ * @throws when the sums file names no such file.
  */
-function expectedChecksum(sums: string, assetName: string, sumsUrl: string): string {
+function expectedChecksum(sums: string, fileName: string, sumsUrl: string): string {
   for (const line of sums.split('\n')) {
     // `<hex>␠␠<name>`, the format this repository's own release job writes.
     const match = /^([0-9a-f]{64})\s+(.+)$/i.exec(line.trim())
-    if (match !== null && match[2]?.trim() === assetName) return match[1]!.toLowerCase()
+    if (match !== null && match[2]?.trim() === fileName) return match[1]!.toLowerCase()
   }
-  throw new Error(`${sumsUrl} names no "${assetName}"`)
+  throw new Error(`${sumsUrl} names no "${fileName}"`)
 }
 
 /**
- * Fetch, verify, and cache one agent binary.
+ * Fetch, verify, unpack, and cache one agent binary.
  *
  * A cached file is returned untouched: it was verified when it was written,
  * and re-hashing every connect would spend a slow link's budget on a file the
  * plugin itself produced.
  * @param options - version, asset, cache directory, and an optional fetch.
  * @returns the verified binary bytes.
- * @throws when the release cannot be read, carries no such asset, the download
- *   fails, the checksum mismatches, or the cache cannot be written.
+ * @throws when the archive cannot be read, fails its checksum, carries no
+ *   agent, or the cache cannot be written.
  */
 export async function resolveAgentBinary(options: AgentBinaryOptions): Promise<Buffer> {
   const fetcher = options.fetch ?? fetchOverHttps
@@ -226,21 +236,20 @@ export async function resolveAgentBinary(options: AgentBinaryOptions): Promise<B
   }
 
   options.onSource?.('network')
-  const releaseUrl = agentReleaseApi(options.version)
-  const release = await download(fetcher, releaseUrl, RELEASE_MEDIA_TYPE)
-  const binaryAsset = requireAsset(release, releaseUrl, options.assetName)
-  const sumsAsset = requireAsset(release, releaseUrl, SUMS_ASSET)
-  const [binary, sums] = await Promise.all([
-    download(fetcher, binaryAsset.apiUrl, BINARY_MEDIA_TYPE),
-    download(fetcher, sumsAsset.apiUrl, BINARY_MEDIA_TYPE),
+  const archiveUrl = agentArchiveUrl(options.version, options.assetName)
+  const sumsUrl = agentSumsUrl(options.version)
+  const [archive, sums] = await Promise.all([
+    download(fetcher, archiveUrl),
+    download(fetcher, sumsUrl),
   ])
-  const expected = expectedChecksum(sums.toString('utf8'), options.assetName, sumsAsset.browserUrl)
-  const actual = createHash('sha256').update(binary).digest('hex')
+  const expected = expectedChecksum(sums.toString('utf8'), archiveName(options.assetName), sumsUrl)
+  const actual = createHash('sha256').update(archive).digest('hex')
   if (actual !== expected) {
     throw new Error(
-      `the download from ${binaryAsset.browserUrl} failed its SHA-256 check: expected ${expected}, got ${actual}`,
+      `the download from ${archiveUrl} failed its SHA-256 check: expected ${expected}, got ${actual}`,
     )
   }
+  const binary = archiveMember(archive, archiveUrl)
 
   // A reader of the cache must never observe a partial download, so the bytes
   // land on a private temp path and are renamed into place in one step. The
