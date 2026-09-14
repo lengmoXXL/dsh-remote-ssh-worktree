@@ -500,7 +500,8 @@ test('a remote worktree is created and removed through the browser', { timeout: 
 
     await chooseAction(page, 'hand-cut', 'releaseWorktree')
     await waitForForm(page, anyOf('releaseWorktreeTitle'), 'the release confirmation')
-    await clickInDialog(page, exact('remove'))
+    // The confirming button names the action: releasing is not removing.
+    await clickInDialog(page, exact('releaseWorktree'))
     await waitFor(page, `!document.body.innerText.includes('hand-cut')`, 'the row to go')
     assert.match(
       await readFile(join(instance.root, 'remote-root', 'hand-cut', 'README.md'), 'utf8'),

@@ -90,6 +90,10 @@ export interface NodeConnectionsDeps {
    * {@link DEFAULT_FORWARD_TIMEOUT_MS}.
    */
   readonly sshForwardTimeoutMs?: number
+  /** Attempts after a connection drops; defaults to {@link RECOVERY_ATTEMPTS}. */
+  readonly recoveryAttempts?: number
+  /** Gap before the first recovery attempt, in milliseconds. */
+  readonly recoveryGapMs?: number
   /**
    * Host directory the agent binaries are cached under. Required to reach an
    * `ssh` record with the default opener; tests that inject `openTransport`
@@ -106,6 +110,12 @@ export interface NodeConnectionsDeps {
    */
   readonly ensureAgent?: (options: EnsureAgentOptions) => Promise<AgentEndpoint>
 }
+
+/** How many times a dropped connection is re-established before it is left failed. */
+const RECOVERY_ATTEMPTS = 3
+
+/** Gap before the first recovery attempt, growing by that much for each later one. */
+const RECOVERY_GAP_MS = 2_000
 
 /**
  * How long a handshake may take. Generous enough for a slow forward over a
@@ -242,6 +252,8 @@ interface Entry {
   transport: ResolvedTransport | undefined
   localPort: number | undefined
   progress: AgentProgress | undefined
+  /** Identity of the recovery in flight for this entry, when one is. */
+  recovery: symbol | undefined
 }
 
 /**
@@ -258,7 +270,17 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     ensureAgent: deps.ensureAgent ?? ensureAgent,
   })
   const handshakeTimeoutMs = deps.daemonHandshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS
+  const recoveryAttempts = deps.recoveryAttempts ?? RECOVERY_ATTEMPTS
+  const recoveryGapMs = deps.recoveryGapMs ?? RECOVERY_GAP_MS
   const entries = new Map<NodeId, Entry>()
+  /**
+   * Transports whose loss has already been published.
+   *
+   * A transport that answers `exited` again — a reused object, or one that was
+   * already gone when it was handed over — must not start a second recovery:
+   * the failure is the same event, and retrying it would reconnect forever.
+   */
+  const lost = new WeakSet<ResolvedTransport>()
 
   const entryFor = (nodeId: NodeId): Entry => {
     const existing = entries.get(nodeId)
@@ -272,6 +294,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
       transport: undefined,
       localPort: undefined,
       progress: undefined,
+      recovery: undefined,
     }
     entries.set(nodeId, created)
     return created
@@ -308,6 +331,90 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     ...entry.error === undefined ? {} : { error: entry.error },
   })
 
+  /**
+   * Bring a dropped connection back without waiting to be asked.
+   *
+   * A drop is the one failure worth retrying unattended: the machine answered a
+   * moment ago, so the reason is usually the link or a restarted daemon rather
+   * than a configuration only a person could change. The attempts are bounded,
+   * and whatever the last one reported stays on the entry.
+   * @param entry - the entry whose connection dropped.
+   * @param record - the machine to reach again.
+   */
+  const recover = (entry: Entry, record: NodeRecord): void => {
+    const mine = Symbol('recovery')
+    entry.recovery = mine
+    void (async () => {
+      for (let attempt = 1; attempt <= recoveryAttempts; attempt += 1) {
+        await new Promise(resolve => {
+          // Unref'd: a pending retry must never be what keeps a process alive.
+          setTimeout(resolve, recoveryGapMs * attempt).unref()
+        })
+        // A disconnect, a disposal, or a newer drop has taken this over.
+        if (entry.recovery !== mine) return
+        try {
+          await connectRecord(record)
+          return
+        } catch {
+          // The attempt published its own failure; the next one may still work.
+        }
+      }
+    })()
+  }
+
+  /** Connect one node, or return the attempt already in flight. */
+  const connectRecord = async (record: NodeRecord): Promise<NodeInfo> => {
+    const entry = entryFor(record.nodeId)
+    if (entry.state === 'ready' && entry.info !== undefined) return entry.info
+    if (entry.pending !== undefined) return entry.pending
+
+    entry.state = 'connecting'
+    entry.error = undefined
+    entry.progress = undefined
+    const attempt = (async (): Promise<NodeInfo> => {
+      try {
+        // The forward comes first: without it there is no address to dial, and
+        // its own failure is more specific than a refused connection would be.
+        // Installing or updating the agent happens inside it, so its steps are
+        // published as they start.
+        const opened = await openTransport(record, (progress) => { entry.progress = progress })
+        entry.transport = opened
+        const live = await connect({
+          host: opened.host,
+          port: opened.port,
+          token: record.token,
+          timeoutMs: handshakeTimeoutMs,
+        })
+        entry.live = live
+        entry.info = live.info
+        entry.localPort = record.transport.kind === 'ssh' ? opened.port : undefined
+        entry.pending = undefined
+        entry.progress = undefined
+        entry.state = 'ready'
+        // A forward can die while the socket it carried stays open long
+        // enough to look healthy. Publish the loss rather than leaving a
+        // `ready` node whose every call hangs, and start bringing it back.
+        void opened.exited?.then(() => {
+          if (lost.has(opened) || entry.transport !== opened) return
+          lost.add(opened)
+          fail(entry, new Error(`the SSH forward to "${record.title}" closed`))
+          recover(entry, record)
+        })
+        return live.info
+      } catch (error) {
+        // Every failure settles the entry, including one from the opener: an
+        // install that could not fetch or upload the agent must leave a
+        // failed machine that can be retried, not one stuck in `connecting`
+        // whose next attempt re-throws this same rejection.
+        const reported = describeFailure(record, error)
+        fail(entry, reported)
+        throw reported
+      }
+    })()
+    entry.pending = attempt
+    return attempt
+  }
+
   return {
     channel(nodeId) {
       return entries.get(nodeId)?.live?.channel
@@ -322,66 +429,23 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
       return [...entries].map(([nodeId, entry]) => statusOf(nodeId, entry))
     },
 
-    async connect(record) {
-      const entry = entryFor(record.nodeId)
-      if (entry.state === 'ready' && entry.info !== undefined) return entry.info
-      if (entry.pending !== undefined) return entry.pending
-
-      entry.state = 'connecting'
-      entry.error = undefined
-      entry.progress = undefined
-      const attempt = (async (): Promise<NodeInfo> => {
-        try {
-          // The forward comes first: without it there is no address to dial, and
-          // its own failure is more specific than a refused connection would be.
-          // Installing or updating the agent happens inside it, so its steps are
-          // published as they start.
-          const opened = await openTransport(record, (progress) => { entry.progress = progress })
-          entry.transport = opened
-          const live = await connect({
-            host: opened.host,
-            port: opened.port,
-            token: record.token,
-            timeoutMs: handshakeTimeoutMs,
-          })
-          entry.live = live
-          entry.info = live.info
-          entry.localPort = record.transport.kind === 'ssh' ? opened.port : undefined
-          entry.pending = undefined
-          entry.progress = undefined
-          entry.state = 'ready'
-          // A forward can die while the socket it carried stays open long
-          // enough to look healthy. Publish the loss rather than leaving a
-          // `ready` node whose every call hangs.
-          void opened.exited?.then(() => {
-            if (entry.transport !== opened) return
-            fail(entry, new Error(`the SSH forward to "${record.title}" closed`))
-          })
-          return live.info
-        } catch (error) {
-          // Every failure settles the entry, including one from the opener: an
-          // install that could not fetch or upload the agent must leave a
-          // failed machine that can be retried, not one stuck in `connecting`
-          // whose next attempt re-throws this same rejection.
-          const reported = describeFailure(record, error)
-          fail(entry, reported)
-          throw reported
-        }
-      })()
-      entry.pending = attempt
-      return attempt
-    },
+    connect: connectRecord,
 
     disconnect(nodeId) {
       const entry = entries.get(nodeId)
       if (entry === undefined) return
+      // A person asking for the connection to end also ends any retry of it.
+      entry.recovery = undefined
       clear(entry)
       entry.error = undefined
       entry.state = 'disconnected'
     },
 
     dispose() {
-      for (const entry of entries.values()) clear(entry)
+      for (const entry of entries.values()) {
+        entry.recovery = undefined
+        clear(entry)
+      }
       entries.clear()
     },
   }
