@@ -2,10 +2,11 @@
 #
 # Two changes over the profile root:
 #
-# 1. Disable the four factory rows whose seams this plugin provides as routing
+# 1. Disable the factory rows whose seams this plugin provides as routing
 #    versions. A disabled row keeps its id addressable by later layers, so a
 #    user overlay can still re-point one of them.
-# 2. Insert the plugin row that provides ctx.fs / ctx.subprocess / ctx.shell.
+# 2. Insert the plugin row that provides ctx.fs / ctx.subprocess / ctx.shell /
+#    ctx.tty.
 
 - id: subprocess
   disabled: true
@@ -17,6 +18,11 @@
   disabled: true
 
 - id: pwsh-sandbox
+  disabled: true
+
+# The local terminal provider, which this plugin composes inside the router
+# instead of mounting beside it.
+- id: tty-local
   disabled: true
 
 - insert:

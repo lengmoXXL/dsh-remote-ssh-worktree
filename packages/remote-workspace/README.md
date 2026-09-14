@@ -52,7 +52,8 @@ setup, so it happens here, and the session that follows just works in it.
 
 ## How it works
 
-- The plugin replaces the harness's `fs`, `subprocess`, and `shell` seams with routing versions: a path under a remote
+- The plugin replaces the harness's `fs`, `subprocess`, `shell`, and `tty` seams with routing versions: a path under a
+  remote
   anchor goes to that machine's agent, every other path stays local.
 - The agent is one statically linked Rust binary. It binds a kernel-assigned loopback port and publishes it in a state
   file, so a machine is configured by its SSH destination and a token alone — there is no port to agree on.
@@ -70,7 +71,7 @@ setup, so it happens here, and the session that follows just works in it.
                                │ management API over HTTP
 ┌─ plugin/   the DSH surfaces ─▼─────────────────────────────┐
 │  api                          over the models              │
-│  routing/  fs · subprocess · shell seams → the SDK         │
+│  routing/  fs · subprocess · shell · tty seams → the SDK   │
 └──────────────────────────────┬─────────────────────────────┘
                                │
 ┌─ models/   the business semantics ─────────────────────────┐

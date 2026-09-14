@@ -43,7 +43,7 @@ token。远程机器用同一套表单和同一批操作，目标加 token 就�
 
 ## 怎么实现的
 
-- 插件把 Harness 的 `fs`、`subprocess`、`shell` 三个 seam 换成路由版本：属于远端锚点的路径交给那台机器的
+- 插件把 Harness 的 `fs`、`subprocess`、`shell`、`tty` 四个 seam 换成路由版本：属于远端锚点的路径交给那台机器的
   agent，其余路径仍在本地。
 - agent 是一个静态链接的 Rust 二进制。它监听内核分配的随机 loopback 端口并写进状态文件，所以配置一台机器
   只需要 SSH 目标和 token，不需要约定端口。
@@ -60,7 +60,7 @@ token。远程机器用同一套表单和同一批操作，目标加 token 就�
                                │ 管理 API（HTTP）
 ┌─ plugin/   DSH 表面 ─────────▼─────────────────────────────┐
 │  api                           经 models                    │
-│  routing/  fs · subprocess · shell 三个 seam → SDK         │
+│  routing/  fs · subprocess · shell · tty 四个 seam → SDK   │
 └──────────────────────────────┬─────────────────────────────┘
                                │
 ┌─ models/   业务语义 ─────────▼─────────────────────────────┐
