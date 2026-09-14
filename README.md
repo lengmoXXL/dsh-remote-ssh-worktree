@@ -16,7 +16,8 @@ English | [中文](README.zh.md)
 - Reaches a machine over SSH — `user@host` or a `~/.ssh/config` alias — and installs nothing there by hand.
 - Works on this machine with no setup at all: the built-in `Local` machine needs no agent and no connection, and manages
   repositories and worktrees here exactly as it does on a machine reached over SSH.
-- Cuts `worktree/<name>` from any repository on it, and registers the checkout as a DSH workspace.
+- Cuts `worktree/<name>` from any repository on it, and registers the checkout as a DSH workspace. The checkout lands
+  under the machine's checkout root unless you name another path in the form.
 - Opens a worktree that already exists on the machine — anything its git lists — and closes it again without touching the
   checkout.
 - Opens a registered directory as a workspace in its own right, repository or not; `git init` a plain one later and

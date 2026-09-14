@@ -191,7 +191,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
   })
 
-  registerNodeApi(ctx, { registry, repos, connections, worktrees })
+  registerNodeApi(ctx, { registry, repos, connections, worktrees, worktreeRoot })
 
   const subprocessScope = ctx.isolate('subprocess')
   subprocessScope.plugin(LocalSubprocessRuntime)

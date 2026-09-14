@@ -70,6 +70,11 @@ export interface WorktreeDraft {
   readonly repoPath: string
   /** Worktree name; the branch becomes `worktree/<name>`. */
   readonly name: string
+  /**
+   * Absolute POSIX path the checkout is created at, when the caller names one.
+   * The configured root's `<repository>/<name>` is the default.
+   */
+  readonly path?: string
   /** Revision to branch from; the repository's HEAD when omitted. */
   readonly baseRef?: string
 }
@@ -298,6 +303,10 @@ function branchFor(name: string): string {
  */
 async function isManaged(deps: WorktreeManagerDeps, anchor: AnchorRecord): Promise<boolean> {
   if (anchor.kind !== 'worktree') return false
+  // A record says which it is, wherever the checkout landed.
+  if (anchor.origin !== undefined) return anchor.origin === 'created'
+  // A local checkout has no record beyond git, so the root is the only clue,
+  // and it is resolved because `/var` and `/private/var` are one directory.
   const root = deps.worktreeRoot(anchor.nodeId).replace(/\/+$/, '')
   const prefix = deps.isLocalNode(anchor.nodeId) ? await resolveLocalPath(root) : root
   return anchor.remoteRoot.startsWith(`${prefix}/`)
@@ -440,7 +449,7 @@ async function createLocalWorktree(deps: WorktreeManagerDeps, draft: WorktreeDra
     throw new Error(`"${repoPath}" is not a git repository on this machine`)
   }
   const branch = branchFor(draft.name)
-  const plannedPath = managedWorktreePath(deps.worktreeRoot(draft.nodeId), repoPath, draft.name)
+  const plannedPath = draft.path ?? managedWorktreePath(deps.worktreeRoot(draft.nodeId), repoPath, draft.name)
   await addWorktree({
     repoPath,
     worktreePath: plannedPath,
@@ -590,7 +599,7 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       // finds the same directory the caller meant.
       const { canonicalPath: repoPath } = await channel.request('fs.resolve', { path: draft.repoPath })
       const branch = branchFor(draft.name)
-      const worktreePath = managedWorktreePath(deps.worktreeRoot(draft.nodeId), repoPath, draft.name)
+      const worktreePath = draft.path ?? managedWorktreePath(deps.worktreeRoot(draft.nodeId), repoPath, draft.name)
       const worktree: WireWorktree = await channel.request('git.worktreeAdd', {
         repoPath,
         worktreePath,
@@ -608,6 +617,7 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
         repoPath,
         remoteRoot: worktree.path,
         branch: checkedOut,
+        origin: 'created',
       })
       // Known repositories keep the name a person gave them; a worktree is
       // only ever what registers a repository nobody has registered yet.
@@ -667,6 +677,7 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
         repoPath: ref.repoPath,
         remoteRoot: path,
         branch: entry.branch,
+        origin: 'adopted',
       })
       try {
         await openAsWorkspace(deps, anchor)

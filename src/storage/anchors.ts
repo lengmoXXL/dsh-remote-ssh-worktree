@@ -102,6 +102,13 @@ export interface WorktreeAnchor extends AnchorBase {
   readonly kind: 'worktree'
   /** Full branch name the checkout is on. */
   readonly branch: string
+  /**
+   * How this plugin came to hold the checkout: the one it cut, wherever that
+   * landed, or one it found on the machine and adopted.
+   *
+   * Absent on a record written before adoption existed, which was always cut.
+   */
+  readonly origin?: 'created' | 'adopted'
 }
 
 /** An anchor on the repository directory itself. */
@@ -134,6 +141,8 @@ export interface WorktreeAnchorDraft {
   readonly remoteRoot: string
   /** The branch the checkout is on, as the daemon reported it. */
   readonly branch: string
+  /** Defaults to `created`: the plugin cut this checkout itself. */
+  readonly origin?: 'created' | 'adopted'
 }
 
 /** Fields a caller supplies when creating a directory anchor. */
@@ -241,9 +250,10 @@ function parseAnchor(text: string, file: string): AnchorRecord {
   }
   const anchor = document.anchor
   // A document written before kinds existed carries none, and the guard has
-  // already refused any that omit the branch a worktree must have.
+  // already refused any that omit the branch a worktree must have. One written
+  // before adoption existed names no origin, and was always cut by this plugin.
   if (anchor.kind === 'directory') return anchor
-  return { ...anchor, kind: 'worktree' }
+  return { ...anchor, kind: 'worktree', origin: anchor.origin === 'adopted' ? 'adopted' : 'created' }
 }
 
 /** Read a directory's entries, treating absence as empty. */
@@ -357,7 +367,12 @@ export function createAnchorStore(deps: AnchorStoreDeps): AnchorStore {
       // `satisfies` on each arm keeps the discriminator narrow; an annotation
       // on the whole conditional would widen both into one unusable union.
       const record = draft.kind === 'worktree'
-        ? { ...shared, kind: 'worktree', branch: draft.branch } satisfies WorktreeAnchor
+        ? {
+          ...shared,
+          kind: 'worktree',
+          branch: draft.branch,
+          origin: draft.origin ?? 'created',
+        } satisfies WorktreeAnchor
         : { ...shared, kind: 'directory' } satisfies DirectoryAnchor
       await mkdir(anchorPath, { recursive: true })
       await writeFileAtomic(

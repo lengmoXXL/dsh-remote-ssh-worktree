@@ -491,6 +491,29 @@ test('existing lists what git has, in order, minus the repository itself', async
   ])
 })
 
+test('a caller may place the checkout itself', async () => {
+  const { manager, calls } = managerWith({
+    'git.worktreeAdd': { path: '/srv/mine/login', branch: 'worktree/login', head: 'abc', main: false },
+  })
+  const anchor = await manager.create({ ...draft, path: '/srv/mine/login' })
+
+  const add = calls.find(call => call.method === 'git.worktreeAdd')
+  assert.equal((add?.params as { worktreePath: string }).worktreePath, '/srv/mine/login')
+  assert.equal(anchor.remoteRoot, '/srv/mine/login')
+  // The name still names the branch, wherever the checkout landed.
+  assert.equal(anchor.branch, 'worktree/login')
+})
+
+test('a checkout the plugin placed is its own to remove, root or not', async () => {
+  const { manager } = managerWith({
+    'git.worktreeAdd': { path: '/srv/mine/login', branch: 'worktree/login', head: 'abc', main: false },
+  })
+  const anchor = await manager.create({ ...draft, path: '/srv/mine/login' })
+
+  const row = worktreesOf(await manager.list()).find(status => status.anchor.anchorId === anchor.anchorId)
+  assert.equal(row?.managed, true, 'the record says the plugin cut it')
+})
+
 /** The worktree rows of a listing, narrowed so their branch is readable. */
 function worktreesOf(statuses: readonly WorktreeStatus[]): (WorktreeStatus & { anchor: WorktreeAnchor })[] {
   return statuses.filter(

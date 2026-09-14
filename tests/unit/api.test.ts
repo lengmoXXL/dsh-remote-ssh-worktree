@@ -27,6 +27,7 @@ import { repositoryAt } from '../git.ts'
 import type { ApiRequest } from '../../src/plugin/api.ts'
 import { handleNodeApi } from '../../src/plugin/api.ts'
 import { asNodeId } from '../../src/storage/nodes.ts'
+import type { NodeId } from '../../src/storage/nodes.ts'
 import { asRepoId } from '../../src/storage/repos.ts'
 
 let dir: string
@@ -65,27 +66,29 @@ async function setup(connect?: Parameters<typeof createNodeConnections>[0]) {
     unregister: (anchor: AnchorRecord) => { registered.delete(anchor.anchorId); return Promise.resolve() },
     registered: (anchor: AnchorRecord) => Promise.resolve(registered.has(anchor.anchorId)),
   }
+  // A stubbed machine takes a fixed POSIX root; the local cases run real git,
+  // so their checkouts stay inside this suite's temp directory.
+  const worktreeRoot = (nodeId: NodeId): string => (registry.get(nodeId)?.transport.kind === 'local'
+    ? join(dir, 'checkouts')
+    : '/srv/checkouts')
   const worktrees = createWorktreeManager({
     anchors,
     repos,
     channel: nodeId => connections.channel(nodeId),
     // This suite drives machines; the local machine's own cases live beside it.
     isLocalNode: nodeId => registry.get(nodeId)?.transport.kind === 'local',
-    // A stubbed machine takes a fixed POSIX root; the local cases run real git,
-    // so their checkouts stay inside this suite's temp directory.
-    worktreeRoot: nodeId => (registry.get(nodeId)?.transport.kind === 'local'
-      ? join(dir, 'checkouts')
-      : '/srv/checkouts'),
+    worktreeRoot,
     workspace,
   })
   return {
     registry,
     repos,
+    worktreeRoot,
     connections,
     anchors,
     worktrees,
     registered,
-    deps: { registry, repos, connections, worktrees },
+    deps: { registry, repos, connections, worktrees, worktreeRoot },
   }
 }
 
@@ -825,4 +828,30 @@ test('an existing checkout is adopted and released through the routes', async ()
   const released = await handleNodeApi(request('POST', `/worktrees/${anchor.anchorId}/release`), deps)
   assert.equal(released.status, 200)
   assert.deepEqual(anchors.list(), [], 'the record is gone, and git was never asked to change anything')
+})
+
+test('a worktree may be placed by the caller, with an absolute path', async () => {
+  const { deps, repos, nodeId } = await connected(daemon())
+  const repo = await repos.upsert({ nodeId, repoPath: '/srv/app' })
+
+  const placed = await handleNodeApi(
+    request('POST', '/worktrees', { repoId: repo.repoId, name: 'login', path: '/srv/mine/login' }),
+    deps,
+  )
+  assert.equal(placed.status, 201)
+  assert.equal(
+    (placed.body as { worktree: { remoteRoot: string; branch: string } }).worktree.remoteRoot,
+    '/srv/mine/login',
+  )
+
+  const relative = await handleNodeApi(
+    request('POST', '/worktrees', { repoId: repo.repoId, name: 'other', path: 'mine/other' }),
+    deps,
+  )
+  assert.equal(relative.status, 400)
+
+  // The panel needs the machine's root to show a default, so the report carries
+  // it whenever the machine's home is already known.
+  const reported = await handleNodeApi(request('GET', `/repos/${repo.repoId}`), deps)
+  assert.equal((reported.body as { repo: { worktreeRoot?: string } }).repo.worktreeRoot, '/srv/checkouts')
 })

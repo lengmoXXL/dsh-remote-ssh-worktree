@@ -60,6 +60,7 @@ export const zh = {
   fieldName: '显示名称',
   fieldRepository: '仓库目录',
   fieldWorktreeName: 'worktree 名称',
+  fieldWorktreePath: '检出目录',
   placeholderTarget: 'user@build-01',
   placeholderIdentityFile: '~/.ssh/id_ed25519',
   placeholderRepoPath: '/workspace/project',
@@ -71,6 +72,7 @@ export const zh = {
   hintToken: '插件安装并启动远端 agent 时使用的访问令牌。',
   hintRepository: '该机器上的绝对路径。普通目录也可以登记；在机器上 git init 之后就能从它切出 worktree。',
   hintWorktreeName: '分支名会变成 worktree/<名称>，名称不可重复。',
+  hintWorktreePath: '已按默认路径填好（检出根目录下的 <仓库>/<名称>），可以改成这台机器上的任意绝对路径；目录不能已存在。',
   optional: '可选',
 
   pickerEmpty: '这个目录下没有子目录。',
@@ -149,6 +151,7 @@ export const en = {
   fieldName: 'Display name',
   fieldRepository: 'Repository directory',
   fieldWorktreeName: 'Worktree name',
+  fieldWorktreePath: 'Checkout directory',
   placeholderTarget: 'user@build-01',
   placeholderIdentityFile: '~/.ssh/id_ed25519',
   placeholderRepoPath: '/workspace/project',
@@ -160,6 +163,7 @@ export const en = {
   hintToken: 'The token the plugin gives the remote agent it installs and starts.',
   hintRepository: 'An absolute path on that machine. A plain directory is fine too; once it is a git repository there, worktrees can be cut from it.',
   hintWorktreeName: 'The branch becomes worktree/<name>; the name must be unique.',
+  hintWorktreePath: 'Filled in with the default — the checkout root plus <repository>/<name> — and editable to any absolute path on that machine; the directory must not exist yet.',
   optional: 'optional',
 
   pickerEmpty: 'No subdirectories here.',

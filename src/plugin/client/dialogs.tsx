@@ -295,6 +295,25 @@ function browseTarget(text: string, entered: string | undefined): { dir: string;
 function withoutTail(path: string): string {
   return path.replace(/\/+$/, '')
 }
+
+/**
+ * The path a new checkout gets when the caller names none.
+ *
+ * The name is what completes the path, so an empty name still shows the
+ * directory the checkout will be created in: the field is filled from the
+ * moment the dialog opens, and the name simply finishes it.
+ * @param root - the machine's checkout root, when the host could name it.
+ * @param repoPath - absolute path of the repository on that machine.
+ * @param name - the worktree name as it is being typed.
+ * @returns the default path, or nothing while it cannot be spelled yet.
+ */
+function defaultWorktreePath(root: string | undefined, repoPath: string, name: string): string {
+  if (root === undefined) return ''
+  const repo = withoutTail(repoPath).split('/').pop() ?? repoPath
+  const base = `${withoutTail(root)}/${repo}`
+  const trimmed = name.trim()
+  return trimmed === '' ? `${base}/` : `${base}/${trimmed}`
+}
 /** Register a repository on a machine. */
 export function AddRepoDialog({ nodeId, busy, onClose, onSubmit, listDirs, t }: {
   nodeId: NodeId
@@ -357,20 +376,41 @@ export function AddRepoDialog({ nodeId, busy, onClose, onSubmit, listDirs, t }: 
   )
 }
 
-export function NewWorktreeDialog({ repo, busy, onClose, onSubmit, t }: {
+/**
+ * Cut a worktree from one repository.
+ *
+ * The path field carries the default the host would use — the machine's
+ * checkout root, the repository, and the name — and follows the name while
+ * nobody has touched it. Once edited it is the caller's to keep, and clearing
+ * it hands it back to the default rather than leaving the host a blank path it
+ * would have to guess at. An untouched field sends no path at all, so the
+ * machine's own root stays the one source of the default.
+ */
+export function NewWorktreeDialog({ repo, root, busy, onClose, onSubmit, t }: {
   repo: RepoRecord
+  /** The machine's checkout root, when the host could name it. */
+  root?: string | undefined
   busy: boolean
   onClose: () => void
-  onSubmit: (draft: { repoId: RepoId; name: string }) => Promise<void>
+  onSubmit: (draft: { repoId: RepoId; name: string; path?: string }) => Promise<void>
   t: T
 }) {
   const [name, setName] = useState('')
+  const [path, setPath] = useState('')
+  const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+
+  const fallback = defaultWorktreePath(root, repo.repoPath, name)
+  const value = touched ? path : fallback
 
   const submit = async (): Promise<void> => {
     setError(undefined)
     try {
-      await onSubmit({ repoId: repo.repoId, name: name.trim() })
+      await onSubmit({
+        repoId: repo.repoId,
+        name: name.trim(),
+        ...touched && value.trim() !== '' ? { path: value.trim() } : {},
+      })
       onClose()
     } catch (failure) {
       setError(reasonOf(failure))
@@ -397,6 +437,21 @@ export function NewWorktreeDialog({ repo, busy, onClose, onSubmit, t }: {
         <DialogError message={error} />
         <Field label={t('fieldWorktreeName')} hint={t('hintWorktreeName')}>
           <Input value={name} placeholder={t('placeholderWorktreeName')} onChange={e => setName(e.target.value)} />
+        </Field>
+        <Field label={t('fieldWorktreePath')} hint={t('hintWorktreePath')}>
+          <Input
+            value={value}
+            placeholder={fallback}
+            onChange={(event) => {
+              if (event.target.value === '') {
+                setTouched(false)
+                setPath('')
+                return
+              }
+              setTouched(true)
+              setPath(event.target.value)
+            }}
+          />
         </Field>
       </div>
     </Modal>

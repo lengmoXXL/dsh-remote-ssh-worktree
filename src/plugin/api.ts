@@ -65,6 +65,13 @@ export interface ManagementApiDeps {
   readonly connections: NodeConnections
   /** The remote worktree lifecycle. */
   readonly worktrees: WorktreeManager
+  /**
+   * Where one machine cuts its checkouts, for the panel's default path.
+   *
+   * It throws while the machine's home is still unknown, which is why every
+   * caller reads it through {@link worktreeRootOf}.
+   */
+  readonly worktreeRoot: (nodeId: NodeId) => string
 }
 
 /** One repository as the API reports it: the record, and whether git owns it. */
@@ -77,6 +84,11 @@ interface RepoReport {
    * written down at registration.
    */
   readonly git: boolean
+  /**
+   * Where this repository's machine cuts its checkouts, when its home is
+   * already known. The panel shows it as the default path of a new worktree.
+   */
+  readonly worktreeRoot?: string
   /** Why the question could not be answered, when it could not. */
   readonly error?: string
 }
@@ -230,26 +242,57 @@ async function statOnNode(
  * @returns the record and whether it is a repository right now.
  */
 async function reportRepo(deps: ManagementApiDeps, record: RepoRecord): Promise<RepoReport> {
+  const root = worktreeRootOf(deps, record.nodeId)
+  // Spread rather than assign: an unknown root is an absent key, not an
+  // undefined one, under `exactOptionalPropertyTypes`.
+  const placed = root === undefined ? {} : { worktreeRoot: root }
   const node = deps.registry.get(record.nodeId)
   if (node?.transport.kind === 'local') {
     try {
-      return { repo: record, git: await isRepository(record.repoPath) }
+      return { repo: record, ...placed, git: await isRepository(record.repoPath) }
     } catch (error) {
-      return { repo: record, git: false, error: error instanceof Error ? error.message : String(error) }
+      return {
+        repo: record,
+        ...placed,
+        git: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   }
   const channel = deps.connections.channel(record.nodeId)
   if (channel === undefined) {
-    return { repo: record, git: false, error: `node "${record.nodeId}" is not connected` }
+    return { repo: record, ...placed, git: false, error: `node "${record.nodeId}" is not connected` }
   }
   try {
     await channel.request('git.repoState', { repoPath: record.repoPath })
-    return { repo: record, git: true }
+    return { repo: record, ...placed, git: true }
   } catch (error) {
     if (error instanceof NodeRequestError && error.data.code === 'GIT_NOT_A_REPOSITORY') {
-      return { repo: record, git: false }
+      return { repo: record, ...placed, git: false }
     }
-    return { repo: record, git: false, error: error instanceof Error ? error.message : String(error) }
+    return {
+      repo: record,
+      ...placed,
+      git: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+/**
+ * The checkout root of one machine, or undefined while its home is unknown.
+ *
+ * A machine that has not answered its handshake yet has no home to resolve
+ * `~` against; the panel then shows no default and the host computes it.
+ * @param deps - the management dependencies.
+ * @param nodeId - the machine to ask about.
+ * @returns the root, or undefined when it cannot be named yet.
+ */
+function worktreeRootOf(deps: ManagementApiDeps, nodeId: NodeId): string | undefined {
+  try {
+    return deps.worktreeRoot(nodeId)
+  } catch {
+    return undefined
   }
 }
 
@@ -389,9 +432,17 @@ async function handleWorktrees(
             return { nodeId: record.nodeId, repoPath: record.repoPath }
           })()
       const baseRef = stringField(request.body, 'baseRef')
+      // A caller may place the checkout itself; the machine's own root is the
+      // default. A relative path would be resolved against that root by the
+      // daemon, which is never what a caller means here.
+      const path = stringField(request.body, 'path')?.trim()
+      if (path !== undefined && path !== '' && !path.startsWith('/')) {
+        throw new ApiError(400, `"path" must be absolute: "${path}"`)
+      }
       const anchor = await deps.worktrees.create({
         ...target,
         name: requireString(request.body, 'name'),
+        ...path === undefined || path === '' ? {} : { path },
         ...baseRef === undefined ? {} : { baseRef },
       })
       return { status: 201, body: { worktree: anchor } }

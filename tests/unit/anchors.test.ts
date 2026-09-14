@@ -166,6 +166,26 @@ test('an anchor written before kinds existed reads as a worktree', async () => {
   const [anchor] = await createAnchorStore({ root }).load()
   assert.equal(anchor?.kind, 'worktree')
   assert.equal(anchor?.kind === 'worktree' ? anchor.branch : undefined, 'worktree/old')
+  // The same document names no origin, and a worktree nobody adopted was cut
+  // by this plugin, so the record reads as created rather than as found.
+  assert.equal(anchor?.kind === 'worktree' ? anchor.origin : undefined, 'created')
+})
+
+test('an adopted anchor keeps its origin across a reload', async () => {
+  const store = createAnchorStore({ root })
+  await store.load()
+  await store.create({
+    kind: 'worktree',
+    nodeId: asNodeId('n1'),
+    name: 'found',
+    repoPath: '/srv/app',
+    remoteRoot: '/srv/elsewhere/found',
+    branch: 'worktree/found',
+    origin: 'adopted',
+  })
+
+  const [loaded] = await createAnchorStore({ root }).load()
+  assert.equal(loaded?.kind === 'worktree' ? loaded.origin : undefined, 'adopted')
 })
 
 test('a malformed anchor document fails loud instead of disappearing', async () => {

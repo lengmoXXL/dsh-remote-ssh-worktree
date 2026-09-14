@@ -106,6 +106,8 @@ interface RepoReport {
   readonly repo: RepoRecord
   /** Whether git owns that directory right now. */
   readonly git: boolean
+  /** Where that machine cuts checkouts; absent until its home is known. */
+  readonly worktreeRoot?: string
   /** Why that could not be answered, when it could not. */
   readonly error?: string
 }
@@ -191,8 +193,8 @@ export interface RemoteWorktreesFace {
   closeDirectory(repoId: RepoId): Promise<void>
   /** List one directory level on a machine. */
   listDirs(nodeId: NodeId, path: string): Promise<DirListing>
-  /** Cut a worktree from a registered repository. */
-  createWorktree(draft: { repoId: RepoId; name: string }): Promise<void>
+  /** Cut a worktree from a registered repository; `path` overrides the default. */
+  createWorktree(draft: { repoId: RepoId; name: string; path?: string }): Promise<void>
   /** Every checkout the repository's machine already has, besides its own. */
   existingWorktrees(repoId: RepoId): Promise<readonly ExistingWorktree[]>
   /** Take an existing checkout under management and open it; git is untouched. */
@@ -701,6 +703,8 @@ export function RemoteWorktreesSection(props: SectionProps) {
       {dialog?.kind === 'worktree' ? (
         <NewWorktreeDialog
           repo={dialog.repo}
+          root={reposOf(dialog.repo.nodeId)
+            .find(entry => entry.repo.repoId === dialog.repo.repoId)?.worktreeRoot}
           busy={busy}
           onClose={() => setDialog(undefined)}
           onSubmit={draft => submit(() => props.createWorktree(draft))}

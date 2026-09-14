@@ -349,7 +349,22 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await waitForEnabled(page, exact('newWorktree'), 'the worktree control to settle')
     await clickByText(page, exact('newWorktree'))
     await waitForForm(page, exact('newWorktree'), 'the new-worktree form')
+    // The path field is filled from the start: the name finishes it, so an
+    // empty name already shows the directory the checkout goes into.
+    const checkoutRoot = join(instance.userHome, '.dsh', 'worktrees', 'demo-repo')
+    await waitFor(
+      page,
+      `[...document.querySelectorAll('[role="dialog"][aria-label] input')]`
+      + `.some(input => input.value === ${JSON.stringify(`${checkoutRoot}/`)})`,
+      'the checkout directory to be filled in before the name',
+    )
     await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderWorktreeName)), 'verify')
+    await waitFor(
+      page,
+      `[...document.querySelectorAll('[role="dialog"][aria-label] input')]`
+      + `.some(input => input.value === ${JSON.stringify(join(checkoutRoot, 'verify'))})`,
+      'the name to finish the default path',
+    )
     await waitForEnabled(page, exact('create'), 'the form to accept the worktree')
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('newWorktree'), 'the new-worktree form to close')
@@ -396,11 +411,22 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await waitFor(page, `!document.body.innerText.includes('verify')`, 'the sidebar to drop the workspace')
     await shot('07-worktree-removed')
 
-    // The same control, with the option switched on, takes the branch too.
+    // The same control, with the option switched on, takes the branch too. This
+    // one is placed by hand: the field arrives holding the default the host
+    // would use, and the caller may replace it.
     await waitForEnabled(page, exact('newWorktree'), 'the worktree control to settle again')
     await clickByText(page, exact('newWorktree'))
     await waitForForm(page, exact('newWorktree'), 'the second new-worktree form')
     await fillDialogInputByPlaceholder(page, new RegExp(escape(en.placeholderWorktreeName)), 'scratch')
+    const defaultCheckout = join(instance.userHome, '.dsh', 'worktrees', 'demo-repo', 'scratch')
+    await waitFor(
+      page,
+      `[...document.querySelectorAll('[role="dialog"][aria-label] input')]`
+      + `.some(input => input.value === ${JSON.stringify(defaultCheckout)})`,
+      'the default checkout path to be filled in',
+    )
+    const customCheckout = join(instance.userHome, 'custom-scratch')
+    await fillDialogInput(page, 1, customCheckout)
     await waitForEnabled(page, exact('create'), 'the form to accept the second worktree')
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('newWorktree'), 'the second new-worktree form to close')
@@ -408,6 +434,11 @@ test('a remote worktree is created and removed through the browser', { timeout: 
       instance.home, 'remote-worktrees', 'anchors', instance.nodeId, 'demo-repo', 'scratch',
     )
     await waitForPath(join(scratch, '.dsh-remote-worktree.json'), 'present')
+    assert.match(
+      await readFile(join(customCheckout, 'README.md'), 'utf8'),
+      /fixture/,
+      'the checkout landed where the caller placed it',
+    )
 
     await waitForEnabled(page, exact('removeWorktree'), 'the second remove control to settle')
     await clickByText(page, exact('removeWorktree'))
@@ -415,6 +446,9 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await clickInDialog(page, anyOf('removeWorktreeBranch'))
     await clickInDialog(page, exact('remove'))
     await waitForPath(join(scratch, '.dsh-remote-worktree.json'), 'absent')
+    // A checkout the plugin placed itself is removable wherever it stands,
+    // which is what separates it from one adopted from the machine.
+    await waitForPath(customCheckout, 'absent')
     await waitForBranchGone(instance.repoPath, 'worktree/scratch')
     await waitFor(page, `!document.body.innerText.includes('scratch')`, 'the sidebar to drop the second workspace')
 
