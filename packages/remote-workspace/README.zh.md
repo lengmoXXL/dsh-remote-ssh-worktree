@@ -1,8 +1,7 @@
 # dsh-remote-workspace
 
-一个 DSH 插件：把远端机器上的一个目录放到 Harness 面前——read、write、edit、bash、grep 和终端工具都在那里执行，
-可以是 git worktree，也可以是目录本身——而模型看到的是普通的本地路径。本仓库里它的兄弟包是
-[terminal](../terminal)：侧边栏终端通过本插件提供的 `ctx.tty` 路由器，在拥有该会话工作区的那台机器上起 shell。
+把 Harness 的文件、shell、终端工具跑在远端机器上的某个目录里——git worktree，或目录本身。
+模型看到的是普通本地路径。兄弟包：[terminal](../terminal)。
 
 [English](README.md) | 中文
 
@@ -12,19 +11,12 @@
 | --- | --- | --- |
 | ![机器列表](docs/screenshots/zh/01-section.png) | ![已连接的机器与仓库](docs/screenshots/zh/03-connected.png) | ![已创建的 worktree](docs/screenshots/zh/06-worktree-created.png) |
 
-## 能做什么
+## 环境要求
 
-- 通过 SSH 连接机器——`user@host` 或 `~/.ssh/config` 里的别名，机器上不需要手动装任何东西。
-- 本机开箱可用：内置的 `Local` 不需要 agent、不需要连接，管仓库和 worktree 的方式和 SSH 机器完全一样。
-- 从机器上任意仓库切出 `worktree/<名称>`，把该 checkout 注册成 DSH 工作区；检出默认放在该机器的检出根目录下，也可以在表单里指定别的路径。
-- 机器上已经存在的 worktree（git 列出的任意检出）也能直接纳入面板打开；关闭时只解除登记，机器上的检出原样保留。
-- 登记的目录本身就能直接开成工作区，不管它是不是 git 仓库；还不是仓库的目录在机器上 `git init` 之后，不用重新登记就能从它切 worktree。
-- read、write、edit、bash、grep 和终端工具都在那台机器上原样执行。
-- 删 worktree 不会弄丢活儿：checkout 消失，分支默认保留，除非你明确要求连分支一起删。
+- Node 22.19+ 或 24+，以及按平时方式配好的 `ssh`。
+- 机器上不需要安装任何东西：agent 由插件下载并保持更新。
 
 ## 安装
-
-需要 Node 22.19+（或 24+）和 `ssh`。agent 走 Release 下载，所以使用插件不需要 Rust 工具链。
 
 ```sh
 git clone https://github.com/lengmoXXL/dsh-remote-workspace
@@ -33,64 +25,30 @@ dsh plugin --profile web add "$PWD"
 dsh --profile web
 ```
 
-## 怎么用
+## 能做什么
 
-**设置 → 远程工作区。** 列表里的第一台是内置的 `Local`，也就是本机：给它加仓库不需要 SSH 目标，也不需要
-token。远程机器用同一套表单和同一批操作，目标加 token 就是全部配置——token 是任意字符串，作为 daemon 的共享
-密钥。插件加载时会自己连接远程机器，每台重试几次；一直连不上的会留成失败状态，旁边有「连接」按钮可以手动再试。
+- 通过 SSH 添加机器（`user@host` 或 `~/.ssh/config` 别名），或直接用内置的 `Local` 机器操作本机。
+- 把机器上的任意目录登记为仓库；不要求是 git 仓库。
+- 从仓库切出 worktree 并打开为工作区；检出路径会预先填好，也可以改。
+- 纳入机器上已存在的 worktree；之后关闭只解除登记，不删除任何东西。
+- 把普通目录直接开成工作区；之后在机器上 `git init`，就能从它切 worktree。
+- read、write、edit、bash、grep 和终端工具都跑在该工作区所属的机器上。
+- 用完的 worktree 可以删除，可选择是否连分支一起删。
 
-仓库就是机器上的任意目录。每一行可以打开、关闭或移除它所持有的东西；还不是 git 仓库的目录也可以先当工作区打开。
-设置面板就是这个插件全部的界面：切 worktree 属于准备工作，在这里做完，之后的会话直接用。
+## 使用
 
-## 怎么实现的
+**设置 → 远程工作区。**
 
-- 插件把 Harness 的 `fs`、`subprocess`、`shell`、`tty` 四个 seam 换成路由版本：属于远端锚点的路径交给那台机器的
-  agent，其余路径仍在本地。
-- agent 是一个静态链接的 Rust 二进制。它监听内核分配的随机 loopback 端口并写进状态文件，所以配置一台机器
-  只需要 SSH 目标和 token，不需要约定端口。
-- 插件负责安装和更新它：连接时读 `uname`，从本仓库的 GitHub Releases 下载对应构建，用 `SHA256SUMS` 校验，
-  经同一条 SSH 连接上传、脱离会话启动，再转发到它发布的端口。
-- agent 流量经由 `ssh -L` 到达本机，因此连接的可信度等同于你自己的 SSH 访问。
+1. 添加机器：SSH 目标 + token。token 是 daemon 的共享密钥，任意字符串。机器会自动连接；
+   一直连不上的会显示**连接**按钮。
+2. `Local` 恒在首位，不需要目标和 token。
+3. 登记仓库，然后用每行的菜单打开、关闭或移除它所持有的东西。
+4. 在这里打开的工作区会出现在会话里，其工具和终端都跑在拥有它的机器上。
 
-## 架构
+## 说明
 
-```text
-┌─ 浏览器 ───────────────────────────────────────────────────┐
-│  plugin/client    设置面板                                 │
-└──────────────────────────────┬─────────────────────────────┘
-                               │ 管理 API（HTTP）
-┌─ plugin/   DSH 表面 ─────────▼─────────────────────────────┐
-│  api                           经 models                    │
-│  routing/  fs · subprocess · shell · tty 四个 seam → SDK   │
-└──────────────────────────────┬─────────────────────────────┘
-                               │
-┌─ models/   业务语义 ─────────▼─────────────────────────────┐
-│  worktrees · machines · autoconnect                        │
-│  routing   路径属于哪个执行世界                            │
-└─────────────┬───────────────────────────────┬──────────────┘
-              │ 状态                          │ SDK
-┌─ storage/ ───────────────┐  ┌─ remote/   SDK ──────────────┐
-│  持久状态                │  │  channel · protocol          │
-│  anchors · nodes · repos │  │  ssh · agent 安装            │
-│  document：锁 + 原子替换 │  │  每台机器一条连接            │
-└──────────────────────────┘  └───────────────┬──────────────┘
-                                              │ ssh -L，JSON-RPC 2.0
-                              ┌─ 机器（可多台） ─────────────┐
-                              │  dsh-remote-agent（Rust）    │
-                              │  随机 loopback 端口          │
-                              └──────────────────────────────┘
-```
-
-依赖只向下，`src/index.ts` 是唯一把它们组装起来的文件。设置面板是另一半：它跑在浏览器里，经管理 API 访问宿主机。
-
-## 状态在哪
-
-`$DSH_HOME/remote-worktrees/` 下有 `nodes.json`、`repos.json`、每个远端目录对应的锚点目录，以及按平台下载的
-agent 构建。卸载插件不会删掉这个目录；删掉它等于忘掉所有机器。
-
-切出的检出不在这个目录里：每台机器把它们放在自己的 `~/.dsh/worktrees/<仓库>/<名称>` 下，除非配置了
-`worktreeRoot` 指定别的根目录。
-
-## 许可证
+- 检出切在机器的检出根目录下，默认 `~/.dsh/worktrees/<仓库>/<名称>`；配置 `worktreeRoot` 可以改根目录。
+- agent 从本仓库 Releases 下载、用 `SHA256SUMS` 校验，并经 `ssh -L` 到达本机，因此连接的可信度等同于你自己的
+  SSH 访问。
 
 MIT

@@ -2,10 +2,7 @@
 
 English | [中文](README.zh.md)
 
-The local terminal provider for DeepSeek Harness: a PTY this host owns,
-published as `ctx.tty`.
-
-Mount it where no router answers for the directory a terminal asks for:
+Terminal provider for this host, built on node-pty. Mount it in a deployment that has no router:
 
 ```yaml
 - insert:
@@ -13,22 +10,12 @@ Mount it where no router answers for the directory a terminal asks for:
       name: dsh-tty-local
 ```
 
-A deployment that runs [dsh-remote-workspace](../remote-workspace) does not mount
-it as a row: that plugin composes this package's provider in an isolated scope
-for the directories its nodes do not own, so local terminals keep working while
-remote ones route away.
+A deployment running [remote-workspace](../remote-workspace) does not mount it: that plugin provides the local
+terminals itself.
 
-## What it does
+- Runs the caller's program with this host's environment plus `TERM=xterm-256color`.
+- Resizes a running terminal to the size the caller asks for, so full-screen programs redraw.
+- Releasing a terminal signals it, then kills it after `graceMs`.
+- No configuration.
 
-- Allocates through [node-pty](https://github.com/microsoft/node-pty), with
-  `TERM=xterm-256color`, the caller's environment layered onto this process's
-  own.
-- Publishes output as bytes on a `Readable` that ends with the terminal.
-- Turns `resize(cols, rows)` into the PTY's own window size, which is what makes
-  a full-screen program redraw instead of drawing against the old width. The
-  kernel signals the foreground process group; nothing here sends it by hand.
-- Releases a terminal with `SIGTERM`, then `SIGKILL` after the caller's grace
-  period, and settles `done` with the exit facts either way.
-
-It takes no config: what to run, where, how large, and how long to wait all
-arrive on the request.
+MIT
