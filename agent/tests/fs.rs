@@ -43,9 +43,7 @@ fn resolves_through_a_symlink_and_refuses_a_relative_path_without_a_root() {
     std::os::unix::fs::symlink(dir.join("real"), dir.join("link")).unwrap();
 
     let fs = backend(dir.path());
-    let resolved = fs
-        .resolve(dir.join("link").to_str().unwrap())
-        .unwrap();
+    let resolved = fs.resolve(dir.join("link").to_str().unwrap()).unwrap();
     assert_eq!(canonical(&resolved), dir.join("real").to_string_lossy());
 
     // Without a root there is nothing to place a relative path against, and the
