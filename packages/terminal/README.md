@@ -17,11 +17,13 @@ header, exactly as every other workspace-scoped reader does, and allocates the
 terminal through `ctx.tty`.
 
 That one seam is the whole remote story. A workspace routed by
-[dsh-remote-workspace](https://github.com/lengmoXXL/dsh-remote-workspace) is
-named by its local anchor path, so the routing terminal provider resolves that
-path to its node and starts the shell **there** — same code path, no knowledge
-of machines here. With no router composed, every workspace is simply local, and
-`dsh-tty-local` is what answers.
+[dsh-remote-workspace](../remote-workspace) — the other plugin in this
+repository — is named by its local anchor path, so the routing terminal provider
+resolves that path to its node and starts the shell **there**: same code path, no
+knowledge of machines here. With no router composed every workspace is simply
+local, and [dsh-tty-local](../tty-local) is what answers. The seam itself is
+[dsh-tty](../tty), and a node's terminal is reached through
+[dsh-tty-remote](../tty-remote).
 
 The shell is the machine's own login shell, resolved on whichever machine owns
 the workspace: argv is `/bin/sh -c 'exec "${SHELL:-/bin/sh}" -l'`, so a

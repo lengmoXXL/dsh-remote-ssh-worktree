@@ -1,7 +1,8 @@
 # dsh-remote-workspace
 
 一个 DSH 插件：把远端机器上的一个目录放到 Harness 面前——read、write、edit、bash、grep 和终端工具都在那里执行，
-可以是 git worktree，也可以是目录本身——而模型看到的是普通的本地路径。
+可以是 git worktree，也可以是目录本身——而模型看到的是普通的本地路径。本仓库里它的兄弟包是
+[terminal](../terminal)：侧边栏终端通过本插件提供的 `ctx.tty` 路由器，在拥有该会话工作区的那台机器上起 shell。
 
 [English](README.md) | 中文
 

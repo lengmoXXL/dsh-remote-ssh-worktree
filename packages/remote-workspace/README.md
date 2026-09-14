@@ -2,6 +2,8 @@
 
 A DSH plugin that puts a directory on a remote machine in front of the harness: read, write, edit, bash, grep, and
 terminal tools run there — in a git worktree, or in the directory itself — while the model sees ordinary local paths.
+Its sibling in this repository is [terminal](../terminal), the sidebar terminal that opens a shell in whichever
+machine owns a Session's workspace through the `ctx.tty` router this plugin provides.
 
 English | [中文](README.zh.md)
 

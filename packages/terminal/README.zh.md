@@ -15,7 +15,7 @@ header 解析出工作区（和其他所有按工作区取数的读取方完全�
 `ctx.tty` 分配终端。
 
 这一个接缝就是全部的远程故事。被
-[dsh-remote-workspace](https://github.com/lengmoXXL/dsh-remote-workspace)
+[dsh-remote-workspace](../remote-workspace)（本仓库里的另一个插件）
 路由的工作区，其名字就是本地 anchor 路径，路由版的终端 provider 会把该
 路径解析到对应节点，并在**那台机器上**起 shell——同一条代码路径，这里完全
 不需要知道有哪些机器。没有装路由插件时，所有工作区就都是本地的。
