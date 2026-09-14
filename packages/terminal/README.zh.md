@@ -20,7 +20,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/terminal"
 ```
 
-本包声明了 bundle patch，安装时即加入 profile 的层；重启服务即可加载。
+重启服务即可加载。
 
 开发时改用 profile 的 patch 层挂载 host 半边，无需重启
 （`$DSH_HOME/profiles/<name>/cordis.patch.yml`，实时监听）：

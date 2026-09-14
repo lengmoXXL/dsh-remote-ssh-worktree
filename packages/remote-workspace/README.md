@@ -24,8 +24,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/remote-workspace"
 ```
 
-Then boot the profile with `dsh --profile web`. The package joins the profile's layers as it is installed, since
-it declares a bundle patch.
+Then start the profile with `dsh --profile web`.
 
 ## What you can do
 
