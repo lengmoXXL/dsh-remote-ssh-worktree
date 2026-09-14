@@ -1,6 +1,6 @@
 {
   "name": "dsh-terminal",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "A terminal in the DeepSeek Harness Web GUI's right Sidebar: one xterm.js tab per Session, opening in the Session's workspace directory on whichever machine owns it \u2014 the local host or a dsh-remote-workspace node.",
   "type": "module",
@@ -43,6 +43,13 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ],
       "platform": "web"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.1.5-alpha.2": "unknown",
+        "0.1.5-rc.1": "unknown",
+        "0.1.5-rc.2": "compatible"
+      }
     }
   },
   "peerDependencies": {

@@ -20,6 +20,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/terminal"
 ```
 
+需要 Node 22.19+ 或 24+，以及 DSH `0.1.5-rc.2`（已在可丢弃的 profile 中验证；其他版本未测试）。
 重启服务即可加载。
 
 开发时改用 profile 的 patch 层挂载 host 半边，无需重启

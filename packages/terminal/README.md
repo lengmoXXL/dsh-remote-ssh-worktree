@@ -23,6 +23,7 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/terminal"
 ```
 
+Needs Node 22.19+ or 24+ and DSH `0.1.5-rc.2` (verified in a disposable profile; other releases are untested).
 Restart the server to load it.
 
 While developing it, the profile's patch layer mounts the host half instead, without a restart

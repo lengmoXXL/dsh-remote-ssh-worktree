@@ -14,6 +14,7 @@ English | [中文](README.zh.md)
 ## Requirements
 
 - Node 22.19+ or 24+, and `ssh` configured as usual.
+- DSH `0.1.5-rc.2`, verified in a disposable profile; other releases are untested.
 - Nothing to install on the machines: the plugin fetches the agent and keeps it up to date.
 
 ## Install
