@@ -376,7 +376,7 @@ test('a setup command that fails reports the shared ssh diagnostic', async () =>
 
 test('the crate version matches the agent build the plugin installs', async () => {
   // Read the manifest rather than trusting a build step to have copied it.
-  const manifest = await readFile(new URL('../../agent/Cargo.toml', import.meta.url), 'utf8')
+  const manifest = await readFile(new URL('../../../../agent/Cargo.toml', import.meta.url), 'utf8')
   const match = /^version = "(.+)"$/m.exec(manifest)
   assert.notEqual(match, null)
   assert.equal(match?.[1], AGENT_VERSION)

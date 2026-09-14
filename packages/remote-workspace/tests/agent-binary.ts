@@ -14,13 +14,16 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
+/** The repository root, three levels above this file's directory. */
+const repoRoot = join(here, '..', '..', '..')
+
 /** Candidates in the order they win: an explicit override, then a release or debug build. */
 function candidates(): readonly string[] {
   const override = process.env['DSH_REMOTE_AGENT_BIN']
   return [
     ...override === undefined || override === '' ? [] : [override],
-    join(here, '..', 'agent', 'target', 'release', 'dsh-remote-agent'),
-    join(here, '..', 'agent', 'target', 'debug', 'dsh-remote-agent'),
+    join(repoRoot, 'agent', 'target', 'release', 'dsh-remote-agent'),
+    join(repoRoot, 'agent', 'target', 'debug', 'dsh-remote-agent'),
   ]
 }
 

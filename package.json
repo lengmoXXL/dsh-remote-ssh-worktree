@@ -1,25 +1,9 @@
 {
-  "name": "dsh-remote-workspace",
+  "name": "dsh-remote-workspace-repo",
   "version": "0.0.1",
   "private": true,
-  "description": "Remote execution worlds for DeepSeek Harness: create a git worktree on a remote machine over a self-hosted node daemon, and run the stock read / write / edit / bash / grep tools inside it.",
+  "description": "DeepSeek Harness plugins for working on other machines: a remote workspace manager, a terminal in the sidebar, and the PTY seam the two share.",
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./client": {
-      "default": "./lib/client.js"
-    },
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "lib",
-    "cordis.patch.yml"
-  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -29,83 +13,9 @@
   "bugs": {
     "url": "https://github.com/lengmoXXL/dsh-remote-workspace/issues"
   },
-  "keywords": [
-    "deepseek-harness",
-    "dsh",
-    "dsh-plugin",
-    "remote",
-    "ssh",
-    "worktree",
-    "git"
+  "workspaces": [
+    "packages/*"
   ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-slots",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-primitives",
-        "@deepseek-ai/dsh-client-ui-renderer"
-      ],
-      "platform": "web"
-    }
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-bash-local": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-bash-sandbox": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs-sandbox": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-home-paths": "*",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-shell": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-subprocess": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-subprocess-local": "^0.1.5-rc.1"
-  },
-  "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/cordis-plugin-include": "^1.0.7",
-    "@deepseek-ai/cordis-plugin-loader": "^1.0.3",
-    "@deepseek-ai/dsh-bash-local": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-bash-sandbox": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs-sandbox": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-home-paths": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-host-webserver": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-sandbox": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-sandbox-local": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-session-projection": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-shell": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-subprocess": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-subprocess-local": "0.1.5-rc.1",
-    "@types/node": "^22.10.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "lightningcss": "^1.33.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tsdown": "^0.23.0",
-    "typescript": "^5.6.3"
-  },
-  "dependencies": {
-    "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-brand": "^0.1.5-rc.1",
-    "@deepseek-ai/schemastery": "^3.18.2",
-    "vscode-jsonrpc": "^8.2.0"
-  },
   "engines": {
     "node": "^22.19 || >=24"
   },
@@ -132,13 +42,11 @@
     "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.1"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
-    "build": "tsdown",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "build:agent": "cargo build --release --manifest-path agent/Cargo.toml",
-    "pretest": "npm run build",
-    "test": "node --test --experimental-strip-types tests/unit/*.test.ts tests/e2e/*.test.ts",
-    "test:browser": "npm run build && node --test --experimental-strip-types tests/browser/workflow.test.ts"
-  },
-  "author": "lengmoXXL",
-  "sideEffects": false
+    "test:agent": "cargo test --manifest-path agent/Cargo.toml --tests",
+    "test:browser": "npm run test:browser --workspace dsh-remote-workspace"
+  }
 }
