@@ -1,0 +1,64 @@
+/**
+ * Which directory a terminal opens in.
+ *
+ * The browser sends a Session identity and never a path: the workspace is
+ * derived on the host from that Session's own header, exactly as every other
+ * workspace-scoped reader derives it. A live Session answers from its header; a
+ * Session the host is not running — one restored from disk that the browser is
+ * still showing — answers from its persisted header.
+ *
+ * The resulting path is what a terminal is started with, and it is also what
+ * makes the machine choice for free: a workspace routed to a
+ * dsh-remote-workspace node is named by its local anchor path, so the routing
+ * subprocess runtime resolves that path to the node and runs the shell there.
+ * Nothing here needs to know which machines exist.
+ *
+ * @module dsh-terminal/host/workspace
+ */
+
+import type { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+// Type-only: pulls the persistence plugin's Context merge (ctx.sessionPersistence),
+// which is how a Session the host is not running still names its workspace.
+import type {} from '@deepseek-ai/dsh-session-persistence'
+
+/** A terminal request the host refused, with a stable code. */
+export class TerminalFailure extends Error {
+  override readonly name = 'TerminalFailure'
+
+  /** Stable failure category. */
+  readonly code: string
+
+  /**
+   * @param code - stable failure category.
+   * @param message - operator-readable description.
+   */
+  constructor(code: string, message: string) {
+    super(message)
+    this.code = code
+  }
+}
+
+/**
+ * The workspace directory one Session's terminal belongs in.
+ * @param ctx - the host context carrying `ctx.sessions`.
+ * @param sessionId - the identity the browser supplied.
+ * @returns the absolute workspace directory.
+ * @throws TerminalFailure `terminal/unknown-session` when neither a live nor a
+ * persisted header names one.
+ */
+export async function resolveWorkspace(ctx: Context, sessionId: string): Promise<string> {
+  if (sessionId.trim() === '') {
+    throw new TerminalFailure('terminal/unknown-session', 'no session identity was supplied, so the workspace is unknown')
+  }
+  const identity = sessionId as SessionId
+  const live = ctx.sessions.get(identity)?.header
+  const stored = live === undefined
+    ? await ctx.get('sessionPersistence')?.stat(identity)
+    : undefined
+  const cwd = (live ?? stored?.header)?.cwd
+  if (cwd === undefined || cwd === '') {
+    throw new TerminalFailure('terminal/unknown-session', `session "${sessionId}" is unknown, so its workspace is too`)
+  }
+  return cwd
+}

@@ -1,0 +1,12 @@
+/* The surface one xterm.js instance is drawn on. */
+
+/*
+ * The element xterm is opened into. FitAddon measures the parent's box and
+ * subtracts this element's own padding, so the padding lives here and the
+ * parent stays unpadded.
+ */
+.surface {
+  position: absolute;
+  inset: 0;
+  padding: 4px 0 6px 8px;
+}

@@ -21,25 +21,25 @@
   },
   "packageManager": "npm@10",
   "overrides": {
-    "@deepseek-ai/dsh-bash-local": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-bash-sandbox": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs-local": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-fs-sandbox": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-sandbox": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-shell": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-subprocess": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-subprocess-local": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-agent": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-sandbox-policy": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-session-projection": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-sandbox-local": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.1"
+    "@deepseek-ai/dsh-bash-local": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-bash-sandbox": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-fs": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-fs-local": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-fs-sandbox": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-sandbox": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-shell": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-subprocess": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-subprocess-local": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-agent": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-session-projection": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-sandbox-local": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.2"
   },
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
@@ -48,5 +48,10 @@
     "build:agent": "cargo build --release --manifest-path agent/Cargo.toml",
     "test:agent": "cargo test --manifest-path agent/Cargo.toml --tests",
     "test:browser": "npm run test:browser --workspace dsh-remote-workspace"
+  },
+  "allowScripts": {
+    "node-pty@1.2.0-beta.15": true,
+    "koffi@3.2.1": true,
+    "@deepseek-ai/dsh-subprocess-local@0.1.5-rc.2": true
   }
 }

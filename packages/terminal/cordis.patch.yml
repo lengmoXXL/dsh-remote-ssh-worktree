@@ -1,0 +1,9 @@
+# dsh-terminal bundle patch.
+#
+# One change over the profile root: insert the plugin row that serves the
+# terminal socket and the browser tab. Nothing is disabled — this plugin adds a
+# surface, it does not replace a seam.
+
+- insert:
+    - id: dsh-terminal
+      name: dsh-terminal
