@@ -291,9 +291,10 @@ const PROGRESS_POLL_MS = 250
  * repository's own state from the row above.
  *
  * Opening and closing share one seat, named for what a click does, so the row
- * reads as a state rather than as a pair of verbs. Removing is icon-only
- * because the settings column is narrow; it keeps its name for assistive
- * technology and for hover.
+ * reads as a state rather than as a pair of verbs. Closing the worktree drops
+ * the plugin's record and leaves the checkout; removing deletes the checkout.
+ * Both are on every row, and the confirmation behind removing says whether the
+ * checkout is one this plugin cut or one it found.
  */
 function WorktreeRow({ entry, busy, onRemove, onRelease, onToggleOpen, t }: {
   entry: WorktreeStatus
@@ -320,28 +321,30 @@ function WorktreeRow({ entry, busy, onRemove, onRelease, onToggleOpen, t }: {
         >
           {entry.open ? t('closeWorktree') : t('openWorktree')}
         </Button>
-        {entry.managed ? (
-          <Button
-            size="sm"
-            icon={<IconTrashOutline16 />}
-            disabled={busy}
-            aria-label={t('removeWorktree')}
-            title={t('removeWorktree')}
-            onClick={onRemove}
-          />
-        ) : (
-          // A checkout the plugin did not cut is never deleted through it: this
-          // only drops the plugin's own record, and the checkout stays put.
-          <Button
-            size="sm"
-            disabled={busy}
-            aria-label={t('releaseWorktree')}
-            title={t('releaseWorktree')}
-            onClick={onRelease}
-          >
-            {t('releaseWorktree')}
-          </Button>
-        )}
+        {/* Two ways out, on every row: closing drops this plugin's record and
+            its workspace and leaves the checkout where it stands, while
+            removing deletes the checkout itself. Removing is offered even for
+            a checkout the plugin found rather than cut — it is the operator's
+            to delete — and is always behind the confirmation that says so. */}
+        <Button
+          size="sm"
+          disabled={busy}
+          aria-label={t('releaseWorktree')}
+          title={t('releaseWorktree')}
+          onClick={onRelease}
+        >
+          {t('releaseWorktree')}
+        </Button>
+        <Button
+          size="sm"
+          icon={<IconTrashOutline16 />}
+          disabled={busy}
+          aria-label={t('removeWorktree')}
+          title={t('removeWorktree')}
+          onClick={onRemove}
+        >
+          {t('removeWorktree')}
+        </Button>
       </span>
     </div>
   )
@@ -656,7 +659,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                         ))}
                                         onRemove={() => confirm({
                                           titleKey: 'removeWorktreeTitle',
-                                          bodyKey: 'removeWorktreeBody',
+                                          bodyKey: item.managed
+                                            ? 'removeWorktreeBody'
+                                            : 'removeAdoptedWorktreeBody',
                                           optionKey: 'removeWorktreeBranch',
                                           run: deleteBranch => props.removeWorktree(item.anchor.anchorId, deleteBranch),
                                         })}

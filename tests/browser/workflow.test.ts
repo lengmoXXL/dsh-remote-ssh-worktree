@@ -100,6 +100,21 @@ function popped(...keys: Key[]): string {
     + `.some(button => [${needles}].includes(button.title))`
 }
 
+/**
+ * An expression that holds when every one of these labels has a control.
+ *
+ * A row's controls are read by their words, their hover text, or their name for
+ * assistive technology, because an icon-only control carries no visible label.
+ */
+function controlsFor(...keys: Key[]): string {
+  return keys.map(key => {
+    const pair = [zh[key], en[key]].map(text => JSON.stringify(text)).join(',')
+    return `[${pair}].some(label => [...document.querySelectorAll('button')]`
+      + `.some(button => (button.textContent ?? '').trim() === label || button.title === label`
+      + ` || button.getAttribute('aria-label') === label))`
+  }).join(' && ')
+}
+
 /** The open form's controls and path field, which the picker is driven with. */
 const FORM_PARTS = `
   const dialogs = [...document.querySelectorAll('[role="dialog"][aria-label]')]
@@ -369,6 +384,9 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     await clickInDialog(page, exact('create'))
     await waitForFormGone(page, exact('newWorktree'), 'the new-worktree form to close')
     await waitForText(page, 'verify', 'the worktree row')
+    // A checkout the plugin cut offers both ways out: closing it (which leaves
+    // the checkout) and removing it (which deletes it).
+    await waitFor(page, controlsFor('releaseWorktree', 'removeWorktree'), 'both row actions')
     const anchor = join(
       instance.home, 'remote-worktrees', 'anchors', instance.nodeId, 'demo-repo', 'verify',
     )
@@ -454,12 +472,15 @@ test('a remote worktree is created and removed through the browser', { timeout: 
 
     // A checkout the plugin never cut: it is adopted from the machine's own
     // list, opened as a workspace, and then closed without being touched.
+    await waitForEnabled(page, exact('adoptWorktree'), 'the open-worktree control to settle')
     await clickByText(page, exact('adoptWorktree'))
     await waitForForm(page, exact('adoptWorktree'), 'the open-worktree dialog')
     await waitForText(page, 'hand-cut', 'the hand-cut checkout to be listed')
     await clickInDialog(page, /hand-cut/)
     await waitForFormGone(page, exact('adoptWorktree'), 'the open-worktree dialog to close')
     await waitForText(page, 'hand-cut', 'the adopted row')
+    // A checkout the plugin found offers both ways out as well.
+    await waitFor(page, controlsFor('releaseWorktree', 'removeWorktree'), 'both actions on an adopted row')
     await waitFor(page, `document.body.innerText.includes('hand-cut · demo-repo')`, 'the adopted workspace')
     await shot('07b-adopted-worktree')
 
@@ -472,6 +493,23 @@ test('a remote worktree is created and removed through the browser', { timeout: 
       /fixture/,
       'the released checkout is still on the machine',
     )
+
+    // The same checkout can be brought back and, this time, deleted: one the
+    // plugin found on the machine is still the operator's to remove.
+    await waitForEnabled(page, exact('adoptWorktree'), 'the open-worktree control to settle again')
+    await clickByText(page, exact('adoptWorktree'))
+    await waitForForm(page, exact('adoptWorktree'), 'the second open-worktree dialog')
+    await waitForText(page, 'hand-cut', 'the checkout to be listed again')
+    await clickInDialog(page, /hand-cut/)
+    await waitForFormGone(page, exact('adoptWorktree'), 'the second open-worktree dialog to close')
+    await waitForText(page, 'hand-cut', 'the re-adopted row')
+
+    await waitForEnabled(page, exact('removeWorktree'), 'the remove control to settle')
+    await clickByText(page, exact('removeWorktree'))
+    await waitForForm(page, anyOf('removeWorktreeTitle'), 'the remove confirmation')
+    await clickInDialog(page, exact('remove'))
+    await waitFor(page, `!document.body.innerText.includes('hand-cut')`, 'the deleted row to go')
+    await waitForPath(join(instance.root, 'remote-root', 'hand-cut'), 'absent')
 
     // A directory nobody initialized registers, opens as a workspace of its
     // own, and refuses worktrees until someone makes it a repository.
