@@ -35,7 +35,6 @@ function fakeTerminalDaemon(options: {
   exitAfterReads?: number
   exitCode?: number | null
   foreground?: { processGroupId: number; inputWaiting: boolean } | null
-  onCall?: (method: string, params: unknown) => void
 }) {
   const calls: { method: string; params: unknown }[] = []
   const chunks = options.chunks ?? []
@@ -47,7 +46,6 @@ function fakeTerminalDaemon(options: {
     onPipeFrame: () => () => {},
     request(method, params) {
       calls.push({ method, params })
-      options.onCall?.(method, params)
       switch (method) {
         case 'term.spawn':
           return Promise.resolve({ termId: 't1', pid: 4242 }) as never

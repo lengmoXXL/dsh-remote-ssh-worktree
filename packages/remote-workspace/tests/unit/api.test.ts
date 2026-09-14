@@ -215,17 +215,8 @@ test('deleting a node disconnects it and drops the record', async () => {
 })
 
 test('connecting reports the daemon facts', async () => {
-  const info = {
-    protocol: 1,
-    agentVersion: '0.0.1',
-    platform: 'linux',
-    arch: 'x64',
-    node: 'v22.19.0',
-    homedir: '/home/dev',
-    capability: { pty: false, spill: false, ripgrep: null },
-  }
   const { deps } = await setup({
-    connect: () => Promise.resolve({ info, channel: { request: () => Promise.reject(new Error('unused')), onPipeFrame: () => () => {} }, close: () => {} }),
+    connect: () => Promise.resolve({ info: DAEMON_INFO, channel: { request: () => Promise.reject(new Error('unused')), onPipeFrame: () => () => {} }, close: () => {} }),
   })
   const created = await handleNodeApi(request('POST', '/nodes', { ssh: { target: 'a' }, token: 't' }), deps)
   const nodeId = asNodeId((created.body as { node: { nodeId: string } }).node.nodeId)
@@ -433,7 +424,6 @@ function daemon(overrides: Readonly<Record<string, (params: never) => unknown>> 
       if (method === 'git.repoState') return Promise.resolve({ branch: 'main', clean: true }) as never
       // The daemon reports where the checkout actually landed.
       if (method === 'git.worktreeAdd') return Promise.resolve({ path: params.worktreePath, branch: 'worktree/x' }) as never
-      if (method === 'fs.writeText') return Promise.resolve({}) as never
       return Promise.reject(new Error(`unexpected ${method}`)) as never
     }) as NodeChannel['request'],
   }

@@ -188,8 +188,9 @@ test('a frame for another process is ignored', async () => {
 
   const seen: string[] = []
   handle.stdout!.on('data', (chunk: Buffer | string) => seen.push(chunk.toString()))
-  await handle.done
+  // Emitted while the handler is live: the process-id guard is what keeps it out.
   emit({ procId: asProcId('someone-else'), stream: 'stdout', seq: 0, data: Buffer.from('nope').toString('base64') })
+  await handle.done
   await new Promise(resolve => setImmediate(resolve))
 
   assert.equal(seen.join(''), '')
@@ -207,6 +208,7 @@ test('a failed start rejects done and reports no output', async () => {
   })
   const handle = runtime(channel).spawn(spec('/srv/app/login'))
   await assert.rejects(() => handle.done, /no such binary/)
+  assert.equal(handle.collected.stdout?.readFrom(0).text, '', 'a start that failed collected nothing')
 })
 
 test('batch stdin is written and closed before the wait', async () => {
