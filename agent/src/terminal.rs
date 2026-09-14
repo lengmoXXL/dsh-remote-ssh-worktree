@@ -400,14 +400,22 @@ fn spawn_on_pty(
         )
     })?;
 
-    let (argv_owned, argv) = argv_pointers(program, args)?;
-    let (env_owned, envp) = env_pointers(spec)?;
-    let program_c = cstring(program)?;
+    // Nothing owns the master descriptor yet, so every failure between here and
+    // the fork closes it: a request carrying a NUL in its argv, environment, or
+    // directory would otherwise leak a pty that stays allocated for good.
+    fn failed(master: RawFd, error: Failure) -> Failure {
+        unsafe { libc::close(master) };
+        error
+    }
+    let (argv_owned, argv) = argv_pointers(program, args).map_err(|e| failed(master, e))?;
+    let (env_owned, envp) = env_pointers(spec).map_err(|e| failed(master, e))?;
+    let program_c = cstring(program).map_err(|e| failed(master, e))?;
     let cwd_c = CString::new(cwd.as_os_str().as_bytes()).map_err(|_| {
-        Failure::new(
+        let error = Failure::new(
             "SP_TERMINAL_FAILED",
             "cannot allocate a terminal: the working directory contains NUL",
-        )
+        );
+        failed(master, error)
     })?;
 
     let winsize = libc::winsize {

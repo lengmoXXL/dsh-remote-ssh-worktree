@@ -163,3 +163,18 @@ async fn an_unknown_terminal_is_reported_rather_than_ignored() {
         "SP_NO_SUCH_TERMINAL"
     );
 }
+
+#[tokio::test]
+async fn refuses_a_program_or_argument_holding_a_nul() {
+    let fixture = TempDir::new("drw-term-nul");
+    let term = TerminalBackend::new();
+
+    // The wire carries any string a caller sends, NUL included, and a spawn that
+    // cannot build its C strings must fail rather than leave a pty allocated.
+    for _ in 0..16 {
+        let error = term
+            .spawn(spec(fixture.path(), &["/bin/sh", "a\0b"]))
+            .expect_err("a NUL in argv cannot start a program");
+        assert_eq!(error.code, "SP_TERMINAL_FAILED");
+    }
+}
