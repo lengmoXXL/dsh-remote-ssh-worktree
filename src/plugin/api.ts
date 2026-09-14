@@ -109,11 +109,16 @@ class ApiError extends Error {
   }
 }
 
-/** Whether an unknown value is a plain object with the named string field. */
+/** The named string field of an unknown value, or undefined. */
 function stringField(value: unknown, key: string): string | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const field = (value as Record<string, unknown>)[key]
   return typeof field === 'string' ? field : undefined
+}
+
+/** The failure for a method one of these routes does not answer. */
+function notAllowed(request: ApiRequest): ApiError {
+  return new ApiError(405, `${request.method} is not allowed on ${request.path}`)
 }
 
 /**
@@ -247,23 +252,14 @@ async function reportRepo(deps: ManagementApiDeps, record: RepoRecord): Promise<
   // undefined one, under `exactOptionalPropertyTypes`.
   const placed = root === undefined ? {} : { worktreeRoot: root }
   const node = deps.registry.get(record.nodeId)
-  if (node?.transport.kind === 'local') {
-    try {
-      return { repo: record, ...placed, git: await isRepository(record.repoPath) }
-    } catch (error) {
-      return {
-        repo: record,
-        ...placed,
-        git: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }
-  const channel = deps.connections.channel(record.nodeId)
-  if (channel === undefined) {
-    return { repo: record, ...placed, git: false, error: `node "${record.nodeId}" is not connected` }
-  }
   try {
+    if (node?.transport.kind === 'local') {
+      return { repo: record, ...placed, git: await isRepository(record.repoPath) }
+    }
+    const channel = deps.connections.channel(record.nodeId)
+    if (channel === undefined) {
+      return { repo: record, ...placed, git: false, error: `node "${record.nodeId}" is not connected` }
+    }
     await channel.request('git.repoState', { repoPath: record.repoPath })
     return { repo: record, ...placed, git: true }
   } catch (error) {
@@ -312,7 +308,6 @@ async function handleRepos(
   // A route segment is a string from an untrusted request; this is where it
   // becomes an id. Everything below passes the branded value.
   const repoId = rawRepoId === undefined ? undefined : asRepoId(rawRepoId)
-  const notAllowed = new ApiError(405, `${request.method} is not allowed on ${request.path}`)
 
   if (repoId === undefined) {
     if (request.method === 'GET') {
@@ -345,7 +340,7 @@ async function handleRepos(
       })
       return { status: existing === undefined ? 201 : 200, body: { repo: await reportRepo(deps, record) } }
     }
-    throw notAllowed
+    throw notAllowed(request)
   }
 
   const record = deps.repos.get(repoId)
@@ -356,7 +351,7 @@ async function handleRepos(
   // Opening the directory itself is what makes a machine's plain directory a
   // workspace before it is a repository; git is never consulted for it.
   if (action === 'open' || action === 'close') {
-    if (request.method !== 'POST') throw notAllowed
+    if (request.method !== 'POST') throw notAllowed(request)
     if (action === 'open') {
       return { status: 200, body: { anchor: await deps.worktrees.openDirectory(ref) } }
     }
@@ -374,7 +369,7 @@ async function handleRepos(
       const anchor = await deps.worktrees.adopt(ref, requireString(request.body, 'path'))
       return { status: 201, body: { worktree: anchor } }
     }
-    throw notAllowed
+    throw notAllowed(request)
   }
 
   if (action !== undefined) throw new ApiError(404, `unknown endpoint ${request.method} ${request.path}`)
@@ -396,7 +391,7 @@ async function handleRepos(
     await deps.worktrees.closeDirectory(ref)
     return { status: 200, body: { deleted: await deps.repos.remove(repoId) } }
   }
-  throw notAllowed
+  throw notAllowed(request)
 }
 
 /**
@@ -447,13 +442,13 @@ async function handleWorktrees(
       })
       return { status: 201, body: { worktree: anchor } }
     }
-    throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+    throw notAllowed(request)
   }
 
   // Opening, closing, and releasing are workspace and record bookkeeping, not
   // git: the checkout on the machine is untouched by all three.
   if (action === 'open' || action === 'close' || action === 'release') {
-    if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+    if (request.method !== 'POST') throw notAllowed(request)
     if (action === 'release') {
       return { status: 200, body: { worktree: await deps.worktrees.release(anchorId) } }
     }
@@ -520,7 +515,7 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
         })
         return { status: 201, body: { node: toNodeView(record) } }
       }
-      throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+      throw notAllowed(request)
     }
 
     const record = requireNode(deps.registry, nodeId)
@@ -560,11 +555,11 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
         })
         return { status: 200, body: { node: toNodeView(updated) } }
       }
-      throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+      throw notAllowed(request)
     }
 
     if (action === 'connect' || action === 'disconnect') {
-      if (request.method !== 'POST') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+      if (request.method !== 'POST') throw notAllowed(request)
       // Connecting this host, and disconnecting it, are both already true: it
       // answers without a connection, so neither needs to do anything.
       if (record.transport.kind !== 'local') {
@@ -575,7 +570,7 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
     }
 
     if (action === 'dirs') {
-      if (request.method !== 'GET') throw new ApiError(405, `${request.method} is not allowed on ${request.path}`)
+      if (request.method !== 'GET') throw notAllowed(request)
       // A request without a path starts at the machine user's home: the home the
       // handshake reported for a node, and this user's home for this host.
       const requested = (request.query.get('path') ?? '').trim()

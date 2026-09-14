@@ -127,8 +127,9 @@ interface WorktreeStatus {
   /** Whether the anchor holds a workspace registration right now. */
   readonly open: boolean
   /**
-   * Whether the plugin cut this checkout itself. A managed checkout is the
-   * plugin's to remove; one it adopted from the machine is only ever released.
+   * Whether the plugin cut this checkout itself. Both kinds are the operator's
+   * to remove, so this only picks the confirmation's wording: one this plugin
+   * cut with no work of anyone else's in it, or one it found on the machine.
    */
   readonly managed: boolean
   /** Why the host could not read the machine, when it could not. */
@@ -638,8 +639,6 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                     actions={[
                                       {
                                         id: 'newWorktree',
-                                        // The reason a control cannot act is read
-                                        // here now, beside the control itself.
                                         label: entry.git
                                           ? t('newWorktree')
                                           : <>{t('newWorktree')} <span className={css.dim}>{why}</span></>,
@@ -734,13 +733,14 @@ export function RemoteWorktreesSection(props: SectionProps) {
         </div>
       )}
 
-      <AddMachineDialog
-        open={dialog?.kind === 'machine'}
-        busy={busy}
-        onClose={() => setDialog(undefined)}
-        onSubmit={draft => submit(() => props.addNode(draft))}
-        t={t}
-      />
+      {dialog?.kind === 'machine' ? (
+        <AddMachineDialog
+          busy={busy}
+          onClose={() => setDialog(undefined)}
+          onSubmit={draft => submit(() => props.addNode(draft))}
+          t={t}
+        />
+      ) : null}
 
       {dialog?.kind === 'repo' ? (
         <AddRepoDialog

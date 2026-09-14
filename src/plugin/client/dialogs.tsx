@@ -1,5 +1,5 @@
 /**
- * The three editors the section opens, and the bits they share with it.
+ * The editors the section opens, and the bits they share with it.
  *
  * Each editor is a form over an injected callback: it collects input, reports
  * its own failure text, and never talks to the host itself. The form field, the
@@ -58,8 +58,7 @@ function DialogError({ message }: { message: string | undefined }) {
  * and never runs `ssh -L` by hand. The token is the shared secret the plugin
  * gives that agent.
  */
-export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
-  open: boolean
+export function AddMachineDialog({ busy, onClose, onSubmit, t }: {
   busy: boolean
   onClose: () => void
   onSubmit: (draft: {
@@ -75,16 +74,6 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
   const [token, setToken] = useState('')
   const [title, setTitle] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    if (!open) return
-    setTarget('')
-    setSshPort('')
-    setIdentityFile('')
-    setToken('')
-    setTitle('')
-    setError(undefined)
-  }, [open])
 
   const submit = async (): Promise<void> => {
     setError(undefined)
@@ -106,7 +95,7 @@ export function AddMachineDialog({ open, busy, onClose, onSubmit, t }: {
 
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       title={t('addMachine')}
       closeLabel={t('close')}

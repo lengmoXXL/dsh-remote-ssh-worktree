@@ -146,14 +146,6 @@ class CollectedMirror implements SubprocessOutputReader {
 }
 
 /**
- * Build the proxy handle for one remote spawn.
- * @param channel - the live node channel.
- * @param remoteCwd - the canonical remote working directory.
- * @param spec - the caller's fully specified spawn request.
- * @returns the handle, valid before the daemon has answered.
- * @throws when the caller asked for a disposition this design cannot carry.
- */
-/**
  * Absorb a teardown request whose failure cannot matter.
  *
  * Every call runs after the decision to release a process, against a transport
@@ -166,6 +158,14 @@ function settled(request: Promise<unknown>): Promise<void> {
   return request.then(() => {}, () => {})
 }
 
+/**
+ * Build the proxy handle for one remote spawn.
+ * @param channel - the live node channel.
+ * @param remoteCwd - the canonical remote working directory.
+ * @param spec - the caller's fully specified spawn request.
+ * @returns the handle, valid before the daemon has answered.
+ * @throws when the caller asked for a disposition this design cannot carry.
+ */
 function createRemoteHandle(
   channel: NodeChannel,
   remoteCwd: string,
@@ -359,7 +359,6 @@ function rewriteExecutable(argv: readonly string[], remoteRipgrep: string): read
   return [remoteRipgrep, ...argv.slice(1)]
 }
 
-
 /**
  * Allocate one remote terminal and proxy its live output.
  *
@@ -420,11 +419,10 @@ async function createRemoteTerminal(
       if (outcome !== null) {
         finish({ exitCode: outcome.exitCode, signal: outcome.signal as NodeJS.Signals | null })
       }
-    } catch (error) {
+    } catch {
       // A dropped transport ends the terminal: the handle settles rather than
       // hanging on output that can no longer arrive.
       finish({ exitCode: null, signal: null })
-      void error
     } finally {
       pumping = false
     }

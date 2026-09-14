@@ -77,7 +77,7 @@
 }
 /* The shared disclosure row is a 24px line built for dense list rows. A
    machine or repository header carries a status cluster, so it gets the height
-   and the horizontal room that cluster needs. */
+   that cluster needs. */
 /* Scoped under the card so these rules outrank the primitive's own module
    classes regardless of which stylesheet the document received last. */
 .card .row {
