@@ -59,7 +59,11 @@ test('a successful handshake publishes the channel and the daemon facts', async 
   const connections = createNodeConnections({ connect: () => Promise.resolve(node) })
 
   assert.deepEqual(await connections.connect(record), info)
-  assert.equal(connections.channel(asNodeId('n1')), node.channel)
+  // The published channel wraps the connection so a lost transport can be
+  // noticed, so it is no longer the node's own object; that it is there, and
+  // that calls reach the node through it, is what this case is about. The
+  // recovery cases cover the reaching.
+  assert.notEqual(connections.channel(asNodeId('n1')), undefined)
   assert.deepEqual(connections.status(asNodeId('n1')), { nodeId: asNodeId('n1'), state: 'ready', info })
 })
 
