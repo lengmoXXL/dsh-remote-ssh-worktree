@@ -12,7 +12,8 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { ConnectedNode } from '../../src/remote/client.ts'
+import type { ConnectedNode, NodeChannel } from '../../src/remote/client.ts'
+import { NodeRequestError } from '../../src/remote/client.ts'
 import type { NodeInfo } from '../../src/remote/protocol.ts'
 import { createNodeConnections } from '../../src/models/machines.ts'
 import type { ResolvedTransport } from '../../src/models/machines.ts'
@@ -51,11 +52,15 @@ function droppable(): Droppable {
   return { host: '127.0.0.1', port: 7801, exited, close: () => {}, drop }
 }
 
-/** A connected node whose close() does nothing the case observes. */
-function stubNode(): ConnectedNode {
+/**
+ * A connected node whose calls the case answers.
+ * @param request - what one call on it does.
+ * @returns the node.
+ */
+function stubNode(request: NodeChannel['request'] = () => Promise.reject(new Error('not used'))): ConnectedNode {
   return {
     info,
-    channel: { request: () => Promise.reject(new Error('not used')), onPipeFrame: () => () => {} },
+    channel: { request, onPipeFrame: () => () => {} },
     close: () => {},
   }
 }
@@ -149,4 +154,49 @@ test('disposing cancels a recovery that has not run yet', async () => {
   await new Promise(resolve => setTimeout(resolve, 80))
 
   assert.equal(opens, 1, 'nothing reconnects after the manager is disposed')
+})
+
+test('a call that fails on the wire is a drop, not a silent ready', async () => {
+  // A killed daemon behind a live forward is exactly this: nothing announces the
+  // loss, so the first call that fails on it is the announcement.
+  const opened: Droppable[] = []
+  let calls = 0
+  const connections = createNodeConnections({
+    openTransport: () => {
+      const transport = droppable()
+      opened.push(transport)
+      return Promise.resolve(transport)
+    },
+    connect: () => Promise.resolve(stubNode(() => {
+      calls += 1
+      return calls === 1
+        ? Promise.reject(new Error('socket hang up'))
+        : Promise.resolve({} as never)
+    })),
+    recoveryGapMs: 1,
+  })
+
+  await connections.connect(record)
+  await assert.rejects(() => connections.channel(asNodeId('n1'))!.request('fs.stat', { path: '/x' }))
+  assert.equal(connections.status(asNodeId('n1')).state, 'failed')
+  await until(() => opened.length === 2 && connections.status(asNodeId('n1')).state === 'ready')
+  assert.deepEqual(await connections.channel(asNodeId('n1'))!.request('fs.stat', { path: '/x' }), {})
+})
+
+test('a refusal the daemon answered is not a drop', async () => {
+  let opens = 0
+  const connections = createNodeConnections({
+    openTransport: () => { opens += 1; return Promise.resolve(droppable()) },
+    connect: () => Promise.resolve(stubNode(() => Promise.reject(new NodeRequestError({
+      code: 'FS_IO_ERROR',
+      message: 'no such file',
+    })))),
+    recoveryGapMs: 1,
+  })
+
+  await connections.connect(record)
+  await assert.rejects(() => connections.channel(asNodeId('n1'))!.request('fs.stat', { path: '/x' }))
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(connections.status(asNodeId('n1')).state, 'ready', 'a typed failure leaves the connection alone')
+  assert.equal(opens, 1)
 })

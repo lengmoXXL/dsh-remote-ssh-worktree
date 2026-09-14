@@ -15,6 +15,7 @@
 
 import type { NodeChannel } from '../remote/client.ts'
 import type { ConnectOptions, ConnectedNode } from '../remote/client.ts'
+import { NodeRequestError } from '../remote/client.ts'
 import { connectNode } from '../remote/client.ts'
 import type { NodeInfo } from '../remote/protocol.ts'
 import type { NodeRecord } from '../storage/nodes.ts'
@@ -254,6 +255,8 @@ interface Entry {
   progress: AgentProgress | undefined
   /** Identity of the recovery in flight for this entry, when one is. */
   recovery: symbol | undefined
+  /** The channel handed out for this connection, wrapped to notice its loss. */
+  published: NodeChannel | undefined
 }
 
 /**
@@ -295,6 +298,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
       localPort: undefined,
       progress: undefined,
       recovery: undefined,
+      published: undefined,
     }
     entries.set(nodeId, created)
     return created
@@ -302,6 +306,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
 
   /** Drop everything a connection holds, leaving the entry itself in place. */
   const clear = (entry: Entry): void => {
+    entry.published = undefined
     entry.live?.close()
     entry.live = undefined
     entry.pending = undefined
@@ -362,6 +367,36 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
     })()
   }
 
+  /**
+   * The channel one connection hands out.
+   *
+   * The transport can die without the SSH process that carries it noticing: a
+   * node whose daemon is killed leaves the forward open, so nothing arrives to
+   * say the connection is gone until a call fails on it. A refusal the daemon
+   * itself answered is a typed error and stays the caller's business; anything
+   * else on the wire is a lost connection, which is published and recovered
+   * from exactly like a forward that closed.
+   * @param entry - the entry this connection belongs to.
+   * @param record - the machine, for the retry.
+   * @param live - the connection being published.
+   * @returns the channel the routers call.
+   */
+  const publish = (entry: Entry, record: NodeRecord, live: ConnectedNode): NodeChannel => ({
+    async request(method, params) {
+      try {
+        return await live.channel.request(method, params)
+      } catch (error) {
+        // Its loss was published already: a stale channel is not a new drop.
+        if (entry.live === live && !(error instanceof NodeRequestError)) {
+          fail(entry, error instanceof Error ? error : new Error(String(error)))
+          recover(entry, record)
+        }
+        throw error
+      }
+    },
+    onPipeFrame: handler => live.channel.onPipeFrame(handler),
+  })
+
   /** Connect one node, or return the attempt already in flight. */
   const connectRecord = async (record: NodeRecord): Promise<NodeInfo> => {
     const entry = entryFor(record.nodeId)
@@ -386,6 +421,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
           timeoutMs: handshakeTimeoutMs,
         })
         entry.live = live
+        entry.published = publish(entry, record, live)
         entry.info = live.info
         entry.localPort = record.transport.kind === 'ssh' ? opened.port : undefined
         entry.pending = undefined
@@ -417,7 +453,7 @@ export function createNodeConnections(deps: NodeConnectionsDeps = {}): NodeConne
 
   return {
     channel(nodeId) {
-      return entries.get(nodeId)?.live?.channel
+      return entries.get(nodeId)?.published
     },
 
     status(nodeId) {
