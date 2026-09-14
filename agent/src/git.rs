@@ -24,6 +24,13 @@ const GIT_TIMEOUT: Duration = Duration::from_secs(120);
 /// Bound on captured git output; porcelain listings are far smaller.
 const GIT_MAX_BUFFER_BYTES: usize = 8 * 1024 * 1024;
 
+/// How long a killed command's output capture is given to reach EOF.
+///
+/// A grandchild that inherited the pipes can hold them open past the kill, so
+/// the capture is bounded: the request reports what it has rather than waiting
+/// for a process this command does not own.
+const GIT_CAPTURE_GRACE: Duration = Duration::from_secs(2);
+
 /// Longest slice of git's own output repeated in a failure message.
 const GIT_DETAIL_MAX_CHARS: usize = 2_000;
 
@@ -271,14 +278,30 @@ async fn run<S: AsRef<OsStr>>(repo: &Path, args: &[S]) -> GitOutcome {
     };
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
-    let stdout_task = tokio::spawn(read_bounded(stdout_pipe));
-    let stderr_task = tokio::spawn(read_bounded(stderr_pipe));
+    let mut stdout_task = tokio::spawn(read_bounded(stdout_pipe));
+    let mut stderr_task = tokio::spawn(read_bounded(stderr_pipe));
     let waited = tokio::time::timeout(GIT_TIMEOUT, child.wait()).await;
     if waited.is_err() {
         let _ = child.kill().await;
     }
-    let stdout = stdout_task.await.unwrap_or_default();
-    let stderr = stderr_task.await.unwrap_or_default();
+    // The kill ends the direct child, not the pipe: a grandchild that inherited
+    // stdout or stderr holds it open, and reading until EOF would then wait for a
+    // process this command does not own. The capture is bounded, and a capture
+    // that outlives the bound is abandoned rather than awaited.
+    let captured = tokio::time::timeout(GIT_CAPTURE_GRACE, async {
+        let out = (&mut stdout_task).await.unwrap_or_default();
+        let err = (&mut stderr_task).await.unwrap_or_default();
+        (out, err)
+    })
+    .await;
+    let (stdout, stderr) = match captured {
+        Ok(captured) => captured,
+        Err(_) => {
+            stdout_task.abort();
+            stderr_task.abort();
+            (Vec::new(), Vec::new())
+        }
+    };
     let text = |bytes: Vec<u8>| String::from_utf8_lossy(&bytes).into_owned();
     match waited {
         Ok(Ok(status)) => GitOutcome {
