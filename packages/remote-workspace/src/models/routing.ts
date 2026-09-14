@@ -34,6 +34,19 @@ export type Route =
   }
 
 /**
+ * What an ambiguous path is refused with. Shared because three seams refuse it
+ * — the filesystem's typed error, a process spawn, and a terminal allocation —
+ * and all three must name the same claiming nodes.
+ */
+export function ambiguousPathMessage(route: {
+  readonly remotePath: string
+  readonly nodeIds: readonly NodeId[]
+}): string {
+  return `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
+    + 'address it as node:<id>:<path>'
+}
+
+/**
  * The explicit `node:<nodeId>:<path>` spelling. `nodeId` never contains a
  * colon, so the first one separates the id from an absolute POSIX path.
  */

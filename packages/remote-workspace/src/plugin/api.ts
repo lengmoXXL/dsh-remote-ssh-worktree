@@ -21,6 +21,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+// Type-only: pulls the Web-server plugin's Context merge (ctx.get('webServer')),
+// which is how these routes register without injecting the service.
+import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { NodeConnections, NodeStatus } from '../models/machines.ts'
 import type { NodeId } from '../storage/nodes.ts'
 import type { NodeRecord, NodeRegistry, NodeTransport } from '../storage/nodes.ts'
@@ -578,20 +581,18 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
         const path = await resolveLocalPath(requested === '' ? localHome() : requested)
         return { status: 200, body: { path, entries: await listLocalDir(path) } }
       }
-      const channel = deps.connections.channel(nodeId)
-      if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
       // The daemon itself expands no `~`, so the spelling never travels: the
       // home it named is asked for verbatim.
-      const path = requested === ''
+      const path = await resolveOnNode(deps, record, requested === ''
         ? deps.connections.status(nodeId).info?.homedir ?? '/'
-        : requested
-      const resolved = await channel.request('fs.resolve', { path })
-      if (resolved.canonicalPath === undefined) throw new ApiError(502, 'the daemon returned no path')
-      const listing = await channel.request('fs.listDir', { path: resolved.canonicalPath })
+        : requested)
+      const channel = deps.connections.channel(nodeId)
+      if (channel === undefined) throw new ApiError(409, `node "${nodeId}" is not connected`)
+      const listing = await channel.request('fs.listDir', { path })
       return {
         status: 200,
         body: {
-          path: resolved.canonicalPath,
+          path,
           entries: listing.map(entry => ({
             name: entry.name,
             type: entry.type,

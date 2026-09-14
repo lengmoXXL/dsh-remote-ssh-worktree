@@ -43,7 +43,7 @@ import type {
 import type { ProcId, SpPipeFrame } from '../../remote/protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../../remote/client.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
-import { classifyPath } from '../../models/routing.ts'
+import { ambiguousPathMessage, classifyPath } from '../../models/routing.ts'
 
 /**
  * The members this provider implements, narrowed from the seam class so the
@@ -115,6 +115,24 @@ class CollectedMirror implements SubprocessOutputReader {
    */
   constructor(maxBytes: number) {
     this.maxBytes = maxBytes
+  }
+
+  /**
+   * Replace the mirror with the window's tail.
+   *
+   * An answer to an offset that has slid out of the daemon's window carries the
+   * retained tail rather than the bytes from that offset, so appending it would
+   * splice two ranges into one stream. The tail becomes the whole content, and
+   * the loss is reported.
+   * @param bytes - the tail the daemon retained.
+   * @param nextOffset - whole-stream offset one past `bytes`.
+   */
+  reset(bytes: Buffer, nextOffset: number): void {
+    this.chunks.length = 0
+    if (bytes.length > 0) this.chunks.push(bytes)
+    this.start = nextOffset - bytes.length
+    this.end = nextOffset
+    this.dropped = true
   }
 
   /** Append one fetched window and trim the head to the cap. */
@@ -253,8 +271,13 @@ function createRemoteHandle(
         stream,
         fromByte: mirror.nextOffset,
       })
-      if (read.data.length === 0) return
-      mirror.push(Buffer.from(read.data, 'base64'))
+      const bytes = Buffer.from(read.data, 'base64')
+      if (read.lossy) {
+        mirror.reset(bytes, read.nextOffset)
+      } else {
+        if (bytes.length === 0) return
+        mirror.push(bytes)
+      }
       if (read.nextOffset <= mirror.nextOffset) return
     }
   }
@@ -514,8 +537,7 @@ export function createRoutingSubprocessRuntime(
     if (route.kind === 'local') return undefined
     if (route.kind === 'ambiguous') {
       throw new Error(
-        `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
-        + 'address it as node:<id>:<path>',
+        ambiguousPathMessage(route),
       )
     }
     const channel = deps.channel(route.nodeId)

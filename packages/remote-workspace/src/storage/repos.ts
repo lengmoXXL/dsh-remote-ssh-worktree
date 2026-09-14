@@ -119,7 +119,6 @@ export interface RepoStore {
   removeByNode(nodeId: NodeId): Promise<number>
 }
 
-/** Build a repository store over one document. */
 export interface RepoStoreDeps {
   /** Absolute path of the JSON document. */
   readonly file: string

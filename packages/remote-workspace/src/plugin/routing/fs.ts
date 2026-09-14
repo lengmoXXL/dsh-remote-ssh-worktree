@@ -25,7 +25,7 @@ import { NodeRequestError } from '../../remote/client.ts'
 import { asNodeId } from '../../storage/nodes.ts'
 import type { NodeId } from '../../storage/nodes.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
-import { classifyPath, isWithin } from '../../models/routing.ts'
+import { ambiguousPathMessage, classifyPath, isWithin } from '../../models/routing.ts'
 
 /** Bytes per remote text pull. Bounds one round trip without capping file size. */
 const TEXT_CHUNK_BYTES = 1 << 20
@@ -132,11 +132,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
  * @returns the typed error to throw.
  */
 function ambiguousError(route: { readonly remotePath: string; readonly nodeIds: readonly NodeId[] }): FsError {
-  return new FsError(
-    `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
-    + 'address it as node:<id>:<path>',
-    'FS_IO_ERROR',
-  )
+  return new FsError(ambiguousPathMessage(route), 'FS_IO_ERROR')
 }
 
 /**

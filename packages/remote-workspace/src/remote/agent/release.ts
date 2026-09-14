@@ -106,21 +106,12 @@ function archiveName(assetName: string): string {
   return `${assetName}.tar.gz`
 }
 
-/**
- * The address one platform's archive is downloaded from.
- * @param version - the agent build.
- * @param assetName - the release asset, from {@link agentAssetName}.
- * @returns the direct download URL.
- */
+/** The direct download address of one platform's archive. */
 export function agentArchiveUrl(version: string, assetName: string): string {
   return `${DOWNLOAD_ROOT}/v${version}/${archiveName(assetName)}`
 }
 
-/**
- * The address one version's sums file is downloaded from.
- * @param version - the agent build.
- * @returns the direct download URL.
- */
+/** The direct download address of one version's sums file. */
 export function agentSumsUrl(version: string): string {
   return `${DOWNLOAD_ROOT}/v${version}/${SUMS_FILE}`
 }

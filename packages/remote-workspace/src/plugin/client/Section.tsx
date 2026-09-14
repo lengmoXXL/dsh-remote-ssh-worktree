@@ -13,7 +13,7 @@
  * @module dsh-remote-workspace/plugin/client/Section
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Button,
   DisclosureRow,
@@ -42,8 +42,6 @@ type NodeTransport =
   | {
     readonly kind: 'ssh'
     readonly target: string
-    readonly sshPort?: number
-    readonly identityFile?: string
   }
   | {
     /** This host, which needs no daemon and no connection. */
@@ -77,6 +75,8 @@ interface NodeStatus {
   readonly localPort?: number
   /** The step in flight, while the attempt is still running. */
   readonly progress?: AgentProgress
+  /** Why the machine is not reachable, when the host reported a reason. */
+  readonly error?: string
 }
 
 /**
@@ -221,6 +221,8 @@ interface Confirmation {
   readonly bodyKey: RemoteWorktreesKey
   /** Label of an opt-in the dialog offers, when the action has one. */
   readonly optionKey?: RemoteWorktreesKey
+  /** What the confirming button does; defaults to removing. */
+  readonly confirmKey?: RemoteWorktreesKey
   readonly run: (option: boolean) => Promise<void>
 }
 
@@ -409,12 +411,18 @@ export function RemoteWorktreesSection(props: SectionProps) {
   const [openMachines, setOpenMachines] = useState<readonly string[]>([])
   const [openRepos, setOpenRepos] = useState<readonly string[]>([])
 
+  // Reads are in flight together while a mutation polls, and a remote read can
+  // answer after a newer one: only the newest answer may be published.
+  const generation = useRef(0)
   const refresh = useCallback(async () => {
+    const mine = (generation.current += 1)
     try {
-      setSnapshot(await props.load())
+      const next = await props.load()
+      if (mine !== generation.current) return
+      setSnapshot(next)
       setError(undefined)
     } catch (failure) {
-      setError(reasonOf(failure))
+      if (mine === generation.current) setError(reasonOf(failure))
     }
   }, [props])
 
@@ -528,9 +536,9 @@ export function RemoteWorktreesSection(props: SectionProps) {
             const here = node.transport.kind === 'local'
             // What the row says in words, when it says anything: the step in
             // flight, or the state of a machine that is not simply connected.
-            const note = step === undefined
+            const note = status?.error ?? (step === undefined
               ? badge.dot === 'done' ? undefined : t(badge.key)
-              : t(step.key, step.params)
+              : t(step.key, step.params))
             return (
               <div key={node.nodeId} className={css.card}>
                 <DisclosureRow
@@ -715,6 +723,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
                                         onRelease={() => confirm({
                                           titleKey: 'releaseWorktreeTitle',
                                           bodyKey: 'releaseWorktreeBody',
+                                          confirmKey: 'releaseWorktree',
                                           run: () => props.releaseWorktree(item.anchor.anchorId),
                                         })}
                                       />
@@ -795,7 +804,7 @@ export function RemoteWorktreesSection(props: SectionProps) {
                   void mutate(() => pending.run(option))
                 }}
               >
-                {t('remove')}
+                {t(confirmation.confirmKey ?? 'remove')}
               </Button>
             </>
           )}

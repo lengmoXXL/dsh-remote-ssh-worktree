@@ -17,10 +17,9 @@ import type { TtyHandle, TtyRuntime, TtySpawnRequest } from 'dsh-tty'
 import { createRemoteTty } from 'dsh-tty-remote'
 import type { TtyWire } from 'dsh-tty-remote'
 import type { ChannelLookup, NodeChannel } from '../../remote/client.ts'
-import type { TermId } from '../../remote/protocol.ts'
 import { asTermId } from '../../remote/protocol.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
-import { classifyPath } from '../../models/routing.ts'
+import { ambiguousPathMessage, classifyPath } from '../../models/routing.ts'
 
 /**
  * The members this provider implements, narrowed from the seam class so the
@@ -50,21 +49,18 @@ export interface RoutingTtyDeps {
 function terminalWire(channel: NodeChannel): TtyWire {
   return {
     spawn: request => channel.request('term.spawn', request),
-    read: (termId, fromByte) => channel.request('term.read', { termId: brand(termId), fromByte }),
+    read: (termId, fromByte) => channel.request('term.read', { termId: asTermId(termId), fromByte }),
     // The daemon answers these with an empty object; the port promises nothing
     // back, so the answer is awaited and dropped.
-    write: async (termId, data) => { await channel.request('term.write', { termId: brand(termId), data }) },
-    resize: async (termId, cols, rows) => {
-      await channel.request('term.resize', { termId: brand(termId), cols, rows })
+    write: async (termId, data) => {
+      await channel.request('term.write', { termId: asTermId(termId), data })
     },
-    terminate: async (termId) => { await channel.request('term.terminate', { termId: brand(termId) }) },
-    outcome: termId => channel.request('term.outcome', { termId: brand(termId) }),
+    resize: async (termId, cols, rows) => {
+      await channel.request('term.resize', { termId: asTermId(termId), cols, rows })
+    },
+    terminate: async (termId) => { await channel.request('term.terminate', { termId: asTermId(termId) }) },
+    outcome: termId => channel.request('term.outcome', { termId: asTermId(termId) }),
   }
-}
-
-/** Brand one session id as the wire's own. */
-function brand(termId: string): TermId {
-  return asTermId(termId)
 }
 
 /**
@@ -79,8 +75,7 @@ export function createRoutingTty(deps: RoutingTtyDeps): TtyRuntimeContract {
       if (route.kind === 'local') return await deps.localTty.spawn(request)
       if (route.kind === 'ambiguous') {
         throw new Error(
-          `"${route.remotePath}" belongs to more than one node (${route.nodeIds.join(', ')}); `
-          + 'address it as node:<id>:<path>',
+          ambiguousPathMessage(route),
         )
       }
       const channel = deps.channel(route.nodeId)

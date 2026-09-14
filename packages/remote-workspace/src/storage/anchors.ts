@@ -68,7 +68,6 @@ export function asAnchorId(value: string): AnchorId {
 }
 
 /** What one anchor maps. */
-export type AnchorKind = 'worktree' | 'directory'
 
 /** Owner-only permissions: the file is bookkeeping, not a secret. */
 const FILE_MODE = 0o600

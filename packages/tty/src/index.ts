@@ -23,9 +23,6 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Readable } from 'node:stream'
 
-/** Signals a terminal's foreground process group may be sent. */
-export type TtySignal = 'SIGINT' | 'SIGTERM' | 'SIGKILL' | 'SIGTSTP' | 'SIGHUP'
-
 /** How one terminal's top-level process ended. */
 export interface TtyOutcome {
   /** Exit code, or null when a signal ended it. */

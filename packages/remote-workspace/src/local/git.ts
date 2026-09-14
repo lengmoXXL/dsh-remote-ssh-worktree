@@ -23,10 +23,10 @@ const run = promisify(execFile)
 const MAX_BUFFER = 8 << 20
 
 /** Why a git command failed. */
-export type LocalGitCode = 'GIT_NOT_A_REPOSITORY' | 'GIT_COMMAND_FAILED'
+type LocalGitCode = 'GIT_NOT_A_REPOSITORY' | 'GIT_COMMAND_FAILED'
 
 /** A git failure, carrying the same discriminant the daemon's errors carry. */
-export class LocalGitError extends Error {
+class LocalGitError extends Error {
   /** Which kind of failure this is. */
   readonly code: LocalGitCode
 
@@ -92,16 +92,6 @@ export async function isRepository(repoPath: string): Promise<boolean> {
     if (error instanceof LocalGitError && error.code === 'GIT_NOT_A_REPOSITORY') return false
     throw error
   }
-}
-
-/**
- * The repository root that owns a directory.
- * @param repoPath - any directory inside the checkout.
- * @returns the canonical worktree root git reports.
- * @throws LocalGitError when the directory is not in a work tree.
- */
-export async function repositoryRoot(repoPath: string): Promise<string> {
-  return (await git(repoPath, ['rev-parse', '--show-toplevel'])).trim()
 }
 
 /**

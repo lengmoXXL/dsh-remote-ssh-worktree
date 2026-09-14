@@ -101,7 +101,7 @@ export interface EnsureAgentOptions {
  * enough for a slow link, short enough that a binary that cannot exec is
  * reported rather than waited on.
  */
-export const DEFAULT_AGENT_START_TIMEOUT_MS = 10_000
+const DEFAULT_AGENT_START_TIMEOUT_MS = 10_000
 
 /** Default gap between state-file polls. */
 const START_POLL_MS = 120

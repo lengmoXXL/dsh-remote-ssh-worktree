@@ -428,7 +428,6 @@ export function NewWorktreeDialog({ repo, root, busy, onClose, onSubmit, t }: {
         <Field label={t('fieldWorktreePath')} hint={t('hintWorktreePath')}>
           <Input
             value={value}
-            placeholder={fallback}
             onChange={(event) => {
               if (event.target.value === '') {
                 setTouched(false)

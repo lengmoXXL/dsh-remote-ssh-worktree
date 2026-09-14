@@ -322,7 +322,7 @@ export interface SpPipeFrame {
   readonly data: string
 }
 
-/** What the daemon can do; the plugin gates optional behavior on this. */
+/** What the daemon reports it can do. */
 export interface NodeCapability {
   /** Whether `spawnTerminal` is served by this build. */
   readonly pty: boolean
