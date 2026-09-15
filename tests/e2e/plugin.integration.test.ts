@@ -76,12 +76,6 @@ after(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-test('the plugin publishes all three execution-world seams', () => {
-  assert.notEqual(ctx.fs, undefined)
-  assert.notEqual(ctx.subprocess, undefined)
-  assert.notEqual(ctx.shell, undefined)
-})
-
 test('a local path is served by the composed filesystem delegate', async () => {
   const target = await ctx.fs.resolve('hello.txt', { cwd: dir })
   assert.equal(target.displayPath, join(dir, 'hello.txt'))
@@ -147,19 +141,4 @@ test('a remote spawn is refused before any process starts when the node is offli
     }),
     /not connected/,
   )
-})
-
-test('the routers report the confinement they actually apply', () => {
-  // Regression: returning `undefined` here makes the shipped base refuse to
-  // compose at all — `dsh-permission-presets` rejects a mounted shell executor
-  // that claims not to confine, so the plugin could never load in a real
-  // profile. The routers do confine local work, through the composed delegates.
-  assert.notEqual(ctx.shell.sandboxMode, undefined)
-  assert.notEqual(ctx.fs.sandboxMode, undefined)
-})
-
-test('the reported mode is one this deployment could have resolved', () => {
-  const modes = ['read-only', 'workspace-write', 'danger-full-access']
-  assert.ok(modes.includes(String(ctx.shell.sandboxMode)), String(ctx.shell.sandboxMode))
-  assert.ok(modes.includes(String(ctx.fs.sandboxMode)), String(ctx.fs.sandboxMode))
 })

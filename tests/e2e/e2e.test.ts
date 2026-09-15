@@ -77,13 +77,11 @@ after(async () => {
   await rm(anchorRoot, { recursive: true, force: true })
 })
 
-test('the handshake reports the protocol revision and capabilities', () => {
-  assert.equal(node.info.protocol, 1)
+test('the daemon the harness started is the build the plugin installs', () => {
+  // The wire shape belongs to `protocol.test.ts`; what only this suite can say
+  // is that the binary the harness started reports the build the plugin would
+  // install on a machine.
   assert.equal(node.info.agentVersion, AGENT_VERSION)
-  assert.equal(typeof node.info.platform, 'string')
-  // The handshake reports which capabilities exist; the terminal tests pin
-  // the terminal one, so this only asserts that the daemon answered the field.
-  assert.equal(typeof node.info.capability.pty, 'boolean')
 })
 
 test('an anchor path routes to the node and maps onto the remote root', async () => {

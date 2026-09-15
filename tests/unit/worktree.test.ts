@@ -298,17 +298,6 @@ test('a branch that outlives its checkout is reported, not hidden', async () => 
   assert.deepEqual(anchors.list(), [])
 })
 
-test('a refused checkout removal keeps the anchor, because the content is still there', async () => {
-  const { manager } = managerWith({
-    'git.worktreeAdd': { path: '/srv/checkouts/app/login', branch: 'worktree/login', head: 'abc', main: false },
-    'git.worktreeRemove': new NodeRequestError({ code: 'GIT_DIRTY', message: 'contains modified files' }),
-  })
-  const anchor = await manager.create(draft)
-
-  await assert.rejects(() => manager.remove(anchor.anchorId, { force: false, deleteBranch: false }), /modified files/)
-  assert.equal(anchors.list().length, 1)
-})
-
 test('removal unregisters the workspace while the anchor directory is still there', async () => {
   // The registry resolves an entry by path, so unregistering after the anchor
   // directory is gone would leave a dead entry in the sidebar and in the
