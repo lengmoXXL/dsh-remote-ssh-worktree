@@ -29,6 +29,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import * as sandbox from '@deepseek-ai/dsh-sandbox'
+import * as fsSandbox from '@deepseek-ai/dsh-fs-sandbox'
 import * as plugin from '../../src/index.ts'
 
 /** One request the plugin's route handler answers. */
@@ -98,9 +99,10 @@ function webServerProvider(routes: CapturedRoute[]): object {
 
 /**
  * Boot the plugin from a test-only `cordis.yml` through the real Loader.
+ * @param extraRows - patch rows to compose ahead of the plugin row.
  * @returns the live composition and a driver for its management route.
  */
-async function compose(): Promise<Composition> {
+async function compose(extraRows: readonly string[] = []): Promise<Composition> {
   root = await mkdtemp(join(tmpdir(), 'drw-composition-'))
   const dataDir = join(root, 'remote-worktrees')
   const routes: CapturedRoute[] = []
@@ -116,6 +118,7 @@ async function compose(): Promise<Composition> {
     '  name: "@deepseek-ai/dsh-sandbox"',
     '- id: web-server',
     '  name: test-web-server',
+    ...extraRows,
     '- id: dsh-remote-workspace',
     '  name: dsh-remote-workspace',
     '  config:',
@@ -131,6 +134,7 @@ async function compose(): Promise<Composition> {
   const modules = new Map<string, unknown>([
     ['test-sandbox-policy', policyProvider('workspace-write')],
     ['@deepseek-ai/dsh-sandbox', sandbox],
+    ['@deepseek-ai/dsh-fs-sandbox', fsSandbox],
     ['test-web-server', webServerProvider(routes)],
     ['dsh-remote-workspace', plugin],
   ])
@@ -244,4 +248,32 @@ test('a machine added through the management route lands in the configured data 
   )
   // The secret never leaves the host, whatever surface asked.
   assert.equal(listed.payload.includes('secret-token'), false)
+})
+
+test('a deployment that left a stock seam row on is told which patch to write', async () => {
+  // The seams are host-plane services, and the profile frees them before this
+  // plugin publishes. Skipping that edit does not fail the boot — the registry
+  // keeps an `inject` callback's rejection, and `dsh web` prints no logger
+  // record — so stderr is what tells an operator what to do, and it has to name
+  // the edit.
+  const written: string[] = []
+  const stderr = process.stderr.write
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    written.push(String(chunk))
+    return true
+  }) as typeof process.stderr.write
+  try {
+    const { ctx } = await compose([
+      '- id: fs-sandbox',
+      '  name: "@deepseek-ai/dsh-fs-sandbox"',
+    ])
+    assert.match(written.join(''), /Disable subprocess, fs-sandbox, bash-sandbox, pwsh-sandbox/)
+    assert.match(written.join(''), /cordis\.patch\.yml/)
+    // The stock provider kept the seam, so the router is inert rather than half
+    // published: the fact the message exists to explain.
+    const fs = ctx.get('fs') as { constructor?: { name?: string } } | undefined
+    assert.equal(fs?.constructor?.name, 'SandboxedFileSystem')
+  } finally {
+    process.stderr.write = stderr
+  }
 })

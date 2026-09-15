@@ -18,6 +18,21 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/remote-workspace" "$PWD/packages/terminal"
 ```
 
+`remote-workspace` routes services the base profile provides, and the host plane holds one implementation per service,
+so its own patch layer cannot free them: add these four lines to `$DSH_HOME/profiles/web/cordis.patch.yml` before
+starting the profile. Without them the plugin loads and reports that its routers are inert.
+
+```yaml
+- id: subprocess
+  disabled: true
+- id: fs-sandbox
+  disabled: true
+- id: bash-sandbox
+  disabled: true
+- id: pwsh-sandbox
+  disabled: true
+```
+
 Restart the server to load them.
 
 MIT

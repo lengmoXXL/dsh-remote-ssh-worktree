@@ -25,6 +25,20 @@ cd dsh-remote-workspace && npm install && npm run build
 dsh plugin --profile web add "$PWD/packages/remote-workspace"
 ```
 
+本插件要接管 base profile 提供的服务，而 host plane 每项服务只允许一个实现，因此它自己的 patch 层不能停用这些行：
+把这四行也加进 `$DSH_HOME/profiles/web/cordis.patch.yml`。缺了它们插件仍会加载，并在 stderr 上说明路由未生效。
+
+```yaml
+- id: subprocess
+  disabled: true
+- id: fs-sandbox
+  disabled: true
+- id: bash-sandbox
+  disabled: true
+- id: pwsh-sandbox
+  disabled: true
+```
+
 再用 `dsh --profile web` 启动。
 
 ## 能做什么

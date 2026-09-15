@@ -21,12 +21,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
 import { SandboxBashExecutor } from '@deepseek-ai/dsh-bash-sandbox'
-import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
-import type { ShellExecutor } from '@deepseek-ai/dsh-shell'
-import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
-import type { TtyRuntime } from 'dsh-tty'
 import { LocalTtyRuntime } from 'dsh-tty-local'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import z from '@deepseek-ai/schemastery'
@@ -56,6 +52,45 @@ export const name = 'dsh-remote-workspace'
  * `ctx.fs` behind that dependency rather than racing it.
  */
 export const inject = ['sandboxPolicy']
+
+/**
+ * The stock rows providing the seams this plugin routes. The host plane holds
+ * one implementation per service, so a deployment disables these in its own
+ * patch layer before this plugin can publish; see the README's install section.
+ */
+const STOCK_ROWS = ['subprocess', 'fs-sandbox', 'bash-sandbox', 'pwsh-sandbox']
+
+/**
+ * Publish one routing seam, naming the profile edit when a stock row got there
+ * first.
+ *
+ * `ctx.provide` refuses a service that already has a provider: the failure a
+ * deployment sees when it added this plugin without disabling the stock rows.
+ * That refusal names the row, not the fix, so this reports the fix.
+ *
+ * The value is cast because each seam type extends `Service`, whose protected
+ * members make it nominal: a plain object cannot be assigned structurally.
+ * Every router is checked against its seam's contract factory instead.
+ * @param ctx - the host context.
+ * @param service - the service being published.
+ * @param value - the routing implementation.
+ * @returns the disposer `ctx.provide` returned.
+ */
+function publishSeam(ctx: Context, service: 'fs' | 'subprocess' | 'shell' | 'tty', value: unknown): unknown {
+  try {
+    return ctx.provide(service as never, value as never)
+  } catch (cause) {
+    const hint = `${name}: ctx.${service} already has a provider, so this router is inert. Disable `
+      + `${STOCK_ROWS.join(', ')} in the profile's cordis.patch.yml — see the README's install section.`
+    // This runs inside an `inject` callback, whose rejection the registry keeps
+    // rather than surfaces, and `dsh web` prints no logger record: without the
+    // write, a deployment that skipped the profile edit boots looking healthy
+    // while the stock provider keeps serving every remote path.
+    ctx.logger.error(hint)
+    process.stderr.write(`${hint}\n`)
+    throw new Error(hint, { cause })
+  }
+}
 
 /** Deployment-varying choices for this plugin. */
 export interface Config {
@@ -205,7 +240,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       channel: nodeId => connections.channel(nodeId),
       ...config.remoteRipgrep === undefined ? {} : { remoteRipgrep: config.remoteRipgrep },
     })
-    return ctx.provide('subprocess', router as unknown as SubprocessRuntime)
+    return publishSeam(ctx, 'subprocess', router)
   })
 
   const fsScope = ctx.isolate('fs')
@@ -216,12 +251,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       anchors: () => anchorStore.routes(),
       channel: nodeId => connections.channel(nodeId),
     })
-    // The cast is the entire cost of not inheriting: `FileSystem` extends
-    // `Service`, whose `protected` members make the type nominal, so a plain
-    // object cannot be assigned structurally. The object above is checked
-    // against `FileSystemContract` first, and consumers only ever call the
-    // public seam methods.
-    return ctx.provide('fs', router as unknown as FileSystem)
+    return publishSeam(ctx, 'fs', router)
   })
 
   // Two independent shell scopes: a local command keeps the host sandbox wrap,
@@ -240,7 +270,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         remoteShell: remoteScoped.shell,
         anchors: () => anchorStore.routes(),
       })
-      return ctx.provide('shell', router as unknown as ShellExecutor)
+      return publishSeam(ctx, 'shell', router)
     })
   })
 
@@ -257,7 +287,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       anchors: () => anchorStore.routes(),
       channel: nodeId => connections.channel(nodeId),
     })
-    return ctx.provide('tty', router as unknown as TtyRuntime)
+    return publishSeam(ctx, 'tty', router)
   })
 }
 

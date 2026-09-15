@@ -1,29 +1,11 @@
-# dsh-remote-workspace bundle patch.
+# dsh-remote-workspace bundle patch: one insert, nothing else.
 #
-# Two changes over the profile root:
-#
-# 1. Disable the factory rows whose seams this plugin provides as routing
-#    versions. A disabled row keeps its id addressable by later layers, so a
-#    user overlay can still re-point one of them.
-# 2. Insert the plugin row that provides ctx.fs / ctx.subprocess / ctx.shell /
-#    ctx.tty.
-
-- id: subprocess
-  disabled: true
-
-- id: fs-sandbox
-  disabled: true
-
-- id: bash-sandbox
-  disabled: true
-
-- id: pwsh-sandbox
-  disabled: true
-
-# The local terminal provider, which this plugin composes inside the router
-# instead of mounting beside it.
-- id: tty-local
-  disabled: true
+# This plugin routes ctx.fs / ctx.subprocess / ctx.shell / ctx.tty, and the host
+# plane holds one implementation per service, so the stock providers must be
+# disabled before this row activates. That is the deployment's call, made in the
+# profile's own patch layer: a submitted bundle must not take over components it
+# does not own (DSH-Store rule 7 — the entry ids already belong to other
+# submissions). The README lists the four lines the profile layer needs.
 
 - insert:
     - id: dsh-remote-workspace
