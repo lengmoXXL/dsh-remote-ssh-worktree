@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 | --- | --- |
 | [`remote-workspace`](packages/remote-workspace) | A **Remote workspaces** settings section: add machines over SSH, register their repositories, create or adopt worktrees, and run the harness's tools inside them. |
 | [`terminal`](packages/terminal) | A terminal tab in the right Sidebar, opened in the Session's workspace — on this host or on a node. |
-| [`tty`](packages/tty) · [`tty-local`](packages/tty-local) · [`tty-remote`](packages/tty-remote) | The terminal seam and its two providers. Only a deployment that mounts providers itself needs these. |
+| [`tty`](packages/tty) · [`tty-local`](packages/tty-local) | The terminal seam and its local provider. `remote-workspace` carries the remote one. |
 
 ## Install
 

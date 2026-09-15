@@ -11,8 +11,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { TtyHandle } from 'dsh-tty'
-import { createRemoteTty } from '../../src/index.ts'
-import type { TtyWire, TtyWireOutcome, TtyWireSpawnRequest, TtyWireRead } from '../../src/index.ts'
+import { createRemoteTty } from '../../src/remote/tty.ts'
+import type { TtyWire, TtyWireOutcome, TtyWireSpawnRequest, TtyWireRead } from '../../src/remote/tty.ts'
 
 /** One call the provider made, as the scripted wire recorded it. */
 type Call =

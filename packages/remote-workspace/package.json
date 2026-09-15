@@ -107,18 +107,16 @@
     "react-dom": "^18.3.1",
     "tsdown": "^0.23.0",
     "typescript": "^5.6.3",
-    "dsh-tty": "0.0.1",
-    "dsh-tty-local": "0.0.1",
-    "dsh-tty-remote": "0.0.1"
+    "dsh-tty": "^0.1.0",
+    "dsh-tty-local": "^0.1.0"
   },
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
     "@deepseek-ai/schemastery": "^3.18.2",
     "vscode-jsonrpc": "^8.2.0",
-    "dsh-tty": "0.0.1",
-    "dsh-tty-local": "0.0.1",
-    "dsh-tty-remote": "0.0.1"
+    "dsh-tty": "^0.1.0",
+    "dsh-tty-local": "^0.1.0"
   },
   "engines": {
     "node": "^22.19 || >=24"

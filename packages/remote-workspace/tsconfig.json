@@ -15,9 +15,6 @@
       ],
       "dsh-tty-local": [
         "../tty-local/src/index.ts"
-      ],
-      "dsh-tty-remote": [
-        "../tty-remote/src/index.ts"
       ]
     }
   },

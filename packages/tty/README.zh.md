@@ -8,8 +8,7 @@
 | provider | 负责 |
 | --- | --- |
 | [tty-local](../tty-local) | 本机的终端 |
-| [tty-remote](../tty-remote) | 节点上的终端 |
-| [remote-workspace](../remote-workspace) | 把每个工作区路由到拥有它的机器 |
+| [remote-workspace](../remote-workspace) | 把每个工作区（含终端）路由到拥有它的机器 |
 
 终端可以写入、在 shell 继续运行的同时改变尺寸、以及释放。
 

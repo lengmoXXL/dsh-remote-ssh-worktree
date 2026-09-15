@@ -13,7 +13,7 @@
  * that adapter passes are checked against each other in one place, so a wire
  * that drifts fails to compile rather than failing at a terminal.
  *
- * @module dsh-tty-remote
+ * @module dsh-remote-workspace/remote/tty
  */
 
 import { StringDecoder } from 'node:string_decoder'

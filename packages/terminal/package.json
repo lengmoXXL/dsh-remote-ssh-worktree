@@ -63,7 +63,7 @@
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-host-webserver": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
-    "dsh-tty": "0.0.1"
+    "dsh-tty": "^0.1.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
@@ -84,7 +84,7 @@
     "react": "^18.3.1",
     "tsdown": "^0.23.0",
     "typescript": "^5.6.3",
-    "dsh-tty": "0.0.1"
+    "dsh-tty": "^0.1.0"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.2",

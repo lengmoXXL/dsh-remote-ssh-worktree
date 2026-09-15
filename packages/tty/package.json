@@ -1,7 +1,6 @@
 {
   "name": "dsh-tty",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.1.0",
   "description": "Terminal seam for DeepSeek Harness: allocate a PTY on whichever machine owns a workspace, and resize it while the shell inside keeps running.",
   "type": "module",
   "main": "lib/index.js",
@@ -45,5 +44,6 @@
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsdown"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "private": true
 }

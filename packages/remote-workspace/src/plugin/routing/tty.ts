@@ -14,8 +14,8 @@
  */
 
 import type { TtyHandle, TtyRuntime, TtySpawnRequest } from 'dsh-tty'
-import { createRemoteTty } from 'dsh-tty-remote'
-import type { TtyWire } from 'dsh-tty-remote'
+import { createRemoteTty } from '../../remote/tty.ts'
+import type { TtyWire } from '../../remote/tty.ts'
 import type { ChannelLookup, NodeChannel } from '../../remote/client.ts'
 import { asTermId } from '../../remote/protocol.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'

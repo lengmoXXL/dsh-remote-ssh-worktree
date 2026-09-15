@@ -8,8 +8,7 @@ English | [中文](README.zh.md)
 | Provider | Serves |
 | --- | --- |
 | [tty-local](../tty-local) | terminals on this host |
-| [tty-remote](../tty-remote) | terminals on a node |
-| [remote-workspace](../remote-workspace) | routes each workspace to the machine that owns it |
+| [remote-workspace](../remote-workspace) | routes each workspace to the machine that owns it, terminals included |
 
 A terminal can be written to, resized while the shell keeps running, and released.
 
