@@ -1,17 +1,8 @@
 # dsh-remote-workspace
 
-Run the harness's tools on another machine: its repositories and worktrees, and a terminal you both use. The model
-sees ordinary local paths — the plugin routes each one to the machine that owns it.
-
-**The three things this gives you**
-
-- **Work where the code is.** Any directory on a machine — a repository, a worktree cut from it, or a plain folder —
-  becomes a workspace, and read/write/edit/bash/grep all run there, not on this host.
-- **One terminal, two users.** The right Sidebar's terminal belongs to the Session, and the agent can drive the same
-  one: list the open terminals, read their output, type text and keys (including `ctrl+c`), and wait for something to
-  appear. You watch every keystroke as it happens.
-- **One command, nothing on the machines.** Install the plugin and point it at a host over SSH; the agent it needs is
-  fetched from Releases, verified, and reached over `ssh -L` — so a connection is as trusted as your own SSH access.
+A DSH plugin for working on another machine. It manages that machine's repositories and worktrees, routes the
+harness's file, shell, and terminal tools to the directory you opened, and adds terminal tabs to the right Sidebar.
+The model sees ordinary local paths.
 
 English | [中文](README.zh.md)
 
@@ -24,7 +15,7 @@ English | [中文](README.zh.md)
 ## Requirements
 
 - Node 22.19+ or 24+, with `ssh` configured as usual.
-- DSH `0.1.5-rc.2` — verified in a disposable profile; other releases are untested.
+- DSH `0.1.5-rc.2`. Other releases are untested.
 
 ## Install
 
@@ -32,9 +23,9 @@ English | [中文](README.zh.md)
 dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.2/dsh-remote-workspace-0.1.2.tgz
 ```
 
-Then add these four lines to `$DSH_HOME/profiles/web/cordis.patch.yml` — **the install is not complete without them**:
-the plugin routes services the base profile provides, and the host plane holds one implementation per service, so the
-deployment has to free them. Skip this and the plugin still loads, but says on stderr that its routers are inert.
+The plugin takes over services the base profile provides, and the host plane holds one implementation per service. Add
+these four lines to `$DSH_HOME/profiles/web/cordis.patch.yml`. Without them the plugin still loads, does not route, and
+says so on stderr.
 
 ```yaml
 - id: subprocess
@@ -47,32 +38,31 @@ deployment has to free them. Skip this and the plugin still loads, but says on s
   disabled: true
 ```
 
-Start the profile with `dsh --profile web`. The tarball carries the built `lib/`, so nothing is compiled here; while
-developing the plugin, `git clone`, `npm install && npm run build`, and `dsh plugin --profile web add "$PWD"` instead.
+Then start the profile with `dsh --profile web`. The tarball contains the built `lib/`, so nothing is compiled on this
+machine. To work on the plugin itself, clone the repository, run `npm install && npm run build`, and add the checkout
+path instead.
 
-## What you can do
+## What it does
 
-- Add a machine over SSH — `user@host` or a `~/.ssh/config` alias — or use the built-in `Local` machine for this host.
-- Register any directory as a repository; git is not required. Cut a worktree from it, adopt one that already exists,
-  or open the directory itself. Remove what you no longer need, with or without its branch.
-- Work in a routed workspace from a Session: its tools, its terminal, and its files all live on the machine that owns
-  it, while the paths you and the model see stay ordinary local paths.
-- Ask the agent to work in a terminal: it lists the Session's open terminals (each tab has its own id), reads their
-  output, types text and keys, and waits for output — the same shell you are watching, so you see it happen and it sees
-  what you type.
-- Keep the terminal as your own: it is not confined by the Session's sandbox mode, and the agent never creates or kills
-  one.
+- Adds machines over SSH, and a built-in `Local` machine for this host. The agent is downloaded from this repository's
+  Releases, checked against `SHA256SUMS`, and reached over `ssh -L`, so nothing has to be installed on the machines.
+- Registers any directory as a repository. Git is not required, and a plain directory can become a repository later.
+- Cuts worktrees from a repository, adopts worktrees that already exist, or opens the repository directory itself.
+  Removing a worktree can delete its branch as well.
+- Opens a directory as a workspace; the file, shell, and terminal tools then run on the machine that owns it.
+- Opens terminal tabs in the right Sidebar, one per Session. Each tab is a terminal with its own id, and a terminal
+  lives as long as its tab.
+- Lets the agent work in a terminal that has a tab open. It lists them, reads output, writes text and keys (including
+  `ctrl+c`), and waits for output to appear. It does not create or close terminals.
 
 ## Usage
 
-**Settings → Remote workspaces.** Add a machine by SSH destination and token — the daemon's shared secret, any string.
-`Local` is always first and needs neither. Machines connect on their own; one that stays unreachable shows a
-**Connect** button. Register a repository, then use each row's menu to open, close, or remove what it holds.
+**Settings → Remote workspaces.** Add a machine with an SSH destination and a token — any string; it is the daemon's
+shared secret. `Local` needs neither. Machines connect on their own, and one that stays unreachable shows a **Connect**
+button. Register a repository, then use a row's menu to open, close, or remove what it holds.
 
-**The terminal.** The right Sidebar's add control lists a **Terminal** button; each Session gets its own tab, opened in
-that Session's workspace. You can open several: each tab is a separate terminal with its own id, so you and the agent
-can tell them apart. A terminal lives exactly as long as its tab — **closing the tab ends that shell**, while hiding the
-tab, switching Session, or collapsing the sidebar leaves it running.
+**Terminal.** The right Sidebar's add control has a **Terminal** button. Closing a tab ends that shell; hiding the tab,
+switching Session, or collapsing the sidebar leaves it running.
 
 ## Config
 
