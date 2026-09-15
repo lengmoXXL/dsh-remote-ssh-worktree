@@ -8,9 +8,19 @@
  * loopback port and publishes it in `state.json`, which is where the forward
  * learns where to point.
  *
- * Reuse is decided from that state file alone: a live process running the
- * expected build is left untouched, and the caller's own handshake is the real
- * liveness check, so this module never opens a TCP probe from the host.
+ * Reuse is decided from that state file and one marker beside the binary: a live
+ * process running the expected build, started with the current launch recipe, is
+ * left untouched, and the caller's own handshake is the real liveness check, so
+ * this module never opens a TCP probe from the host.
+ *
+ * The agent is started through the account's login shell rather than directly,
+ * because the SSH command that reaches this module runs under sshd, whose
+ * environment is minimal. Without the login shell the daemon would inherit that
+ * minimal environment and pass it on to everything it starts — the routing
+ * subprocess, git, and the Sidebar terminal — so a PATH the profile extends or
+ * the user's own `SHELL` would never arrive. A launch-recipe marker beside the
+ * binary is what keeps that from going stale: a machine still running an agent
+ * started the old way is restarted instead of reused.
  *
  * Every remote snippet below is shaped for the same three reasons: bytes the
  * plugin owns travel on stdin rather than in the command string, where shell
@@ -37,6 +47,17 @@ import { runSsh, sshFailure } from '../ssh.ts'
  * keeps in step.
  */
 export const AGENT_VERSION = '0.0.3'
+
+/**
+ * Version of the launch recipe recorded in `launch-env.json`.
+ *
+ * The recipe is how the agent was started, not which build it runs: the
+ * environment a start hands the agent is what everything it later spawns
+ * inherits. Bump this whenever {@link startAgentCommand} changes what
+ * environment that is, so a machine left running an agent from the previous
+ * recipe is restarted rather than reused.
+ */
+export const LAUNCH_RECIPE_VERSION = 1
 
 /** A started agent, and where a forward can reach it. */
 export interface AgentEndpoint {
@@ -88,6 +109,13 @@ export interface EnsureAgentOptions {
   readonly run?: AgentCommandRunner
   /** Binary resolver; defaults to {@link resolveAgentBinary}. */
   readonly resolveBinary?: (options: AgentBinaryOptions) => Promise<Buffer>
+  /**
+   * Login shell the start command uses instead of resolving the account's own.
+   *
+   * A test seam: a deployment never sets it, and production resolves `$SHELL`,
+   * then the passwd entry, then `bash`, then `sh` on the machine.
+   */
+  readonly loginShell?: string
   /** Receives each step as it starts; omitted stays silent. */
   readonly onProgress?: (progress: AgentProgress) => void
   /** Budget for a fresh agent to publish its state, in milliseconds. */
@@ -115,6 +143,9 @@ const READ_STATE = 'cat "$HOME/.dsh/remote-agent/state.json" 2>/dev/null || true
 /** Read the plugin's own marker for which build it installed. */
 const READ_INSTALLED = 'cat "$HOME/.dsh/remote-agent/installed.json" 2>/dev/null || true'
 
+/** Read the plugin's own marker for how the running agent was launched. */
+const READ_LAUNCH_ENV = 'cat "$HOME/.dsh/remote-agent/launch-env.json" 2>/dev/null || true'
+
 /** Seed the agent directory before anything is written into it. */
 const ENSURE_DIR = 'mkdir -p "$HOME/.dsh/remote-agent"'
 
@@ -134,17 +165,60 @@ const WRITE_INSTALLED = 'cat > "$HOME/.dsh/remote-agent/installed.json"'
 /** Write the secret on stdin too, and keep it owner-only. */
 const WRITE_TOKEN = 'cat > "$HOME/.dsh/remote-agent/token" && chmod 600 "$HOME/.dsh/remote-agent/token"'
 
+/** Record how the agent was launched, so a changed recipe forces a restart. */
+const WRITE_LAUNCH_ENV = 'cat > "$HOME/.dsh/remote-agent/launch-env.json"'
+
 /**
- * Start the agent detached from the SSH session: `setsid` gives it a session
- * of its own where the machine has it, `nohup` survives the hangup either way,
- * every stream goes to the log or `/dev/null` so `ssh` does not wait on a
- * process that is meant to outlive it, and `exit 0` keeps a successful
- * backgrounding from reading as a failed command.
+ * The agent invocation, run with `exec` from inside the login shell.
+ *
+ * Quoted as one word so the outer non-interactive shell hands it to the login
+ * shell untouched; it holds no single quote of its own. The paths stay relative
+ * because the start command changed into the agent directory, and the login
+ * shell inherits that directory.
  */
-const START_AGENT = 'cd "$HOME/.dsh/remote-agent"'
-  + ' && if command -v setsid >/dev/null 2>&1; then'
-  + ' setsid nohup ./dsh-remote-agent --listen 127.0.0.1:0 --token-file token --state-file state.json >>agent.log 2>&1 </dev/null &'
-  + ' else nohup ./dsh-remote-agent --listen 127.0.0.1:0 --token-file token --state-file state.json >>agent.log 2>&1 </dev/null & fi; exit 0'
+const AGENT_UNDER_LOGIN_SHELL =
+  "'exec ./dsh-remote-agent --listen 127.0.0.1:0 --token-file token --state-file state.json'"
+
+/**
+ * Quote one string as a single POSIX shell word.
+ * @param value - the literal text to quote.
+ * @returns the quoted word.
+ */
+function shQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+/**
+ * Build the command that starts the agent through the account's login shell.
+ *
+ * The shell is resolved on the machine in the order a person would expect:
+ * {@link EnsureAgentOptions.loginShell} when a test names one, then `$SHELL`,
+ * then the passwd entry (`getent` on Linux, `dscl` on Darwin), then `bash`, then
+ * `sh`. `exec` inside `-lc` replaces that login shell with the agent, so the
+ * agent's environment is the login environment, its pid is the pid the state
+ * file publishes, and it stays the session leader `setsid` created.
+ *
+ * The start itself is unchanged: `setsid` gives the agent a session of its own
+ * where the machine has it, `nohup` survives the hangup either way, every
+ * stream goes to the log or `/dev/null` so `ssh` does not wait on a process
+ * meant to outlive it, and `exit 0` keeps a successful backgrounding from
+ * reading as a failed command.
+ * @param loginShell - the shell to force, or undefined to resolve the account's.
+ * @returns the command string the remote shell runs.
+ */
+function startAgentCommand(loginShell?: string): string {
+  const seed = loginShell === undefined ? '"$SHELL"' : shQuote(loginShell)
+  const launch = `"$agent_shell" -lc ${AGENT_UNDER_LOGIN_SHELL} >>agent.log 2>&1 </dev/null &`
+  return 'cd "$HOME/.dsh/remote-agent" && {'
+    + ` agent_shell=${seed};`
+    + ' if [ ! -x "$agent_shell" ]; then agent_shell="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"; fi;'
+    + ' if [ ! -x "$agent_shell" ]; then agent_shell="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk \'NR==1 {print $2}\')"; fi;'
+    + ' if [ ! -x "$agent_shell" ]; then agent_shell="$(command -v bash)"; fi;'
+    + ' if [ ! -x "$agent_shell" ]; then agent_shell="$(command -v sh)"; fi;'
+    + ` if command -v setsid >/dev/null 2>&1; then setsid nohup ${launch}`
+    + ` else nohup ${launch} fi;`
+    + ' }; exit 0'
+}
 
 /** The subset of the agent's published state this module reads. */
 interface AgentState {
@@ -233,6 +307,18 @@ async function isAlive(
   }
 }
 
+/** Whether the machine records this plugin's current launch recipe. */
+async function launchRecipeMatches(run: AgentCommandRunner, ssh: SshTarget): Promise<boolean> {
+  const result = await run(ssh, READ_LAUNCH_ENV)
+  if (result.code !== 0) return false
+  try {
+    const marker = JSON.parse(result.stdout) as { recipe?: unknown }
+    return marker.recipe === LAUNCH_RECIPE_VERSION
+  } catch {
+    return false
+  }
+}
+
 /**
  * Ensure the agent is installed and running on one machine.
  * @param options - the machine, token, version, cache, and optional seams.
@@ -264,10 +350,18 @@ export async function ensureAgent(options: EnsureAgentOptions): Promise<AgentEnd
   // A pid that does not answer `kill -0` is a stale state file, not a running
   // agent; a pid that does is a process the install below must replace.
   const stalePid = state !== undefined && await isAlive(run, ssh, state.pid) ? state.pid : undefined
-  if (state !== undefined && stalePid === state.pid && state.version === version) {
+  // The recipe is read only where a reuse could happen, so the common path that
+  // installs or replaces an agent pays for no extra round trip. It answers
+  // whether the live agent's environment is the one this plugin would start.
+  if (state !== undefined && stalePid === state.pid && state.version === version
+    && await launchRecipeMatches(run, ssh)) {
     report({ phase: 'reusing', version })
     return { port: state.port, version, reused: true }
   }
+  // A state file left by the agent being replaced still names its pid and port.
+  // Waiting for a different pid is what makes the poll below read the new
+  // agent's publication rather than the one the start just superseded.
+  const replacedPid = state?.pid
 
   await runChecked(run, ssh, ENSURE_DIR, `could not create ~/.dsh/remote-agent on "${ssh.target}"`)
 
@@ -309,12 +403,27 @@ export async function ensureAgent(options: EnsureAgentOptions): Promise<AgentEnd
   }
 
   report({ phase: 'starting', version })
-  await runChecked(run, ssh, START_AGENT, `could not start the agent on "${ssh.target}"`)
+  await runChecked(
+    run,
+    ssh,
+    startAgentCommand(options.loginShell),
+    `could not start the agent on "${ssh.target}"`,
+  )
 
   const deadline = Date.now() + startTimeoutMs
   for (;;) {
     const published = await readState(run, ssh).catch(() => undefined)
-    if (published !== undefined && published.version === version && published.port > 0) {
+    if (published !== undefined && published.version === version && published.port > 0
+      && published.pid !== replacedPid) {
+      // The recipe is recorded once an agent started this way is answering, so
+      // the marker never describes a start that did not survive.
+      await runChecked(
+        run,
+        ssh,
+        WRITE_LAUNCH_ENV,
+        `could not record the agent launch recipe on "${ssh.target}"`,
+        JSON.stringify({ recipe: LAUNCH_RECIPE_VERSION }),
+      )
       return { port: published.port, version, reused: false }
     }
     if (Date.now() >= deadline) {

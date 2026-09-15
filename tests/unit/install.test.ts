@@ -14,7 +14,11 @@ import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
 import type { SshCommandResult, SshTarget } from '../../src/remote/ssh.ts'
 import type { AgentCommandRunner, AgentProgress } from '../../src/remote/agent/install.ts'
-import { AGENT_VERSION, ensureAgent } from '../../src/remote/agent/install.ts'
+import {
+  AGENT_VERSION,
+  LAUNCH_RECIPE_VERSION,
+  ensureAgent,
+} from '../../src/remote/agent/install.ts'
 
 const SSH: SshTarget = { target: 'me@build-01' }
 const DIR = '$HOME/.dsh/remote-agent'
@@ -27,6 +31,8 @@ interface Machine {
   state: string | undefined
   /** The plugin's version marker, absent until an install writes one. */
   installed: string | undefined
+  /** The plugin's launch-recipe marker, absent until a start records one. */
+  launchEnv: string | undefined
   readonly alive: Set<number>
   /** Runs when the start command is issued, to publish a fresh state. */
   onStart?: () => void
@@ -34,7 +40,19 @@ interface Machine {
 
 /** A fresh, empty machine. */
 function machine(): Machine {
-  return { commands: [], inputs: [], state: undefined, installed: undefined, alive: new Set() }
+  return {
+    commands: [],
+    inputs: [],
+    state: undefined,
+    installed: undefined,
+    launchEnv: undefined,
+    alive: new Set(),
+  }
+}
+
+/** The marker a machine records when it started the agent with the current recipe. */
+function currentRecipe(): string {
+  return JSON.stringify({ recipe: LAUNCH_RECIPE_VERSION })
 }
 
 /** An agent state file for one build. */
@@ -57,10 +75,17 @@ function runnerFor(machine: Machine): AgentCommandRunner {
     if (command === `cat "${DIR}/installed.json" 2>/dev/null || true`) {
       return Promise.resolve(ok(machine.installed ?? ''))
     }
+    if (command === `cat "${DIR}/launch-env.json" 2>/dev/null || true`) {
+      return Promise.resolve(ok(machine.launchEnv ?? ''))
+    }
     if (command === `mkdir -p "${DIR}"`) return Promise.resolve(ok())
     if (command.startsWith(`cat > "${DIR}/dsh-remote-agent.new"`)) return Promise.resolve(ok())
     if (command === `cat > "${DIR}/installed.json"`) {
       machine.installed = String(options?.input ?? '')
+      return Promise.resolve(ok())
+    }
+    if (command === `cat > "${DIR}/launch-env.json"`) {
+      machine.launchEnv = String(options?.input ?? '')
       return Promise.resolve(ok())
     }
     if (command === `cat > "${DIR}/token" && chmod 600 "${DIR}/token"`) return Promise.resolve(ok())
@@ -88,6 +113,7 @@ test('an agent already on the expected build is reused untouched', async () => {
   const host = machine()
   host.alive.add(4242)
   host.state = stateFile('0.0.1', 4242, 41_234)
+  host.launchEnv = currentRecipe()
   let resolved = 0
 
   const endpoint = await ensureAgent({
@@ -132,6 +158,65 @@ test('a matching state whose pid is gone is reinstalled rather than reused', asy
 
   assert.equal(endpoint.reused, false)
   assert.equal(resolved, 1)
+})
+
+test('a live agent launched by an older recipe is replaced, not reused', async () => {
+  const host = machine()
+  host.alive.add(4242)
+  host.state = stateFile('0.0.1', 4242, 41_234)
+  host.installed = JSON.stringify({ version: '0.0.1' })
+  host.launchEnv = JSON.stringify({ recipe: LAUNCH_RECIPE_VERSION - 1 })
+  let resolved = 0
+  host.onStart = () => {
+    host.alive.add(5253)
+    host.state = stateFile('0.0.1', 5253, 41_236)
+  }
+
+  const endpoint = await ensureAgent({
+    ssh: SSH,
+    token: 't',
+    version: '0.0.1',
+    cacheDir: '/unused',
+    run: runnerFor(host),
+    resolveBinary: () => {
+      resolved += 1
+      return Promise.resolve(Buffer.from('binary'))
+    },
+    pollMs: 1,
+  })
+
+  assert.equal(endpoint.reused, false)
+  assert.equal(endpoint.port, 41_236)
+  // The build is current, so only the launch is replaced.
+  assert.equal(resolved, 0)
+  assert.equal(host.commands.includes('kill 4242'), true)
+  assert.equal(host.alive.has(4242), false)
+  assert.equal(host.launchEnv, currentRecipe())
+})
+
+test('a live agent with no recorded launch recipe is replaced, not reused', async () => {
+  const host = machine()
+  host.alive.add(4242)
+  host.state = stateFile('0.0.1', 4242, 41_234)
+  host.launchEnv = undefined
+  host.onStart = () => {
+    host.alive.add(5254)
+    host.state = stateFile('0.0.1', 5254, 41_237)
+  }
+
+  const endpoint = await ensureAgent({
+    ssh: SSH,
+    token: 't',
+    version: '0.0.1',
+    cacheDir: '/unused',
+    run: runnerFor(host),
+    resolveBinary: () => Promise.resolve(Buffer.from('binary')),
+    pollMs: 1,
+  })
+
+  assert.equal(endpoint.reused, false)
+  assert.equal(host.commands.includes('kill 4242'), true)
+  assert.equal(host.alive.has(4242), false)
 })
 
 test('a missing agent is installed from the resolved binary and started', async () => {
@@ -199,6 +284,7 @@ test('reports reuse without pretending to fetch anything', async () => {
   const host = machine()
   host.alive.add(4242)
   host.state = stateFile('0.0.1', 4242, 41_234)
+  host.launchEnv = currentRecipe()
   const seen: AgentProgress[] = []
 
   await ensureAgent({
