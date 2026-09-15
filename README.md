@@ -14,9 +14,10 @@ English | [中文](README.zh.md)
 
 ## Requirements
 
-- Node 22.19+ or 24+, and `ssh` configured as usual.
-- DSH `0.1.5-rc.2`, verified in a disposable profile; other releases are untested.
-- Nothing to install on the machines: the plugin fetches the agent and keeps it up to date.
+- Node 22.19+ or 24+, with `ssh` configured as usual.
+- DSH `0.1.5-rc.2` — verified in a disposable profile; other releases are untested.
+- Nothing to install on the machines: the plugin fetches its agent from this repository's Releases, keeps it up to
+  date, and reaches it over `ssh -L`, so a connection is only as trusted as your own SSH access.
 
 ## Install
 
@@ -24,7 +25,9 @@ English | [中文](README.zh.md)
 dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.0/dsh-remote-workspace-0.1.0.tgz
 ```
 
-The tarball carries the built `lib/`, so the machine that installs it compiles nothing.
+The tarball carries the built `lib/`, so the machine that installs it compiles nothing. While developing the plugin,
+install from a checkout instead: `git clone`, `npm install && npm run build`, then
+`dsh plugin --profile web add "$PWD"`.
 
 This plugin routes services the base profile provides, and the host plane holds one implementation per service, so its
 own patch layer cannot free them: add these four lines to `$DSH_HOME/profiles/web/cordis.patch.yml` too. Without them
@@ -43,53 +46,35 @@ the plugin still loads, and says on stderr that its routers are inert.
 
 Then start the profile with `dsh --profile web`.
 
-Working on the plugin itself, or installing from a checkout:
-
-```sh
-git clone https://github.com/lengmoXXL/dsh-remote-workspace
-cd dsh-remote-workspace && npm install && npm run build
-dsh plugin --profile web add "$PWD"
-```
-
-`dsh plugin --profile web add github:lengmoXXL/dsh-remote-workspace` works too — the plugin builds itself through its
-`prepare` script — but pnpm refuses that script until the exact commit is allowlisted, which is why the release tarball
-is the shorter path.
-
 ## What you can do
 
+- Add a machine over SSH — `user@host` or a `~/.ssh/config` alias — or use the built-in `Local` machine for this host.
+- Register any directory on a machine as a repository; git is not required.
+- Cut a worktree from a repository and open it as a workspace; the checkout path is filled in and can be changed.
 - Adopt a worktree that already exists on the machine, and release it later without deleting anything.
-- Open a plain directory as a workspace; `git init` it later and cut worktrees from it.
-- Run read, write, edit, bash, grep, and terminal tools in the workspace, on the machine that owns it.
-- Open a terminal tab in the right Sidebar: it starts the machine's own login shell in the Session's workspace, keeps
-  running while you hide the tab, switch Session, or collapse the sidebar, and follows the panel's size. It is your
-  shell, so the Session's sandbox mode does not confine it.
+- Open a plain directory as a workspace, `git init` it later, and keep working in it.
+- Run read, write, edit, bash, grep, and terminal tools in a workspace, on the machine that owns it.
+- Open a terminal tab in the right Sidebar: the machine's own login shell in the Session's workspace, which survives
+  hiding the tab, switching Session, or collapsing the sidebar, follows the panel's size, and is not confined by the
+  Session's sandbox mode — it is your shell, not the agent's.
 
 ## Usage
 
-**Settings → Remote workspaces.**
+**Settings → Remote workspaces.** Add a machine by SSH destination and token — the daemon's shared secret, any string.
+`Local` is always first and needs neither. Machines connect on their own; one that stays unreachable shows a
+**Connect** button. Register a repository, then use each row's menu to open, close, or remove what it holds. A workspace
+opened here appears in Sessions, and its tools and terminals run on the machine that owns it.
 
-1. Add a machine by SSH destination and token. The token is the daemon's shared secret and may be any string.
-   Machines connect on their own; one that stays unreachable shows a **Connect** button.
-2. `Local` is always first and needs neither a destination nor a token.
-3. Register a repository, then use each row's menu to open, close, or remove what it holds.
-4. A workspace you open here is available to Sessions, and its tools and terminals run on the machine that owns it.
-
-**The terminal.** The right Sidebar's add control lists a **Terminal** button. Each Session gets its own tab, opened in
-that Session's workspace — on this host or on the machine that owns it. Closing the tab ends the shell; a closed
-browser tab leaves none behind.
+**The terminal.** The right Sidebar's add control lists a **Terminal** button; each Session gets its own tab, opened in
+that Session's workspace. Closing the tab ends the shell.
 
 ## Config
 
 | Field | Default | Meaning |
 |---|---|---|
-| `worktreeRoot` | `~/.dsh/worktrees` | Root every managed checkout is cut under, on every machine. A checkout lands at `<root>/<repository>/<name>`. |
-| `shell` | unset | Program the Sidebar terminal runs. Unset uses the machine's own login shell. |
+| `worktreeRoot` | `~/.dsh/worktrees` | Root every managed checkout is cut under, on every machine. |
+| `shell` | unset | Program the Sidebar terminal runs; unset uses the machine's own login shell. |
 | `shellArgs` | `['-l']` | Arguments after `shell`; ignored while `shell` is unset. |
 | `graceMs` | `3000` | How long a closing terminal is given to exit, in milliseconds. |
-
-## Notes
-
-- The agent is downloaded from this repository's Releases, checked against `SHA256SUMS`, and reached over `ssh -L`,
-  so a connection has the trust of your own SSH access.
 
 MIT

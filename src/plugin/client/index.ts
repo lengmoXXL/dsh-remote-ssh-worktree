@@ -148,7 +148,6 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs']
  * @param ctx - the client context this plugin was mounted on.
  */
 export function apply(ctx: Context): void {
-  mountTerminal(ctx)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-remote-workspace: dictionaries')
   // Bound, not called: the seat reads the current language on every use, so a
   // request that fails after a language change is reported in the new one.
@@ -163,4 +162,7 @@ export function apply(ctx: Context): void {
     locale: NS,
     inject: () => face,
   }, RemoteWorktreesSection))
+  // The section registers first: the terminal half owns the same plugin, and a
+  // failure there must not take the settings surface with it.
+  mountTerminal(ctx)
 }
