@@ -60,6 +60,15 @@ interface Entry {
   readonly fit: FitAddon
   readonly socket: WebSocket
   readonly observer: ResizeObserver
+  /**
+   * The registry id and label the host assigned, once it has.
+   *
+   * The id is what the model addresses this shell by; the label is the tab
+   * title, so two terminal tabs on screen are told apart the same way the model
+   * tells them apart in a call.
+   */
+  id?: string
+  label?: string
   /** The element the body is currently drawing into; the entry moves between them. */
   host: HTMLElement
   /** Replaced on every mount, so a remounted body receives the live state. */
@@ -80,8 +89,38 @@ const SCROLLBACK_LINES = 5000
 /** Every terminal this page owns, keyed by tab record id. */
 const entries = new Map<string, Entry>()
 
+/** Title seats watching for a label the host has not sent yet. */
+const labelListeners = new Set<() => void>()
+
 /** Whether the theme observer is already installed. */
 let watchingTheme = false
+
+/**
+ * Subscribe to host-assigned terminal labels.
+ *
+ * The tab's title is drawn outside the body that owns the entry, so it needs
+ * its own notification rather than the body's state callback.
+ * @param listener - called after any label changes.
+ * @returns the unsubscribe function.
+ */
+export function subscribeTerminalLabels(listener: () => void): () => void {
+  labelListeners.add(listener)
+  return () => { labelListeners.delete(listener) }
+}
+
+/**
+ * The host-assigned label of one tab's terminal.
+ * @param tabId - the Sidebar tab record's id.
+ * @returns the label, or null before the host has answered with one.
+ */
+export function terminalLabel(tabId: string): string | null {
+  return entries.get(tabId)?.label ?? null
+}
+
+/** Tell every title seat that a label changed. */
+function emitLabels(): void {
+  for (const listener of labelListeners) listener()
+}
 
 /**
  * Read the panel's surface colors so the terminal is drawn in the app's theme.
@@ -198,6 +237,9 @@ function create(mount: TerminalMount): Entry {
     }
     switch (frame.t) {
       case 'ready':
+        entry.id = frame.id
+        entry.label = frame.label
+        emitLabels()
         emit(entry, { kind: 'live', cwd: frame.cwd, fixedSize: entry.fixedSize })
         return
       case 'size':
@@ -233,6 +275,7 @@ function dispose(tabId: string): void {
   const entry = entries.get(tabId)
   if (entry === undefined) return
   entries.delete(tabId)
+  emitLabels()
   entry.observer.disconnect()
   entry.socket.close(1000, 'closed')
   entry.term.dispose()

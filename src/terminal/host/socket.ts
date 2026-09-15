@@ -13,6 +13,10 @@
  *   not covered by the browser's same-origin policy, so without that fence any
  *   page in the browser could open a shell on this host.
  *
+ * Unloading the plugin terminates every live socket; each socket's own close
+ * handler then releases its registry entry, and the registry's own disposal
+ * covers the terminals a Session's end did not.
+ *
  * @module dsh-remote-workspace/terminal/host/socket
  */
 
@@ -22,7 +26,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { WebSocket, WebSocketServer } from 'ws'
-import { attachTerminal, type TerminalSettings } from './terminal.ts'
+import { attachTerminal } from './terminal.ts'
+import type { TerminalRegistry } from './registry.ts'
 
 /**
  * Refuse an upgrade without giving the socket to the WebSocket server.
@@ -38,14 +43,13 @@ function rejectUpgrade(socket: Duplex, status: 401 | 403): void {
  * Register the terminal socket for this plugin's lifetime.
  *
  * A missing Web server is not a failure: it means nobody can open a terminal,
- * not that the plugin is misconfigured. Unloading the plugin terminates every
- * live socket, and each socket's own close handler releases its PTY.
+ * not that the plugin is misconfigured.
  *
  * @param ctx - the host context.
  * @param path - the absolute pathname the socket is served at.
- * @param settings - how to start a shell.
+ * @param registry - the terminals a person's tabs have open.
  */
-export function registerTerminalSocket(ctx: Context, path: string, settings: TerminalSettings): void {
+export function registerTerminalSocket(ctx: Context, path: string, registry: TerminalRegistry): void {
   const webServer = ctx.get('webServer')
   if (webServer === undefined) return
 
@@ -64,7 +68,7 @@ export function registerTerminalSocket(ctx: Context, path: string, settings: Ter
         server.handleUpgrade(request, socket, head, (accepted) => {
           live.add(accepted)
           accepted.on('close', () => live.delete(accepted))
-          attachTerminal(ctx, settings, accepted)
+          attachTerminal(ctx, registry, accepted)
         })
       },
     })

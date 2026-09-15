@@ -14,7 +14,8 @@ import { PassThrough } from 'node:stream'
 import { WebSocket } from 'ws'
 import type { Context } from '@deepseek-ai/cordis'
 import type { TtyHandle, TtyOutcome, TtySpawnRequest } from '../../src/tty.ts'
-import { attachTerminal, type TerminalSettings } from '../../src/terminal/host/terminal.ts'
+import { attachTerminal } from '../../src/terminal/host/terminal.ts'
+import { createTerminalRegistry, type TerminalSettings } from '../../src/terminal/host/registry.ts'
 import { resolveWorkspace, TerminalFailure } from '../../src/terminal/host/workspace.ts'
 
 /** A context carrying only what the workspace resolver reads. */
@@ -172,6 +173,15 @@ function ttyContext(spawn: (request: TtySpawnRequest) => Promise<TtyHandle>, cwd
   } as unknown as Context
 }
 
+/** The registry one socket's terminal is registered in. */
+function terminalRegistry(spawn: (request: TtySpawnRequest) => Promise<TtyHandle>) {
+  return createTerminalRegistry({
+    spawn,
+    settings,
+    machine: () => ({ nodeId: 'local', label: 'Local' }),
+  })
+}
+
 /** Serve one open frame and return everything the case observes. */
 async function opened(options: {
   readonly refuseResize?: boolean
@@ -182,21 +192,20 @@ async function opened(options: {
   terminal: FakeTerminal
   browser: FakeSocket
   requests: TtySpawnRequest[]
+  registry: ReturnType<typeof terminalRegistry>
 }> {
   const terminal = fakeTerminal(options.refuseResize ?? false)
   const requests: TtySpawnRequest[] = []
   const browser = fakeSocket()
-  attachTerminal(
-    ttyContext(async (request) => {
-      requests.push(request)
-      return terminal.handle
-    }, options.cwd ?? '/w/live'),
-    settings,
-    browser.socket,
-  )
+  const spawn = async (request: TtySpawnRequest): Promise<TtyHandle> => {
+    requests.push(request)
+    return terminal.handle
+  }
+  const registry = terminalRegistry(spawn)
+  attachTerminal(ttyContext(spawn, options.cwd ?? '/w/live'), registry, browser.socket)
   browser.send({ t: 'open', sessionId: 'session-1', cols: options.cols ?? 80, rows: options.rows ?? 24 })
   await new Promise(resolve => setImmediate(resolve))
-  return { terminal, browser, requests }
+  return { terminal, browser, requests, registry }
 }
 
 test('a terminal is allocated through the seam in the Session workspace', async () => {
@@ -209,20 +218,23 @@ test('a terminal is allocated through the seam in the Session workspace', async 
     rows: 40,
     graceMs: 3000,
   }])
-  assert.deepEqual(browser.frames, [{ t: 'ready', pid: 4242, cwd: '/w/live' }])
+  assert.deepEqual(browser.frames, [{ t: 'ready', pid: 4242, cwd: '/w/live', id: 't1', label: 'Terminal 1' }])
 })
 
 test('an unknown Session is answered with an error frame rather than a terminal', async () => {
   const terminal = fakeTerminal()
   const requests: TtySpawnRequest[] = []
   const browser = fakeSocket()
+  const spawn = async (request: TtySpawnRequest): Promise<TtyHandle> => {
+    requests.push(request)
+    return terminal.handle
+  }
   attachTerminal(
     {
       sessions: { get: () => undefined },
       get: (name: string) => name === 'sessions' ? { get: () => undefined } : undefined,
-      tty: { spawn: async (request: TtySpawnRequest) => { requests.push(request); return terminal.handle } },
     } as unknown as Context,
-    settings,
+    terminalRegistry(spawn),
     browser.socket,
   )
   browser.send({ t: 'open', sessionId: 'session-1', cols: 80, rows: 24 })
@@ -242,6 +254,7 @@ test('keystrokes reach the terminal and its output reaches the browser', async (
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(terminal.writes, ['ls\r'])
   terminal.emit('total 0\n')
+  await new Promise(resolve => setImmediate(resolve))
   assert.ok(browser.sent.some(entry => Buffer.isBuffer(entry) && entry.toString('utf8') === 'total 0\n'))
 })
 
@@ -262,10 +275,15 @@ test('a resize the provider refuses is reported stale instead of failing the ter
 })
 
 test('a browser that goes away releases the terminal', async () => {
-  const { terminal, browser } = await opened()
+  const { terminal, browser, registry } = await opened()
+  assert.deepEqual(registry.listFor('session-1').map(view => view.id), ['t1'])
   browser.close()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(terminal.terminations(), 1)
+  // The tab owns the shell: closing it removes the terminal from the table the
+  // model's tool reads, so a tool call can no longer reach a shell nobody sees.
+  assert.deepEqual(registry.listFor('session-1'), [])
+  assert.throws(() => registry.requireOwned('session-1'), /this session has no open terminal/)
 })
 
 test('a terminal that exits says so and closes the socket', async () => {

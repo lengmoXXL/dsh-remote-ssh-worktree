@@ -29,6 +29,7 @@ import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sideb
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import { en, NS, zh, type TerminalKey } from './locales.ts'
 import { TerminalBody } from './TerminalBody.tsx'
+import { TerminalTitle } from './TerminalTitle.tsx'
 import { TerminalGlyph } from './glyphs.tsx'
 
 /** The tab type this plugin contributes to the right Sidebar. */
@@ -81,4 +82,10 @@ export function mountTerminal(ctx: Context): void {
     { name: 'sidebar.right.pane.tab', key: TERMINAL_ID, locale: NS },
     TerminalBody,
   )), 'dsh-terminal: body')
+  // The title is a second seat under the same id: a shell's chip names the id
+  // the model addresses it by, so two terminal tabs stay distinguishable.
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab.title', key: TERMINAL_ID, locale: NS },
+    TerminalTitle,
+  )), 'dsh-terminal: title')
 }

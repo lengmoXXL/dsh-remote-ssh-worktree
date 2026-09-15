@@ -30,6 +30,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import * as sandbox from '@deepseek-ai/dsh-sandbox'
 import * as fsSandbox from '@deepseek-ai/dsh-fs-sandbox'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import * as plugin from '../../src/index.ts'
 import { resolveWorkspace } from '../../src/terminal/host/workspace.ts'
 
@@ -56,6 +57,8 @@ interface CapturedRoute {
 interface Composition {
   readonly ctx: Context
   readonly dataDir: string
+  /** The tool definitions the mounted plugin registered. */
+  readonly tools: readonly ToolDefinition[]
   /** Drive the management route the plugin registered, without a socket. */
   readonly request: (method: string, url: string, body?: unknown) => Promise<CapturedResponse>
 }
@@ -112,6 +115,21 @@ function webServerProvider(routes: CapturedRoute[]): object {
   }
 }
 
+/** Captures registered tools so a test can see the mounted catalog. */
+function toolsProvider(definitions: ToolDefinition[]): object {
+  return {
+    name: 'test-tools',
+    apply(ctx: Context): void {
+      ctx.provide('tools', {
+        register(definition: ToolDefinition) {
+          definitions.push(definition)
+          return () => {}
+        },
+      } as never)
+    },
+  }
+}
+
 /**
  * Boot the plugin from a test-only `cordis.yml` through the real Loader.
  * @param extraRows - patch rows to compose ahead of the plugin row.
@@ -121,6 +139,7 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
   root = await mkdtemp(join(tmpdir(), 'drw-composition-'))
   const dataDir = join(root, 'remote-worktrees')
   const routes: CapturedRoute[] = []
+  const tools: ToolDefinition[] = []
 
   const configPath = join(root, 'cordis.yml')
   const { writeFile } = await import('node:fs/promises')
@@ -136,6 +155,9 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     // The terminal half resolves a Session's workspace here.
     '- id: sessions',
     '  name: test-sessions',
+    // The model-facing terminal tool registers here.
+    '- id: tools',
+    '  name: test-tools',
     ...extraRows,
     '- id: dsh-remote-workspace',
     '  name: dsh-remote-workspace',
@@ -155,6 +177,7 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     ['@deepseek-ai/dsh-fs-sandbox', fsSandbox],
     ['test-web-server', webServerProvider(routes)],
     ['test-sessions', sessionsProvider()],
+    ['test-tools', toolsProvider(tools)],
     ['dsh-remote-workspace', plugin],
   ])
   ctx.loader.internal = {
@@ -208,7 +231,7 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     return response
   }
 
-  return { ctx, dataDir, request }
+  return { ctx, dataDir, tools, request }
 }
 
 test('the plugin boots from cordis.yml and publishes routing seams', async () => {
@@ -307,3 +330,14 @@ test('the terminal half reads the session store through the composition', async 
   // exactly how the terminal broke after the halves were merged.
   assert.equal(await resolveWorkspace(ctx, 'session-1'), root)
 })
+
+test('the mounted plugin registers the terminal tool after composition', async () => {
+  const { tools } = await compose()
+
+  // A preset realm could still hide the tool from a model later; what a Loader
+  // boot proves is that composition itself reaches the host plane's tool
+  // registry, with exactly the one name the contract names.
+  assert.deepEqual(tools.map(tool => tool.name), ['terminal'])
+  assert.equal(tools.some(tool => tool.name.startsWith('terminal_')), false)
+})
+

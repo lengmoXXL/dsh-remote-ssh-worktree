@@ -4,14 +4,15 @@
  * The test boots a disposable DSH instance that loads this plugin, opens the
  * shell in the Firefox installed on this machine, and walks the path an
  * operator walks: add a machine, connect it, register a repository on it, cut a
- * worktree, and remove it again.
+ * worktree, remove it again, and open a terminal tab.
  *
  * No model is involved anywhere: the deployment carries no credentials, and
- * every surface reached here — the settings section, the management routes, and
- * the daemon — answers without an LLM call. Every step is asserted twice where
- * it matters — once from the page and once from the state it was supposed to
- * change (the management API, the anchor directory on disk, the git repository
- * on the machine) — so a UI that renders without acting fails the test.
+ * every surface reached here — the settings section, the management routes, the
+ * daemon, and the terminal tab — answers without an LLM call. Every step is
+ * asserted twice where it matters — once from the page and once from the state
+ * it was supposed to change (the management API, the anchor directory on disk,
+ * the git repository on the machine) — so a UI that renders without acting
+ * fails the test.
  *
  * Screenshots land in the instance's artifact directory and their paths are
  * printed when the run ends.
@@ -281,6 +282,113 @@ async function gitLocked(cwd: string, args: readonly string[]): Promise<void> {
 
 /** The shell's own onboarding and notice buttons, which trap focus while open. */
 const SKIP_SHELL_DIALOG = /^(?:稍后配置|Configure later|继续|Continue)$/i
+
+/** The chip title the host assigns a terminal, which carries its registry id. */
+const TERMINAL_TITLE = /^Terminal \d+$/
+
+/** Page-side reader for the right Sidebar's tab chip titles. */
+const CHIP_TITLES = `[...document.querySelectorAll('[data-dockkit-tab-title]')].map(el => (el.textContent ?? '').trim())`
+
+/**
+ * Open one Workspace as a Session, which is the only place a terminal can live.
+ *
+ * The right Sidebar is Session-scoped: the shell renders neither its strip nor
+ * the control that reveals it until a Conversation is selected, so with no
+ * Session open there is no column to put a terminal in. Everything above only
+ * manages worktrees and never opened one, so this clicks the workspace row's
+ * own new-session control — the affordance an operator uses — and waits for the
+ * Session's right Sidebar to mount.
+ * @param page - the page to act on.
+ * @param workspace - the Workspace's own label, exactly as its row shows it.
+ */
+async function openWorkspaceSession(page: FirefoxPage, workspace: string): Promise<void> {
+  const control = `[...document.querySelectorAll('button[aria-label]')].find(button => {\n`
+    + `  const label = button.getAttribute('aria-label') ?? ''\n`
+    + `  return /新建会话|new session/i.test(label) && label.includes(${JSON.stringify(workspace)})\n`
+    + `})`
+  await waitFor(page, `${control} !== undefined`, "the workspace's new-session control")
+  await page.evaluate(`${control}.click()`)
+  // The panel element is present whenever the Session's right Sidebar is
+  // mounted, expanded or collapsed, so it is what tells "no Session" apart from
+  // "Session with the column closed".
+  await waitFor(page, `document.querySelector('[data-sidebar-right-panel]') !== null`, 'the Session right Sidebar')
+}
+
+/**
+ * Open one terminal tab in the right Sidebar.
+ *
+ * The panel's strip carries the add control; it opens the guide, and the guide
+ * carries the terminal entry this plugin contributes. A pane already holding
+ * the guide shows the entry without the add control, so both paths are taken.
+ * @param page - the page to act on.
+ * @returns the host-assigned chip title, which names the terminal's id.
+ */
+async function openTerminal(page: FirefoxPage): Promise<string> {
+  // The seat belongs to a Session that is on screen: wait for it rather than
+  // checking once, because it mounts a beat after the Session opens.
+  await waitFor(
+    page,
+    `document.querySelector('[data-sidebar-right-panel]') !== null`
+      + ` || document.querySelector('[data-dockkit-add-tab]') !== null`
+      + ` || document.querySelector('[data-sidebar-right-guide-entry="terminal"]') !== null`,
+    'the right Sidebar seat',
+  )
+  // A collapsed panel hides its whole strip behind the conversation header's
+  // expand button.
+  if (await page.evaluate<boolean>(`document.querySelector('[data-sidebar-right-expand]') !== null`)) {
+    await page.evaluate(`document.querySelector('[data-sidebar-right-expand]').click()`)
+  }
+  await waitFor(
+    page,
+    `document.querySelector('[data-dockkit-add-tab]') !== null`
+      + ` || document.querySelector('[data-sidebar-right-guide-entry="terminal"]') !== null`,
+    'the right Sidebar strip',
+  )
+  if (await page.evaluate<boolean>(`document.querySelector('[data-sidebar-right-guide-entry="terminal"]') === null`)) {
+    await page.evaluate(`document.querySelector('[data-dockkit-add-tab]').click()`)
+  }
+  await waitFor(
+    page,
+    `document.querySelector('[data-sidebar-right-guide-entry="terminal"]') !== null`,
+    'the terminal entry in the guide',
+  )
+  await page.evaluate(`document.querySelector('[data-sidebar-right-guide-entry="terminal"]').click()`)
+  // The chip only carries a number once the host has registered the shell and
+  // answered the socket, so this waits for a live terminal, not just a tab.
+  const titlePattern = JSON.stringify(TERMINAL_TITLE.source)
+  await waitFor(page, `${CHIP_TITLES}.some(title => new RegExp(${titlePattern}).test(title))`, 'a terminal chip')
+  return await page.evaluate<string>(`
+    (() => {
+      const pattern = new RegExp(${titlePattern})
+      const title = ${CHIP_TITLES}.find(candidate => pattern.test(candidate))
+      return title ?? ''
+    })()`)
+}
+
+/**
+ * Close one right-Sidebar tab through its own close control.
+ * @param page - the page to act on.
+ * @param title - the exact chip title to close.
+ */
+async function closeTabByTitle(page: FirefoxPage, title: string): Promise<void> {
+  const closed = await page.evaluate<boolean>(`
+    (() => {
+      const chip = [...document.querySelectorAll('[data-dockkit-tab]')].find(el =>
+        (el.querySelector('[data-dockkit-tab-title]')?.textContent ?? '').trim() === ${JSON.stringify(title)})
+      if (chip === null || chip === undefined) return false
+      const id = chip.getAttribute('data-dockkit-tab')
+      const control = document.querySelector('[data-dockkit-tab-close="' + CSS.escape(id) + '"]')
+      if (control === null) return false
+      control.click()
+      return true
+    })()`)
+  assert.equal(closed, true, `no close control for the ${title} chip`)
+  await waitFor(
+    page,
+    `!${CHIP_TITLES}.some(candidate => candidate === ${JSON.stringify(title)})`,
+    'the terminal chip to close',
+  )
+}
 
 test('a remote worktree is created and removed through the browser', { timeout: 300_000 }, async () => {
   // Nothing is created until the guard is in place: a deployment that is built
@@ -647,6 +755,22 @@ test('a remote worktree is created and removed through the browser', { timeout: 
     // The workspace a session would open is labelled for this machine too.
     await waitFor(page, `document.body.innerText.includes('here · local-repo · Local')`, 'the local workspace label')
     await shot('10-local-worktree')
+
+    // A terminal tab belongs to a Session's right Sidebar, and only worktree
+    // management has run so far: the workspace just cut is opened as a Session
+    // here, the way an operator would, so the terminal has one to belong to.
+    await openWorkspaceSession(page, 'here · local-repo · Local')
+
+    // A terminal tab owns its shell, and the model can only address one that is
+    // open. The chip names the registry id the agent uses; closing the tab
+    // releases that terminal, so reopening produces a different one rather than
+    // the shell the closed tab left behind.
+    const firstTerminal = await openTerminal(page)
+    await shot('11-terminal-open')
+    await closeTabByTitle(page, firstTerminal)
+    const secondTerminal = await openTerminal(page)
+    assert.notEqual(secondTerminal, firstTerminal, 'a reopened terminal is a new terminal')
+    await shot('12-terminal-reopened')
   } catch (error) {
     failure = error
     if (browser !== undefined && deployment !== undefined) {

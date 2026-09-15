@@ -23,6 +23,10 @@
  * policy bounds what the *agent* may do while a terminal is the person's own
  * shell.
  *
+ * That shell is also what the plugin's one model-facing terminal tool drives,
+ * so a person and the model share one handle: the tab owns the shell's life,
+ * and the tool can read, type into, and wait on it while the tab is open.
+ *
  * @module dsh-remote-workspace
  */
 
@@ -38,6 +42,7 @@ import { homedir } from 'node:os'
 import { join, posix } from 'node:path'
 import { autoconnect } from './models/autoconnect.ts'
 import { createNodeConnections, DEFAULT_HANDSHAKE_TIMEOUT_MS } from './models/machines.ts'
+import { classifyPath } from './models/routing.ts'
 import { createWorktreeManager, workspaceLabel } from './models/worktrees.ts'
 import { registerNodeApi } from './plugin/api.ts'
 import { createRoutingFileSystem } from './plugin/routing/fs.ts'
@@ -47,12 +52,13 @@ import { createRoutingTty } from './plugin/routing/tty.ts'
 import { AGENT_VERSION } from './remote/agent/install.ts'
 import { DEFAULT_FORWARD_TIMEOUT_MS } from './remote/ssh.ts'
 import { createAnchorStore } from './storage/anchors.ts'
-import { createNodeRegistry } from './storage/nodes.ts'
+import { createNodeRegistry, LOCAL_NODE_ID } from './storage/nodes.ts'
 import type { NodeId } from './storage/nodes.ts'
 import { createRepoStore } from './storage/repos.ts'
+import { createTerminalRegistry, type TerminalSettings } from './terminal/host/registry.ts'
 import { registerTerminalSocket } from './terminal/host/socket.ts'
-import type { TerminalSettings } from './terminal/host/terminal.ts'
 import { SOCKET_PATH } from './terminal/shared/wire.ts'
+import { registerTerminalTool } from './tools/terminal.ts'
 
 /** Plugin name used by the Loader and by diagnostics. */
 export const name = 'dsh-remote-workspace'
@@ -338,7 +344,40 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     env: { TERM: 'xterm-256color', COLORTERM: 'truecolor' },
     graceMs: config.graceMs ?? 3000,
   }
-  registerTerminalSocket(ctx, SOCKET_PATH, terminalSettings)
+
+  // The registry is the one handle on the shells a person's tabs have open: the
+  // socket registers through it, the model-facing tool addresses it, and each
+  // side releases only what it owns.
+  const terminals = createTerminalRegistry({
+    // Read at open time, not at composition time: the routing provider is
+    // published asynchronously from its own scope, exactly as the socket's
+    // comment below explains.
+    spawn: (request) => {
+      const tty = ctx.get('tty')
+      if (tty === undefined) throw new Error('no terminal provider is composed')
+      return tty.spawn(request)
+    },
+    settings: terminalSettings,
+    machine: (cwd) => {
+      // The anchor route that owns this directory names the machine; a
+      // directory no anchor claims runs locally.
+      const route = classifyPath(cwd, undefined, anchorStore.routes())
+      const nodeId = route.kind === 'remote' ? route.nodeId : LOCAL_NODE_ID
+      return { nodeId, label: registry.get(nodeId as NodeId)?.title ?? nodeId }
+    },
+  })
+  registerTerminalSocket(ctx, SOCKET_PATH, terminals)
+  registerTerminalTool(ctx, terminals)
+
+  // Session end releases that Session's terminals. There is no host-plane
+  // per-Session disposer to hook, but `agent/disposed` is the event the agent
+  // registry emits as one leaves, and it carries the exact Session identity.
+  ctx.on('agent/disposed', ({ agent }) => {
+    void terminals.releaseSession(String(agent.id))
+  })
+  // The plugin's own unload covers whatever a Session's end did not; the
+  // socket's disposal above has already ended its own terminals by then.
+  ctx.effect(() => () => terminals.disposeAll(), 'dsh-terminal: registry disposal')
 }
 
 /** The handle a workspace record is addressed by. */

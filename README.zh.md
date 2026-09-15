@@ -21,7 +21,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.0/dsh-remote-workspace-0.1.0.tgz
+dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.1/dsh-remote-workspace-0.1.1.tgz
 ```
 
 tarball 里带着构建好的 `lib/`，安装的机器不需要编译任何东西。改插件本身时，改为从检出安装：`git clone`、
@@ -53,6 +53,8 @@ tarball 里带着构建好的 `lib/`，安装的机器不需要编译任何东�
 - read、write、edit、bash、grep 和终端工具都跑在该工作区所属的机器上。
 - 在右侧边栏开终端标签页：在会话的工作区里启动该机器自己的登录 shell；隐藏标签页、切换会话、收起边栏都不会中断
   它，它跟随面板尺寸变化，也不受会话沙箱模式约束——它是你自己的 shell，不是 agent 的。
+- 让 agent 在**会话里开着的**终端里干活：它会列出这些终端（每个标签就是一个终端、有自己的 id）、读它们的输出、
+  输入文本和按键（包括 `ctrl+c`）、等待某段输出出现。标签关掉它就不再碰那个终端；它做的每一步你都实时看得到。
 
 ## 使用
 
@@ -60,8 +62,8 @@ tarball 里带着构建好的 `lib/`，安装的机器不需要编译任何东�
 不需要这两项。机器会自动连接，一直连不上的显示**连接**按钮。登记仓库后，用每行的菜单打开、关闭或移除它持有的
 东西；在这里打开的工作区会出现在会话里，其工具和终端都跑在拥有它的机器上。
 
-**终端。** 右侧边栏的添加控件里有一个**终端**按钮；每个会话一个标签页，开在该会话的工作区里，关闭标签页即结束
-shell。
+**终端。** 右侧边栏的添加控件里有一个**终端**按钮；每个会话一个标签页，开在该会话的工作区里。可以开多个：每个
+标签是一个独立终端、有自己的 id，你和 agent 都能分得清。关闭标签页即结束那个 shell。
 
 ## 配置
 

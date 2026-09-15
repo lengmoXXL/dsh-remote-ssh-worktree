@@ -22,7 +22,7 @@ English | [中文](README.zh.md)
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.0/dsh-remote-workspace-0.1.0.tgz
+dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.1/dsh-remote-workspace-0.1.1.tgz
 ```
 
 The tarball carries the built `lib/`, so the machine that installs it compiles nothing. While developing the plugin,
@@ -57,6 +57,9 @@ Then start the profile with `dsh --profile web`.
 - Open a terminal tab in the right Sidebar: the machine's own login shell in the Session's workspace, which survives
   hiding the tab, switching Session, or collapsing the sidebar, follows the panel's size, and is not confined by the
   Session's sandbox mode — it is your shell, not the agent's.
+- Let the agent work in a terminal that is open in the Session: it lists them (each tab is its own terminal with its
+  own id), reads their output, types text and keys (including `ctrl+c`), and waits for something to appear. It only
+  ever touches a terminal while its tab is open, and you see everything it does as it happens.
 
 ## Usage
 
@@ -66,7 +69,8 @@ Then start the profile with `dsh --profile web`.
 opened here appears in Sessions, and its tools and terminals run on the machine that owns it.
 
 **The terminal.** The right Sidebar's add control lists a **Terminal** button; each Session gets its own tab, opened in
-that Session's workspace. Closing the tab ends the shell.
+that Session's workspace. You can open several: each tab is a separate terminal with its own id, so you and the agent
+can tell them apart. Closing the tab ends that shell.
 
 ## Config
 

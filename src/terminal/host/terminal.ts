@@ -1,38 +1,32 @@
 /**
- * One browser socket, one PTY.
+ * One browser socket, one terminal in the shared registry.
  *
- * The bridge owns the whole correspondence: it resolves the Session's
- * workspace, allocates the terminal through `ctx.tty` — which is what makes a
- * routed workspace run its shell on the node that owns it, with no knowledge
- * of machines here — pumps output back as binary frames, and kills
- * the terminal when the socket goes away. Nothing outlives the socket, so a
- * browser that is closed, reloaded, or disconnected leaves no shell behind.
+ * The bridge owns the socket's half of the correspondence: it resolves the
+ * Session's workspace, asks the registry to register the shell a person just
+ * opened, and forwards keystrokes, resizes, and output. The registry owns the
+ * terminal itself, because the model-facing terminal tool drives the same
+ * shell; this module never allocates or releases one directly.
  *
- * Output is paced one chunk at a time: a command that floods the terminal
- * pauses the PTY's output stream until the socket has taken the chunk, instead
- * of queueing the whole flood inside this process.
+ * A tab owns its shell. The socket closing is what ends it — a browser that is
+ * closed, reloaded, or disconnected leaves no shell behind, and a shell whose
+ * process exits closes its socket — so the registry entry disappears with the
+ * tab and the tool can no longer address it. A Session ending releases its
+ * terminals through the registry's own hook; nothing else outlives the tab.
+ *
+ * Output is paced one chunk at a time through the sink the registry calls: a
+ * command that floods the terminal pauses the PTY's output stream until the
+ * socket has taken the chunk, instead of queueing the whole flood inside this
+ * process.
  *
  * @module dsh-remote-workspace/terminal/host/terminal
  */
 
 import { Buffer } from 'node:buffer'
 import type { Context } from '@deepseek-ai/cordis'
-import type { TtyHandle } from '../../tty.ts'
 import { WebSocket, type RawData } from 'ws'
 import type { ClientFrame, HostFrame, OpenFrame } from '../shared/wire.ts'
+import type { TerminalRegistry, TerminalSink } from './registry.ts'
 import { resolveWorkspace } from './workspace.ts'
-
-/** How this deployment starts a shell. */
-export interface TerminalSettings {
-  /** The program to run, which is the shell the terminal is named after. */
-  readonly shell: string
-  /** Arguments after the program. */
-  readonly shellArgs: readonly string[]
-  /** Environment layered onto the provider's ambient scrub. */
-  readonly env: Readonly<Record<string, string>>
-  /** TERM-to-KILL grace for the whole terminal session, in milliseconds. */
-  readonly graceMs: number
-}
 
 /** Largest dimension a browser may ask a PTY for. */
 const MAX_DIMENSION = 1000
@@ -73,12 +67,12 @@ function describe(error: unknown): string {
 
 /**
  * Serve one terminal over one accepted socket.
- * @param ctx - the host context carrying `ctx.tty`.
- * @param settings - how to start a shell.
+ * @param ctx - the host context the workspace resolver reads.
+ * @param registry - the terminals a person's tabs have open.
  * @param socket - the accepted browser socket.
  */
-export function attachTerminal(ctx: Context, settings: TerminalSettings, socket: WebSocket): void {
-  let handle: TtyHandle | undefined
+export function attachTerminal(ctx: Context, registry: TerminalRegistry, socket: WebSocket): void {
+  let entryId: string | undefined
   let opening = false
   let closed = false
   /** The size the browser last asked for; the spawn uses it even if it changed mid-allocation. */
@@ -91,37 +85,43 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame))
   }
 
-  /** Release the PTY, whether the socket failed or the terminal had already exited. */
+  /**
+   * The registry's view of this socket.
+   *
+   * Output is handed to the socket one chunk at a time and the returned promise
+   * is what lets the registry pause the PTY, so a socket that cannot keep up
+   * slows the shell rather than this process.
+   */
+  const sink: TerminalSink = {
+    output(chunk): Promise<void> | void {
+      if (socket.readyState !== WebSocket.OPEN) return
+      return new Promise<void>((resolve) => {
+        socket.send(chunk, () => { resolve() })
+      })
+    },
+    exit(outcome): void {
+      post({ t: 'exit', code: outcome.exitCode, signal: outcome.signal })
+      socket.close(1000, 'terminal exited')
+    },
+    fail(error): void {
+      post({ t: 'error', message: describe(error) })
+      socket.close(1011, 'terminal failed')
+    },
+  }
+
+  /** Release this socket's terminal; the registry removes it, so the tool loses it too. */
   const stop = (): void => {
     if (closed) return
     closed = true
-    const current = handle
-    handle = undefined
-    if (current !== undefined) void current.terminate().catch(() => undefined)
+    const current = entryId
+    entryId = undefined
+    if (current !== undefined) void registry.kill(current)
   }
 
-  /** Stream terminal output to the browser, one chunk in flight. */
-  const pump = (terminal: TtyHandle): void => {
-    terminal.output.on('data', (chunk: Buffer) => {
-      if (socket.readyState !== WebSocket.OPEN) return
-      terminal.output.pause()
-      socket.send(chunk, () => {
-        if (!closed) terminal.output.resume()
-      })
-    })
-    void terminal.done.then((outcome) => {
-      post({ t: 'exit', code: outcome.exitCode, signal: outcome.signal })
-      socket.close(1000, 'terminal exited')
-    }, (error: unknown) => {
-      post({ t: 'error', message: describe(error) })
-      socket.close(1011, 'terminal failed')
-    })
-  }
-
-  /** Allocate the shell for one Session's workspace. */
+  /** Register the shell for one Session's workspace and start streaming it. */
   const open = async (frame: OpenFrame): Promise<void> => {
     if (closed) return
-    if (handle !== undefined || opening) {
+    if (entryId !== undefined || opening) {
       post({ t: 'error', message: 'this connection already owns a terminal' })
       return
     }
@@ -129,26 +129,19 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
     opening = true
     try {
       const cwd = await resolveWorkspace(ctx, frame.sessionId)
-      const terminal = await ctx.tty.spawn({
-        argv: [settings.shell, ...settings.shellArgs],
-        cwd,
-        env: { ...settings.env },
-        cols: requested.cols,
-        rows: requested.rows,
-        graceMs: settings.graceMs,
-      })
-      // The socket may have gone while the terminal was being allocated; a
-      // published handle owns its own lifetime and must be released here.
+      const entry = await registry.open(frame.sessionId, cwd, requested)
+      // The socket may have gone while the shell was being allocated; a
+      // registered terminal owns its own lifetime and must be released here.
       if (closed) {
-        void terminal.terminate().catch(() => undefined)
+        void registry.kill(entry.id)
         return
       }
-      handle = terminal
+      entryId = entry.id
       applied = { ...requested }
-      pump(terminal)
-      post({ t: 'ready', pid: terminal.pid, cwd })
+      registry.attach(entry.id, sink)
+      post({ t: 'ready', pid: entry.handle.pid, cwd, id: entry.id, label: entry.label })
       for (const data of typed.splice(0)) {
-        void terminal.write(data).catch(() => undefined)
+        void registry.write(entry.id, data).catch(() => undefined)
       }
     } catch (error: unknown) {
       post({ t: 'error', message: describe(error) })
@@ -164,12 +157,11 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
       rows: dimension(rows, requested.rows),
     }
     requested = next
-    const current = handle
+    const current = entryId
     if (current === undefined) return
     if (applied !== undefined && applied.cols === next.cols && applied.rows === next.rows) return
     applied = next
-    // A refusal is not a failure: the browser is told the size is stale.
-    const live = await current.resize(next.cols, next.rows).then(() => true, () => false)
+    const live = await registry.resize(current, next.cols, next.rows)
     post({ t: 'size', cols: next.cols, rows: next.rows, live })
   }
 
@@ -188,12 +180,12 @@ export function attachTerminal(ctx: Context, settings: TerminalSettings, socket:
         void open(frame)
         return
       case 'input': {
-        const current = handle
+        const current = entryId
         if (current === undefined) {
           if (typed.length < MAX_PENDING_INPUT) typed.push(frame.data)
           return
         }
-        void current.write(frame.data).catch(() => undefined)
+        void registry.write(current, frame.data).catch(() => undefined)
         return
       }
       case 'resize':

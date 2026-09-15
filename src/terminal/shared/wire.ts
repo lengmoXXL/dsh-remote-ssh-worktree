@@ -10,8 +10,9 @@
  *   output is not base64-encoded and re-decoded once per chunk.
  *
  * The socket's whole life is one terminal: the browser keeps it open while the
- * tab exists, and the host kills the PTY when it closes. There is no reattach
- * protocol because there is nothing to reattach to.
+ * tab exists, and the host releases the PTY — from the registry the model's
+ * terminal tool reads — when it closes. There is no reattach protocol because
+ * there is nothing to reattach to.
  *
  * @module dsh-remote-workspace/terminal/shared/wire
  */
@@ -54,6 +55,15 @@ export interface ReadyFrame {
   readonly pid: number
   /** The workspace directory the shell was started in. */
   readonly cwd: string
+  /**
+   * The registry id the model's terminal tool addresses this shell by.
+   *
+   * The tab title shows it too, so two terminal tabs are told apart on screen
+   * exactly the way the model tells them apart in a call.
+   */
+  readonly id: string
+  /** The human label behind {@link ReadyFrame.id}, and the tab's title. */
+  readonly label: string
 }
 
 /** The top-level process exited; the host closes the socket next. */
