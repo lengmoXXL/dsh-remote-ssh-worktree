@@ -1,0 +1,59 @@
+name: Plugin release
+
+on:
+  push:
+    tags: ['plugin-v*']
+  # Dispatch on the tag ref itself; a branch run fails the guard.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # The tag names the asset the install line downloads, so a tag that disagrees
+  # with package.json must never publish one.
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches package.json version
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ -z "$version" ]; then
+            echo "package.json has no version" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "plugin-v$version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match plugin-v$version from package.json" >&2
+            exit 1
+          fi
+
+  # The tarball is what a deployment installs: it carries the built `lib/`, so
+  # the machine that installs it compiles nothing and runs no dependency build
+  # script beyond the ones it already allows. `npm ci` runs the `prepare`
+  # script, which is what puts `lib/` there.
+  pack:
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Pack the plugin
+        run: |
+          mkdir -p dist
+          npm pack --pack-destination dist
+          ls -l dist
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/dsh-remote-workspace-*.tgz \
+            --repo lengmoXXL/dsh-remote-workspace \
+            --verify-tag --generate-notes

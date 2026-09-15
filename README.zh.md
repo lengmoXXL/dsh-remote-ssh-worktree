@@ -20,10 +20,10 @@
 ## 安装
 
 ```sh
-git clone https://github.com/lengmoXXL/dsh-remote-workspace
-cd dsh-remote-workspace && npm install && npm run build
-dsh plugin --profile web add "$PWD"
+dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.0/dsh-remote-workspace-0.1.0.tgz
 ```
+
+tarball 里带着构建好的 `lib/`，安装的机器不需要编译任何东西。
 
 本插件要接管 base profile 提供的服务，而 host plane 每项服务只允许一个实现，因此它自己的 patch 层不能停用这些行：
 把这四行也加进 `$DSH_HOME/profiles/web/cordis.patch.yml`。缺了它们插件仍会加载，并在 stderr 上说明路由未生效。
@@ -41,10 +41,16 @@ dsh plugin --profile web add "$PWD"
 
 再用 `dsh --profile web` 启动。
 
-也可以直接从 git 装——`dsh plugin --profile web add github:lengmoXXL/dsh-remote-workspace`——插件会用 `prepare`
-脚本自建 `lib/`。但 pnpm 默认拦这个脚本，要先放行：跑一次命令，把它打印出的那行键贴到
-`$DSH_HOME/profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 下，再跑一次即可。那行键按 commit 钉死，所以以后
-更新插件还要再改一次——这也是上面那条检出+构建仍是更短路径的原因。
+改插件本身、或从检出安装：
+
+```sh
+git clone https://github.com/lengmoXXL/dsh-remote-workspace
+cd dsh-remote-workspace && npm install && npm run build
+dsh plugin --profile web add "$PWD"
+```
+
+`dsh plugin --profile web add github:lengmoXXL/dsh-remote-workspace` 也能用——插件靠 `prepare` 脚本自建——但 pnpm
+默认拦这个脚本，要对确切 commit 放行一次；所以上面那条 release tarball 是更短的路径。
 
 ## 能做什么
 
