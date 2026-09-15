@@ -17,7 +17,7 @@
 
 import { Buffer } from 'node:buffer'
 import type { Context } from '@deepseek-ai/cordis'
-import type { TtyHandle } from '../../tty/index.ts'
+import type { TtyHandle } from '../../tty.ts'
 import { WebSocket, type RawData } from 'ws'
 import type { ClientFrame, HostFrame, OpenFrame } from '../shared/wire.ts'
 import { resolveWorkspace } from './workspace.ts'

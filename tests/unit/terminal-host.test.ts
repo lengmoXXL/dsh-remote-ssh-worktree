@@ -13,7 +13,7 @@ import { test } from 'node:test'
 import { PassThrough } from 'node:stream'
 import { WebSocket } from 'ws'
 import type { Context } from '@deepseek-ai/cordis'
-import type { TtyHandle, TtyOutcome, TtySpawnRequest } from '../../src/tty/index.ts'
+import type { TtyHandle, TtyOutcome, TtySpawnRequest } from '../../src/tty.ts'
 import { attachTerminal, type TerminalSettings } from '../../src/terminal/host/terminal.ts'
 import { resolveWorkspace, TerminalFailure } from '../../src/terminal/host/workspace.ts'
 

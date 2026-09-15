@@ -11,14 +11,14 @@
  * size a terminal was born with is therefore not the size it keeps, which is the
  * whole point of this package.
  *
- * @module dsh-tty-local
+ * @module dsh-remote-workspace/local/tty
  */
 
 import { constants } from 'node:os'
 import { PassThrough } from 'node:stream'
 import * as nodePty from 'node-pty'
-import { TtyRuntime } from './index.ts'
-import type { TtyHandle, TtyOutcome, TtySpawnRequest } from './index.ts'
+import { TtyRuntime } from '../tty.ts'
+import type { TtyHandle, TtyOutcome, TtySpawnRequest } from '../tty.ts'
 
 /** What a PTY calls itself when the caller names no terminal type. */
 const TERM = 'xterm-256color'

@@ -17,7 +17,7 @@
  * signal; the model-facing PTY tools keep using the seams that already carry
  * them. A verb earns its place here with a caller.
  *
- * @module dsh-tty
+ * @module dsh-remote-workspace/tty
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'

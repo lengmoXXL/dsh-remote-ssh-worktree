@@ -11,8 +11,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { LocalTtyRuntime } from '../../src/tty/local.ts'
-import type { TtyHandle } from '../../src/tty/index.ts'
+import { LocalTtyRuntime } from '../../src/local/tty.ts'
+import type { TtyHandle } from '../../src/tty.ts'
 
 /** The provider every case asks for a terminal. */
 function provider(): LocalTtyRuntime {

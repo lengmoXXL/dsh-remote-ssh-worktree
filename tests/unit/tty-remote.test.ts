@@ -10,7 +10,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { TtyHandle } from '../../src/tty/index.ts'
+import type { TtyHandle } from '../../src/tty.ts'
 import { createRemoteTty } from '../../src/remote/tty.ts'
 import type { TtyWire, TtyWireOutcome, TtyWireSpawnRequest, TtyWireRead } from '../../src/remote/tty.ts'
 

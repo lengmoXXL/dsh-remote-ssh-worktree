@@ -13,7 +13,7 @@
  * @module dsh-remote-workspace/plugin/routing/tty
  */
 
-import type { TtyHandle, TtyRuntime, TtySpawnRequest } from '../../tty/index.ts'
+import type { TtyHandle, TtyRuntime, TtySpawnRequest } from '../../tty.ts'
 import { createRemoteTty } from '../../remote/tty.ts'
 import type { TtyWire } from '../../remote/tty.ts'
 import type { ChannelLookup, NodeChannel } from '../../remote/client.ts'

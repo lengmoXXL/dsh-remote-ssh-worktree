@@ -18,7 +18,7 @@
 
 import { StringDecoder } from 'node:string_decoder'
 import { PassThrough } from 'node:stream'
-import type { TtyHandle, TtyOutcome, TtySpawnRequest } from '../tty/index.ts'
+import type { TtyHandle, TtyOutcome, TtySpawnRequest } from '../tty.ts'
 
 /**
  * How often the proxy asks the daemon for new output.
