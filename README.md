@@ -43,6 +43,12 @@ the plugin still loads, and says on stderr that its routers are inert.
 
 Then start the profile with `dsh --profile web`.
 
+Straight from git also works — `dsh plugin --profile web add github:lengmoXXL/dsh-remote-workspace` — because the
+plugin builds itself through its `prepare` script. pnpm refuses to run that script until the installation is
+allowlisted: run the command once, paste the key pnpm prints under `allowBuilds` in
+`$DSH_HOME/profiles/web/pnpm-workspace.yaml`, and run it again. The key is pinned to the commit, so a later update
+needs the same edit, which is why the checkout above is the shorter path.
+
 ## What you can do
 
 - Add a machine over SSH — `user@host` or a `~/.ssh/config` alias — or use the built-in `Local` machine for this host.

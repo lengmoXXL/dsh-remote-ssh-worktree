@@ -41,6 +41,11 @@ dsh plugin --profile web add "$PWD"
 
 再用 `dsh --profile web` 启动。
 
+也可以直接从 git 装——`dsh plugin --profile web add github:lengmoXXL/dsh-remote-workspace`——插件会用 `prepare`
+脚本自建 `lib/`。但 pnpm 默认拦这个脚本，要先放行：跑一次命令，把它打印出的那行键贴到
+`$DSH_HOME/profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 下，再跑一次即可。那行键按 commit 钉死，所以以后
+更新插件还要再改一次——这也是上面那条检出+构建仍是更短路径的原因。
+
 ## 能做什么
 
 - 通过 SSH 添加机器（`user@host` 或 `~/.ssh/config` 别名），或直接用内置的 `Local` 机器操作本机。
