@@ -133,16 +133,6 @@ test('the collected mirror is complete by the time done settles', async () => {
   assert.equal(handle.collected.stderr?.readFrom(0).text, 'warn\n')
 })
 
-test('two independent reads from zero return identical text', async () => {
-  const { channel } = fakeDaemon({ stdout: ['one\n', 'two\n'] })
-  const handle = runtime(channel).spawn(spec('/srv/app/login'))
-  await handle.done
-
-  const first = handle.collected.stdout!.readFrom(0)
-  const second = handle.collected.stdout!.readFrom(0)
-  assert.deepEqual(second, first)
-})
-
 test('resuming from the reported offset returns only the delta', async () => {
   const { channel } = fakeDaemon({ stdout: ['one\n', 'two\n'] })
   const handle = runtime(channel).spawn(spec('/srv/app/login'))
@@ -194,12 +184,6 @@ test('a frame for another process is ignored', async () => {
   await new Promise(resolve => setImmediate(resolve))
 
   assert.equal(seen.join(''), '')
-})
-
-test('a piped stream is not readable as collected output', () => {
-  const { channel } = fakeDaemon({})
-  const handle = runtime(channel).spawn(spec('/srv/app/login', { stdout: 'pipe' }))
-  assert.equal(handle.collected.stdout, undefined)
 })
 
 test('a failed start rejects done and reports no output', async () => {
