@@ -31,6 +31,7 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import * as sandbox from '@deepseek-ai/dsh-sandbox'
 import * as fsSandbox from '@deepseek-ai/dsh-fs-sandbox'
 import * as plugin from '../../src/index.ts'
+import { resolveWorkspace } from '../../src/terminal/host/workspace.ts'
 
 /** One request the plugin's route handler answers. */
 interface CapturedRequest {
@@ -82,6 +83,16 @@ function policyProvider(mode: 'workspace-write'): object {
   }
 }
 
+/** The session store the terminal's workspace lookup reads. */
+function sessionsProvider(): object {
+  return {
+    name: 'test-sessions',
+    apply(ctx: Context): void {
+      ctx.provide('sessions', { get: () => ({ header: { cwd: root } }) } as never)
+    },
+  }
+}
+
 /** Captures the management route so a test can drive it without a socket. */
 function webServerProvider(routes: CapturedRoute[]): object {
   return {
@@ -122,6 +133,9 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     '  name: "@deepseek-ai/dsh-sandbox"',
     '- id: web-server',
     '  name: test-web-server',
+    // The terminal half resolves a Session's workspace here.
+    '- id: sessions',
+    '  name: test-sessions',
     ...extraRows,
     '- id: dsh-remote-workspace',
     '  name: dsh-remote-workspace',
@@ -140,6 +154,7 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     ['@deepseek-ai/dsh-sandbox', sandbox],
     ['@deepseek-ai/dsh-fs-sandbox', fsSandbox],
     ['test-web-server', webServerProvider(routes)],
+    ['test-sessions', sessionsProvider()],
     ['dsh-remote-workspace', plugin],
   ])
   ctx.loader.internal = {
@@ -280,4 +295,15 @@ test('a deployment that left a stock seam row on is told which patch to write', 
   } finally {
     process.stderr.write = stderr
   }
+})
+
+test('the terminal half reads the session store through the composition', async () => {
+  const { ctx } = await compose()
+
+  // The plugin reads `sessions` dynamically rather than declaring it as an
+  // activation dependency, so this is the read a real terminal makes. A
+  // property access behind `inject` would throw
+  // `cannot get property "sessions" without inject` here instead, which is
+  // exactly how the terminal broke after the halves were merged.
+  assert.equal(await resolveWorkspace(ctx, 'session-1'), root)
 })
