@@ -38,9 +38,9 @@ jobs:
           npm test
       - name: Built artifacts exist
         run: |
-          test -f packages/remote-workspace/lib/index.js
-          test -f packages/remote-workspace/lib/index.d.ts
-          test -f packages/remote-workspace/lib/client.js
+          test -f lib/index.js
+          test -f lib/index.d.ts
+          test -f lib/client.js
 
   rust:
     strategy:
