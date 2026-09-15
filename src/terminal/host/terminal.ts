@@ -12,7 +12,7 @@
  * pauses the PTY's output stream until the socket has taken the chunk, instead
  * of queueing the whole flood inside this process.
  *
- * @module dsh-terminal/host/terminal
+ * @module dsh-remote-workspace/terminal/host/terminal
  */
 
 import { Buffer } from 'node:buffer'

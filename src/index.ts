@@ -60,7 +60,9 @@ export const name = 'dsh-remote-workspace'
 /**
  * Services this plugin needs before it activates. `sandboxPolicy` is required
  * by the composed local delegate, and declaring it here keeps provision of
- * `ctx.fs` behind that dependency rather than racing it.
+ * `ctx.fs` behind that dependency rather than racing it. The Sidebar terminal
+ * reads the session store and the terminal seam it serves, so it looks both up
+ * dynamically rather than making them activation dependencies.
  */
 export const inject = ['sandboxPolicy']
 

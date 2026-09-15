@@ -13,7 +13,7 @@
  * terminal provider resolves that path to the node and runs the shell there.
  * Nothing here needs to know which machines exist.
  *
- * @module dsh-terminal/host/workspace
+ * @module dsh-remote-workspace/terminal/host/workspace
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -41,7 +41,7 @@ export class TerminalFailure extends Error {
 
 /**
  * The workspace directory one Session's terminal belongs in.
- * @param ctx - the host context carrying `ctx.sessions`.
+ * @param ctx - the host context carrying the session store.
  * @param sessionId - the identity the browser supplied.
  * @returns the absolute workspace directory.
  * @throws TerminalFailure `terminal/unknown-session` when neither a live nor a
@@ -52,7 +52,9 @@ export async function resolveWorkspace(ctx: Context, sessionId: string): Promise
     throw new TerminalFailure('terminal/unknown-session', 'no session identity was supplied, so the workspace is unknown')
   }
   const identity = sessionId as SessionId
-  const live = ctx.sessions.get(identity)?.header
+  // Read rather than injected: the terminal is one surface of a plugin whose
+  // activation does not depend on a session store existing.
+  const live = ctx.get('sessions')?.get(identity)?.header
   const stored = live === undefined
     ? await ctx.get('sessionPersistence')?.stat(identity)
     : undefined

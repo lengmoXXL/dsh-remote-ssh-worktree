@@ -8,7 +8,7 @@
  * — plus the two things only a live body can do: measure, and offer a restart
  * once the shell is gone.
  *
- * @module dsh-terminal/client/TerminalBody
+ * @module dsh-remote-workspace/plugin/client/terminal/TerminalBody
  */
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'

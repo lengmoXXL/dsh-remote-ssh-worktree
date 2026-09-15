@@ -12,7 +12,7 @@
  * closing is what makes the host kill the shell, so nothing outlives the tab.
  *
  *
- * @module dsh-terminal/client/session
+ * @module dsh-remote-workspace/plugin/client/terminal/session
  */
 
 import { FitAddon } from '@xterm/addon-fit'

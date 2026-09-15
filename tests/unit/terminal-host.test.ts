@@ -22,13 +22,16 @@ function hostContext(options: {
   live?: { cwd?: string } | undefined
   stored?: { header?: { cwd?: string } } | undefined
 }): Context {
+  const sessions = {
+    get: () => options.live === undefined ? undefined : { header: options.live },
+  }
   return {
-    sessions: {
-      get: () => options.live === undefined ? undefined : { header: options.live },
-    },
-    get: (name: string) => name === 'sessionPersistence' && options.stored !== undefined
-      ? { stat: () => Promise.resolve(options.stored) }
-      : undefined,
+    sessions,
+    get: (name: string) => name === 'sessions'
+      ? sessions
+      : name === 'sessionPersistence' && options.stored !== undefined
+        ? { stat: () => Promise.resolve(options.stored) }
+        : undefined,
   } as unknown as Context
 }
 
@@ -161,9 +164,10 @@ function fakeSocket(): FakeSocket {
 
 /** A host context whose terminal seam is the given provider. */
 function ttyContext(spawn: (request: TtySpawnRequest) => Promise<TtyHandle>, cwd: string): Context {
+  const sessions = { get: () => ({ header: { cwd } }) }
   return {
-    sessions: { get: () => ({ header: { cwd } }) },
-    get: () => undefined,
+    sessions,
+    get: (name: string) => name === 'sessions' ? sessions : undefined,
     tty: { spawn },
   } as unknown as Context
 }
@@ -215,7 +219,7 @@ test('an unknown Session is answered with an error frame rather than a terminal'
   attachTerminal(
     {
       sessions: { get: () => undefined },
-      get: () => undefined,
+      get: (name: string) => name === 'sessions' ? { get: () => undefined } : undefined,
       tty: { spawn: async (request: TtySpawnRequest) => { requests.push(request); return terminal.handle } },
     } as unknown as Context,
     settings,

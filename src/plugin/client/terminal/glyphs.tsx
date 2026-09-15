@@ -5,7 +5,7 @@
  * component rather than an element, so the prompt glyph is wrapped in
  * something with the `IconProps` shape.
  *
- * @module dsh-terminal/client/glyphs
+ * @module dsh-remote-workspace/plugin/client/terminal/glyphs
  */
 
 import type { ReactNode } from 'react'

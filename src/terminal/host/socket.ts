@@ -13,7 +13,7 @@
  *   not covered by the browser's same-origin policy, so without that fence any
  *   page in the browser could open a shell on this host.
  *
- * @module dsh-terminal/host/socket
+ * @module dsh-remote-workspace/terminal/host/socket
  */
 
 import type { IncomingMessage } from 'node:http'

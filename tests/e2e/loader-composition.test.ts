@@ -82,6 +82,16 @@ function policyProvider(mode: 'workspace-write'): object {
   }
 }
 
+/** The session store, as the terminal's workspace lookup reads it. */
+function sessionsProvider(): object {
+  return {
+    name: 'test-sessions',
+    apply(ctx: Context): void {
+      ctx.provide('sessions', { get: () => undefined } as never)
+    },
+  }
+}
+
 /** Captures the management route so a test can drive it without a socket. */
 function webServerProvider(routes: CapturedRoute[]): object {
   return {
@@ -122,6 +132,9 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     '  name: "@deepseek-ai/dsh-sandbox"',
     '- id: web-server',
     '  name: test-web-server',
+    // The Sidebar terminal resolves a Session's workspace through this store.
+    '- id: sessions',
+    '  name: test-sessions',
     ...extraRows,
     '- id: dsh-remote-workspace',
     '  name: dsh-remote-workspace',
@@ -140,6 +153,7 @@ async function compose(extraRows: readonly string[] = []): Promise<Composition> 
     ['@deepseek-ai/dsh-sandbox', sandbox],
     ['@deepseek-ai/dsh-fs-sandbox', fsSandbox],
     ['test-web-server', webServerProvider(routes)],
+    ['test-sessions', sessionsProvider()],
     ['dsh-remote-workspace', plugin],
   ])
   ctx.loader.internal = {

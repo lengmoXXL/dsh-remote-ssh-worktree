@@ -4,7 +4,7 @@
  * The Chinese dictionary is the key source; the English one is checked against
  * its key set, so a key added to one without the other fails the type check.
  *
- * @module dsh-terminal/client/locales
+ * @module dsh-remote-workspace/plugin/client/terminal/locales
  */
 
 /** Locale namespace owned by this plugin's Web UI. */
