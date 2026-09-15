@@ -6,10 +6,6 @@
  * whole deployment is legible at once and any single branch can be worked on
  * without losing sight of the rest.
  *
- * The component is a function of the four prop shares: data it fetches for
- * itself lives in local state, every mutation arrives as an injected callback,
- * every string comes from the locale seat, and no value reaches for `ctx`.
- *
  * @module dsh-remote-workspace/plugin/client/Section
  */
 
@@ -395,11 +391,7 @@ function WorktreeRow({ entry, busy, onRemove, onRelease, onToggleOpen, t }: {
   )
 }
 
-/**
- * The Remote workspaces settings section.
- * @param props - the owner share, the locale seat, and the injected face.
- * @returns the section element.
- */
+/** The Remote workspaces settings section. */
 export function RemoteWorktreesSection(props: SectionProps) {
   const { t } = props
   const [snapshot, setSnapshot] = useState<Snapshot | undefined>(undefined)

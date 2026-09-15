@@ -57,7 +57,7 @@ test('an unknown Session is a typed refusal, not a fallback directory', async ()
   const ctx = hostContext({})
   await assert.rejects(resolveWorkspace(ctx, 'session-1'), (error: unknown) => {
     assert.ok(error instanceof TerminalFailure)
-    assert.equal(error.code, 'terminal/unknown-session')
+    assert.match((error as Error).message, /is unknown/)
     return true
   })
 })

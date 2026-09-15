@@ -54,15 +54,11 @@ dsh plugin --profile web add "$PWD"
 
 ## 能做什么
 
-- 通过 SSH 添加机器（`user@host` 或 `~/.ssh/config` 别名），或直接用内置的 `Local` 机器操作本机。
-- 把机器上的任意目录登记为仓库；不要求是 git 仓库。
-- 从仓库切出 worktree 并打开为工作区；检出路径会预先填好，也可以改。
 - 纳入机器上已存在的 worktree；之后关闭只解除登记，不删除任何东西。
 - 把普通目录直接开成工作区；之后在机器上 `git init`，就能从它切 worktree。
 - read、write、edit、bash、grep 和终端工具都跑在该工作区所属的机器上。
 - 在右侧边栏开终端标签页：它在会话的工作区里启动该机器自己的登录 shell，隐藏标签页、切换会话、收起边栏都不会
   中断它，并跟随面板尺寸变化；它不受会话沙箱模式约束——它是你自己的 shell。
-- 用完的 worktree 可以删除，可选择是否连分支一起删。
 
 ## 使用
 
@@ -81,13 +77,13 @@ dsh plugin --profile web add "$PWD"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
+| `worktreeRoot` | `~/.dsh/worktrees` | 每台机器上切出的检出所在的根目录；检出落在 `<根>/<仓库>/<名称>`。 |
 | `shell` | 未设置 | 侧边栏终端运行的程序。未设置则用机器自己的登录 shell。 |
 | `shellArgs` | `['-l']` | `shell` 之后的参数；`shell` 未设置时忽略。 |
 | `graceMs` | `3000` | 关闭终端时留给它退出的时间（毫秒）。 |
 
 ## 说明
 
-- 检出切在机器的检出根目录下，默认 `~/.dsh/worktrees/<仓库>/<名称>`；配置 `worktreeRoot` 可以改根目录。
 - agent 从本仓库 Releases 下载、用 `SHA256SUMS` 校验，并经 `ssh -L` 到达本机，因此连接的可信度等同于你自己的
   SSH 访问。
 

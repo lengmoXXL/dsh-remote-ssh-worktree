@@ -41,11 +41,7 @@ export type TerminalBodyProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
   & PropsLocale<TerminalNamespace>
 
-/**
- * Draw the terminal.
- * @param props - see {@link TerminalBodyProps}.
- * @returns the tab's body.
- */
+/** Draw the terminal. */
 export function TerminalBody({ useTabInfo, sessionId, t }: TerminalBodyProps): ReactNode {
   const { tab } = useTabInfo()
   const screen = useRef<HTMLDivElement | null>(null)

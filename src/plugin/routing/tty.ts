@@ -46,7 +46,15 @@ export interface RoutingTtyDeps {
  * @param channel - the live node channel.
  * @returns the wire the remote provider drives.
  */
-function terminalWire(channel: NodeChannel): TtyWire {
+/**
+ * Adapt one node channel to the terminal port.
+ *
+ * Both seams that allocate a terminal on a node drive the same daemon methods,
+ * so they drive them through this one adapter.
+ * @param channel - the live node channel.
+ * @returns the port `createRemoteTty` drives.
+ */
+export function terminalWire(channel: NodeChannel): TtyWire {
   return {
     spawn: request => channel.request('term.spawn', request),
     read: (termId, fromByte) => channel.request('term.read', { termId: asTermId(termId), fromByte }),

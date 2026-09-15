@@ -134,7 +134,6 @@ function create(mount: TerminalMount): Entry {
   const element = document.createElement('div')
   // The local is declared beside this file; the CSS Modules indexer cannot prove it.
   element.className = css.surface!
-  mount.host.appendChild(element)
 
   const term = new Terminal({
     cursorBlink: true,
@@ -152,7 +151,6 @@ function create(mount: TerminalMount): Entry {
   const observer = new ResizeObserver(() => {
     fit.fit()
   })
-  observer.observe(mount.host)
 
   const socket = new WebSocket(socketUrl())
   socket.binaryType = 'arraybuffer'
@@ -217,9 +215,6 @@ function create(mount: TerminalMount): Entry {
     }
   })
   socket.addEventListener('close', () => {
-    if (entry.state.kind === 'opening' || entry.state.kind === 'live') emit(entry, { kind: 'closed' })
-  })
-  socket.addEventListener('error', () => {
     if (entry.state.kind === 'opening' || entry.state.kind === 'live') emit(entry, { kind: 'closed' })
   })
 

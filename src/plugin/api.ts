@@ -34,8 +34,9 @@ import { asRepoId } from '../storage/repos.ts'
 import type { RepoRecord, RepoStore } from '../storage/repos.ts'
 import { NodeRequestError } from '../remote/client.ts'
 import type { WorktreeManager } from '../models/worktrees.ts'
+import { homedir } from 'node:os'
 import type { LocalPathType } from '../local/fs.ts'
-import { listLocalDir, localHome, localPathType, resolveLocalPath } from '../local/fs.ts'
+import { listLocalDir, localPathType, resolveLocalPath } from '../local/fs.ts'
 import { isRepository } from '../local/git.ts'
 
 /** One normalized request, already routed to this API's prefix. */
@@ -71,8 +72,7 @@ export interface ManagementApiDeps {
   /**
    * Where one machine cuts its checkouts, for the panel's default path.
    *
-   * It throws while the machine's home is still unknown, which is why every
-   * caller reads it through {@link worktreeRootOf}.
+   * It throws while the machine's home is still unknown.
    */
   readonly worktreeRoot: (nodeId: NodeId) => string
 }
@@ -250,7 +250,14 @@ async function statOnNode(
  * @returns the record and whether it is a repository right now.
  */
 async function reportRepo(deps: ManagementApiDeps, record: RepoRecord): Promise<RepoReport> {
-  const root = worktreeRootOf(deps, record.nodeId)
+  // A machine that has not answered its handshake yet has no home to resolve
+  // `~` against; the panel then shows no default and the host computes it.
+  let root: string | undefined
+  try {
+    root = deps.worktreeRoot(record.nodeId)
+  } catch {
+    root = undefined
+  }
   // Spread rather than assign: an unknown root is an absent key, not an
   // undefined one, under `exactOptionalPropertyTypes`.
   const placed = root === undefined ? {} : { worktreeRoot: root }
@@ -275,23 +282,6 @@ async function reportRepo(deps: ManagementApiDeps, record: RepoRecord): Promise<
       git: false,
       error: error instanceof Error ? error.message : String(error),
     }
-  }
-}
-
-/**
- * The checkout root of one machine, or undefined while its home is unknown.
- *
- * A machine that has not answered its handshake yet has no home to resolve
- * `~` against; the panel then shows no default and the host computes it.
- * @param deps - the management dependencies.
- * @param nodeId - the machine to ask about.
- * @returns the root, or undefined when it cannot be named yet.
- */
-function worktreeRootOf(deps: ManagementApiDeps, nodeId: NodeId): string | undefined {
-  try {
-    return deps.worktreeRoot(nodeId)
-  } catch {
-    return undefined
   }
 }
 
@@ -578,7 +568,7 @@ export async function handleNodeApi(request: ApiRequest, deps: ManagementApiDeps
       // handshake reported for a node, and this user's home for this host.
       const requested = (request.query.get('path') ?? '').trim()
       if (record.transport.kind === 'local') {
-        const path = await resolveLocalPath(requested === '' ? localHome() : requested)
+        const path = await resolveLocalPath(requested === '' ? homedir() : requested)
         return { status: 200, body: { path, entries: await listLocalDir(path) } }
       }
       // The daemon itself expands no `~`, so the spelling never travels: the

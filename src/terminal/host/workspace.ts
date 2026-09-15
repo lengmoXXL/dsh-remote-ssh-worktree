@@ -22,21 +22,9 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // which is how a Session the host is not running still names its workspace.
 import type {} from '@deepseek-ai/dsh-session-persistence'
 
-/** A terminal request the host refused, with a stable code. */
+/** A terminal request the host refused. */
 export class TerminalFailure extends Error {
   override readonly name = 'TerminalFailure'
-
-  /** Stable failure category. */
-  readonly code: string
-
-  /**
-   * @param code - stable failure category.
-   * @param message - operator-readable description.
-   */
-  constructor(code: string, message: string) {
-    super(message)
-    this.code = code
-  }
 }
 
 /**
@@ -44,12 +32,11 @@ export class TerminalFailure extends Error {
  * @param ctx - the host context carrying the session store.
  * @param sessionId - the identity the browser supplied.
  * @returns the absolute workspace directory.
- * @throws TerminalFailure `terminal/unknown-session` when neither a live nor a
- * persisted header names one.
+ * @throws TerminalFailure when neither a live nor a persisted header names one.
  */
 export async function resolveWorkspace(ctx: Context, sessionId: string): Promise<string> {
   if (sessionId.trim() === '') {
-    throw new TerminalFailure('terminal/unknown-session', 'no session identity was supplied, so the workspace is unknown')
+    throw new TerminalFailure('no session identity was supplied, so the workspace is unknown')
   }
   const identity = sessionId as SessionId
   // Read rather than injected: the terminal is one surface of a plugin whose
@@ -60,7 +47,7 @@ export async function resolveWorkspace(ctx: Context, sessionId: string): Promise
     : undefined
   const cwd = (live ?? stored?.header)?.cwd
   if (cwd === undefined || cwd === '') {
-    throw new TerminalFailure('terminal/unknown-session', `session "${sessionId}" is unknown, so its workspace is too`)
+    throw new TerminalFailure(`session "${sessionId}" is unknown, so its workspace is too`)
   }
   return cwd
 }

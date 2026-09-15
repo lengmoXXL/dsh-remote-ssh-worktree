@@ -195,16 +195,6 @@ function remoteWriteAllowed(
     case 'workspace-write':
       if (isWithin(REMOTE_TEMP_ROOT, remotePath)) return true
       return remoteRoot !== undefined && isWithin(remoteRoot, remotePath)
-    default: {
-      // `SandboxMode` is closed, so this arm is unreachable in a build that
-      // knows every mode. A mode this build does not know means it cannot say
-      // what the sandbox permits, and guessing would be the wrong answer to a
-      // security question. Spelled inline rather than with `dsh-values`'
-      // `assertNever`: the assignability check is exactly as strong, and this
-      // plugin takes no dependency it does not otherwise need.
-      const mode: never = policy.mode
-      throw new Error(`unreachable sandbox mode: ${String(mode)}`)
-    }
   }
 }
 

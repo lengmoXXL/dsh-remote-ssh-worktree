@@ -293,15 +293,6 @@ export type ProcId = string & { readonly [WIRE_BRAND]: 'ProcId' }
 export type TermId = string & { readonly [WIRE_BRAND]: 'TermId' }
 
 /**
- * Admit a string as a process id.
- * @param value - a string the daemon minted, or one the wire delivered.
- * @returns the same string, branded.
- */
-export function asProcId(value: string): ProcId {
-  return value as ProcId
-}
-
-/**
  * Admit a string as a terminal session id.
  * @param value - a string the daemon minted, or one the wire delivered.
  * @returns the same string, branded.

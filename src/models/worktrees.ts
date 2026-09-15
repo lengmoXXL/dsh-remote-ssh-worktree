@@ -503,9 +503,51 @@ async function removeLocalWorktree(
   // The workspace entry resolves by path, so it goes before the path stops
   // existing under its feet.
   await unregisterWorkspace(deps, anchor)
+  return await dropBranchOrReport(anchor, options, () =>
+    deleteBranch({ repoPath: anchor.repoPath, branch: anchor.branch, force: options.force }))
+}
+
+/**
+ * Open a freshly registered anchor, leaving nothing behind when that is refused.
+ *
+ * An anchor with nothing open behind it is a row nobody asked for, and a path
+ * that routes into a directory nobody asked to open.
+ * @param deps - the manager's dependencies.
+ * @param anchor - the anchor that was just created.
+ * @param open - how this kind of anchor is opened.
+ * @throws whatever `open` threw, after the anchor is removed.
+ */
+async function openOrDrop(
+  deps: WorktreeManagerDeps,
+  anchor: AnchorRecord,
+  open: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await open()
+  } catch (error) {
+    await deps.anchors.remove(anchor.anchorId)
+    throw error
+  }
+}
+
+/**
+ * Delete a removed checkout's branch, reporting a refusal instead of failing.
+ *
+ * The checkout is already gone, so a branch that would not go is reported
+ * rather than thrown: the caller shows why it outlived its worktree.
+ * @param anchor - the worktree whose branch is in question.
+ * @param options - whether to delete the branch, and how hard.
+ * @param remove - the deletion itself, local or over the wire.
+ * @returns the removal, with the branch's fate.
+ */
+async function dropBranchOrReport(
+  anchor: WorktreeAnchor,
+  options: { force: boolean; deleteBranch: boolean },
+  remove: () => Promise<unknown>,
+): Promise<WorktreeRemoval> {
   if (!options.deleteBranch) return { anchor, branchDeleted: false }
   try {
-    await deleteBranch({ repoPath: anchor.repoPath, branch: anchor.branch, force: options.force })
+    await remove()
     return { anchor, branchDeleted: true }
   } catch (error) {
     return {
@@ -679,14 +721,7 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
         branch: entry.branch,
         origin: 'adopted',
       })
-      try {
-        await openAsWorkspace(deps, anchor)
-      } catch (error) {
-        // An anchor with nothing open behind it is a row nobody asked for, so a
-        // refused registration leaves nothing behind.
-        await deps.anchors.remove(anchor.anchorId)
-        throw error
-      }
+      await openOrDrop(deps, anchor, () => openAsWorkspace(deps, anchor))
       return { ...anchor, kind: 'worktree', branch: entry.branch }
     },
 
@@ -732,21 +767,12 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
       await unregisterWorkspace(deps, anchor)
       await deps.anchors.remove(anchorId)
 
-      if (!options.deleteBranch) return { anchor, branchDeleted: false }
-      try {
-        await channel.request('git.branchDelete', {
+      return await dropBranchOrReport(anchor, options, () =>
+        channel.request('git.branchDelete', {
           repoPath: anchor.repoPath,
           branch: anchor.branch,
           force: options.force,
-        })
-        return { anchor, branchDeleted: true }
-      } catch (error) {
-        return {
-          anchor,
-          branchDeleted: false,
-          branchError: error instanceof Error ? error.message : String(error),
-        }
-      }
+        }))
     },
 
     async open(anchorId) {
@@ -803,14 +829,7 @@ export function createWorktreeManager(deps: WorktreeManagerDeps): WorktreeManage
         // checkout to distinguish, so the two spellings are one path.
         remoteRoot: repoPath,
       })
-      try {
-        await workspace.register(anchor)
-      } catch (error) {
-        // An anchor with no workspace is a path that routes into a directory
-        // nobody asked to open, so the attempt leaves nothing behind.
-        await deps.anchors.remove(anchor.anchorId)
-        throw error
-      }
+      await openOrDrop(deps, anchor, () => workspace.register(anchor))
       return { ...anchor, kind: 'directory' }
     },
 

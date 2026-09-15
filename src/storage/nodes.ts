@@ -129,8 +129,7 @@ export interface NodeRecord {
   readonly transport: NodeTransport
   /**
    * The daemon's shared secret. Kept out of every view this module returns to
-   * callers that render to a browser or a model; a later phase moves it to the
-   * credential seam, at which point this field becomes a reference.
+   * callers that render to a browser or a model.
    */
   readonly token: string
   /** ISO-8601 creation instant. */

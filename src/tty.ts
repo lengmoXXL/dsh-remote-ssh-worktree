@@ -60,11 +60,7 @@ export interface TtyHandle {
    * @param data - UTF-8 text, sent without newline conversion.
    */
   write(data: string): Promise<void>
-  /**
-   * Adopt a new window size.
-   * @param cols - column count.
-   * @param rows - row count.
-   */
+  /** Adopt a new window size. */
   resize(cols: number, rows: number): Promise<void>
   /**
    * Release the terminal, escalating to a kill after the grace period.

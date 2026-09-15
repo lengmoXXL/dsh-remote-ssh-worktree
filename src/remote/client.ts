@@ -150,24 +150,18 @@ export async function connectNode(options: ConnectOptions): Promise<ConnectedNod
   const socket = new Socket()
   socket.setNoDelay(true)
 
-  await new Promise<void>((resolve, reject) => {
-    const timer = options.timeoutMs === undefined
-      ? undefined
-      : setTimeout(() => {
-        socket.destroy()
-        reject(new Error(`timed out connecting to ${options.host}:${String(options.port)}`))
-      }, options.timeoutMs)
-    const settle = (error?: Error): void => {
-      if (timer !== undefined) clearTimeout(timer)
-      socket.off('error', onError)
-      if (error === undefined) resolve()
-      else reject(error)
-    }
-    const onError = (error: Error): void => settle(error)
-    socket.once('error', onError)
-    socket.once('connect', () => settle())
-    socket.connect({ host: options.host, port: options.port })
-  })
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      socket.once('error', reject)
+      socket.once('connect', () => resolve())
+      socket.connect({ host: options.host, port: options.port })
+    }),
+    options.timeoutMs,
+    () => {
+      socket.destroy()
+      return new Error(`timed out connecting to ${options.host}:${String(options.port)}`)
+    },
+  )
 
   const connection = createMessageConnection(
     new StreamMessageReader(socket),

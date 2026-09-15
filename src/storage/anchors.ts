@@ -30,7 +30,6 @@
 
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import type { Dirent } from 'node:fs'
 import { mkdir, readFile, readdir, realpath, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -66,8 +65,6 @@ export type AnchorId = Branded<'AnchorId'>
 export function asAnchorId(value: string): AnchorId {
   return brandString<AnchorId>(value)
 }
-
-/** What one anchor maps. */
 
 /** Owner-only permissions: the file is bookkeeping, not a secret. */
 const FILE_MODE = 0o600
@@ -255,16 +252,6 @@ function parseAnchor(text: string, file: string): AnchorRecord {
   return { ...anchor, kind: 'worktree', origin: anchor.origin === 'adopted' ? 'adopted' : 'created' }
 }
 
-/** Read a directory's entries, treating absence as empty. */
-async function readdirOrEmpty(path: string): Promise<Dirent[]> {
-  try {
-    return await readdir(path, { withFileTypes: true })
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw error
-  }
-}
-
 /**
  * Walk the anchor tree and collect every metadata file it finds.
  *
@@ -278,7 +265,11 @@ async function readdirOrEmpty(path: string): Promise<Dirent[]> {
 async function findMetadataFiles(dir: string, depth: number): Promise<string[]> {
   if (depth < 0) return []
   const found: string[] = []
-  for (const entry of await readdirOrEmpty(dir)) {
+  const entries = await readdir(dir, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return []
+    throw error
+  })
+  for (const entry of entries) {
     const child = join(dir, entry.name)
     if (entry.isFile() && entry.name === ANCHOR_FILE) {
       found.push(child)

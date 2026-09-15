@@ -1,11 +1,9 @@
 # dsh-remote-workspace bundle patch: one insert, nothing else.
 #
-# This plugin routes ctx.fs / ctx.subprocess / ctx.shell / ctx.tty, and the host
-# plane holds one implementation per service, so the stock providers must be
-# disabled before this row activates. That is the deployment's call, made in the
-# profile's own patch layer: a submitted bundle must not take over components it
-# does not own (DSH-Store rule 7 — the entry ids already belong to other
-# submissions). The README lists the four lines the profile layer needs.
+# The stock rows this plugin routes are disabled by the deployment's own patch
+# layer (the README lists the four lines): a submitted bundle must not take over
+# components it does not own — DSH-Store rule 7, and the entry ids already
+# belong to other submissions.
 
 - insert:
     - id: dsh-remote-workspace

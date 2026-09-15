@@ -11,7 +11,6 @@
  */
 
 import { readdir, realpath, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 
 /** What one directory entry's type can be, in the vocabulary the wire uses. */
@@ -25,11 +24,6 @@ export interface LocalDirEntry {
   readonly type: LocalPathType
   /** Absolute path of the entry. */
   readonly path: string
-}
-
-/** The home directory of the user running the harness, which is where browsing starts. */
-export function localHome(): string {
-  return homedir()
 }
 
 /**

@@ -102,12 +102,21 @@ export interface TtyWire {
  * than waiting for output that can no longer arrive.
  * @param wire - the node's terminal methods.
  * @param request - what to run, where, how large, and how long to wait.
- * @returns the live handle.
+ * @param verbs - extra daemon verbs to hang on the same handle, for a seam that
+ *   has more than this port names e.g. the subprocess seam's foreground verbs.
+ * @returns the live handle, carrying whatever `verbs` added.
  * @throws when the allocation itself fails, so a caller learns before it holds a handle.
  */
+export async function createRemoteTty(wire: TtyWire, request: TtySpawnRequest): Promise<TtyHandle>
+export async function createRemoteTty<Extra extends object>(
+  wire: TtyWire,
+  request: TtySpawnRequest,
+  verbs: (termId: string) => Extra,
+): Promise<TtyHandle & Extra>
 export async function createRemoteTty(
   wire: TtyWire,
   request: TtySpawnRequest,
+  verbs?: (termId: string) => object,
 ): Promise<TtyHandle> {
   const started = await wire.spawn({
     argv: [...request.argv],
@@ -168,7 +177,7 @@ export async function createRemoteTty(
   timer.unref()
   void tick()
 
-  return {
+  const handle: TtyHandle = {
     pid: started.pid,
     output,
     done,
@@ -192,4 +201,5 @@ export async function createRemoteTty(
       })
     },
   }
+  return verbs === undefined ? handle : { ...handle, ...verbs(started.termId) }
 }

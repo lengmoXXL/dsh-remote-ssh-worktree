@@ -25,7 +25,7 @@ import { connectNode } from '../../src/remote/client.ts'
 import type { ConnectedNode } from '../../src/remote/client.ts'
 import { NodeRequestError } from '../../src/remote/client.ts'
 import type { SpPipeFrame, WireMethod, WireParams, WireResult } from '../../src/remote/protocol.ts'
-import { asProcId } from '../../src/remote/protocol.ts'
+import type { ProcId } from '../../src/remote/protocol.ts'
 
 const run = promisify(execFile)
 const TOKEN = 'protocol-token-0123456789'
@@ -302,7 +302,7 @@ test("sp.pipe pushes a frame for every chunk of a 'pipe' stream", async () => {
 
 test('a daemon failure carries the protocol error data', async () => {
   await assert.rejects(
-    () => call('sp.outcome', { procId: asProcId('no-such-process') }),
+    () => call('sp.outcome', { procId: 'no-such-process' as ProcId }),
     (error: unknown) => {
       assert.ok(error instanceof NodeRequestError)
       assert.deepEqual(fields(error.data), ['code', 'message'])

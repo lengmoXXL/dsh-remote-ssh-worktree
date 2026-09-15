@@ -60,12 +60,7 @@ function signalName(code: number): NodeJS.Signals | null {
   return null
 }
 
-/**
- * Wait for one promise, or for its budget to run out.
- * @param ms - the budget.
- * @param promise - what is being waited on.
- * @returns a promise that settles either way.
- */
+/** Wait for one promise, or for its budget to run out. */
 async function within(ms: number, promise: Promise<void>): Promise<void> {
   let timer: NodeJS.Timeout | undefined
   const expiry = new Promise<void>((resolve) => { timer = setTimeout(resolve, ms) })
@@ -142,7 +137,7 @@ class LocalTtyHandle implements TtyHandle {
  */
 export class LocalTtyRuntime extends TtyRuntime {
   async spawn(request: TtySpawnRequest): Promise<TtyHandle> {
-    const terminal = nodePty.spawn(request.argv[0], [...request.argv.slice(1)], {
+    const terminal = nodePty.spawn(request.argv[0], request.argv.slice(1), {
       name: TERM,
       cols: request.cols,
       rows: request.rows,

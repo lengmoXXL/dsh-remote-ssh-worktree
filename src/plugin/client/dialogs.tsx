@@ -138,12 +138,6 @@ export function AddMachineDialog({ busy, onClose, onSubmit, t }: {
  *
  * The listing comes from the same remote filesystem the agent's tools use, so
  * what the picker shows is what a session opened on the result would see.
- *
- * The typed path drives the list: while it is edited, the picker lists the
- * children of the directory the text names and keeps only the ones answering
- * the segment being typed, so the suggestion list narrows under the cursor.
- * Clicking a row descends into it and writes it into the field, which leaves
- * the field holding the directory that would be registered.
  */
 function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
   nodeId: NodeId
@@ -189,7 +183,7 @@ function DirectoryPicker({ nodeId, value, onChange, listDirs, t }: {
   const parent = current === undefined ? undefined : parentOf(current.path)
   // The bar names what is listed. Until the machine answers, an unspelled
   // request is the home directory, which `~` is the readable name for.
-  const place = current?.path ?? (dir === '' ? HOME_LABEL : dir)
+  const place = current?.path ?? (dir === '' ? '~' : dir)
 
   /** Descend: the text follows the path and the list shows what it holds. */
   const navigate = (path: string): void => {
@@ -246,8 +240,6 @@ function parentOf(path: string): string | undefined {
   if (cut < 0) return undefined
   return cut === 0 ? '/' : path.slice(0, cut)
 }
-/** The label the picker bar shows for the machine's own home directory. */
-const HOME_LABEL = '~'
 /** Whether one directory name answers the segment being typed. */
 function matchesName(name: string, prefix: string): boolean {
   // A dotted directory is furniture on this machine, not a suggestion, unless

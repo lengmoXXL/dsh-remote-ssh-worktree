@@ -57,17 +57,12 @@ is the shorter path.
 
 ## What you can do
 
-- Add a machine over SSH — `user@host` or a `~/.ssh/config` alias — or use the built-in `Local` machine for this host.
-- Register any directory on a machine as a repository; git is not required.
-- Cut a worktree from a repository and open it as a workspace. The checkout path is filled in for you and can be
-  changed.
 - Adopt a worktree that already exists on the machine, and release it later without deleting anything.
 - Open a plain directory as a workspace; `git init` it later and cut worktrees from it.
 - Run read, write, edit, bash, grep, and terminal tools in the workspace, on the machine that owns it.
 - Open a terminal tab in the right Sidebar: it starts the machine's own login shell in the Session's workspace, keeps
   running while you hide the tab, switch Session, or collapse the sidebar, and follows the panel's size. It is your
   shell, so the Session's sandbox mode does not confine it.
-- Remove a worktree when you are done, with or without its branch.
 
 ## Usage
 
@@ -87,14 +82,13 @@ browser tab leaves none behind.
 
 | Field | Default | Meaning |
 |---|---|---|
+| `worktreeRoot` | `~/.dsh/worktrees` | Root every managed checkout is cut under, on every machine. A checkout lands at `<root>/<repository>/<name>`. |
 | `shell` | unset | Program the Sidebar terminal runs. Unset uses the machine's own login shell. |
 | `shellArgs` | `['-l']` | Arguments after `shell`; ignored while `shell` is unset. |
 | `graceMs` | `3000` | How long a closing terminal is given to exit, in milliseconds. |
 
 ## Notes
 
-- Checkouts are cut under the machine's checkout root — `~/.dsh/worktrees/<repository>/<name>` by default.
-  `worktreeRoot` moves that root.
 - The agent is downloaded from this repository's Releases, checked against `SHA256SUMS`, and reached over `ssh -L`,
   so a connection has the trust of your own SSH access.
 

@@ -26,7 +26,6 @@
 
 import { PassThrough } from 'node:stream'
 import type { Writable } from 'node:stream'
-import { StringDecoder } from 'node:string_decoder'
 import type {
   SubprocessCollectedOutputs,
   SubprocessHandle,
@@ -40,10 +39,14 @@ import type {
   SubprocessTerminalSignal,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
+import { asTermId } from '../../remote/protocol.ts'
 import type { ProcId, SpPipeFrame } from '../../remote/protocol.ts'
 import type { ChannelLookup, NodeChannel } from '../../remote/client.ts'
 import type { AnchorRoute } from '../../storage/anchors.ts'
 import { ambiguousPathMessage, classifyPath } from '../../models/routing.ts'
+import { terminalWire } from './tty.ts'
+import type { TtySpawnRequest } from '../../tty.ts'
+import { createRemoteTty } from '../../remote/tty.ts'
 
 /**
  * The members this provider implements, narrowed from the seam class so the
@@ -88,16 +91,6 @@ export interface RoutingSubprocessDeps {
    */
   readonly remoteRipgrep?: string
 }
-
-/**
- * How often a remote terminal asks the daemon for new output.
- *
- * A terminal's output is a live stream while the wire serves retained windows,
- * so the proxy polls. The interval is the interactive latency floor: small
- * enough that a prompt appears promptly, large enough that an idle terminal does
- * not flood the connection.
- */
-const TERMINAL_POLL_MS = 40
 
 /** One stream's local mirror of the daemon's retained window. */
 class CollectedMirror implements SubprocessOutputReader {
@@ -402,121 +395,6 @@ function rewriteExecutable(argv: readonly string[], remoteRipgrep: string): read
 }
 
 /**
- * Allocate one remote terminal and proxy its live output.
- *
- * Unlike `spawn`, this seam method is already asynchronous, so the allocation
- * round trip is awaited rather than queued. What still cannot cross the wire is
- * a push stream, so the proxy polls the daemon's retained window into a local
- * `PassThrough`; a consumer sees the same `Readable` it would locally, one poll
- * interval behind.
- * @param channel - the live node channel.
- * @param remoteCwd - the canonical remote working directory.
- * @param spec - the caller's fully specified terminal request.
- * @returns the live terminal handle.
- */
-async function createRemoteTerminal(
-  channel: NodeChannel,
-  remoteCwd: string,
-  spec: SubprocessTerminalSpawnSpec,
-): Promise<RemoteTerminalHandle> {
-  const started = await channel.request('term.spawn', {
-    argv: [...spec.argv],
-    cwd: remoteCwd,
-    rows: spec.rows,
-    cols: spec.cols,
-    graceMs: spec.graceMs,
-    ...spec.env === undefined ? {} : { env: spec.env },
-  })
-
-  const output = new PassThrough()
-  const decoder = new StringDecoder('utf8')
-  let offset = 0
-  let finished = false
-  let pumping = false
-  let timer: NodeJS.Timeout | undefined
-
-  let resolveDone: (outcome: SubprocessOutcome) => void = () => {}
-  const done = new Promise<SubprocessOutcome>((resolve) => {
-    resolveDone = resolve
-  })
-
-  /** Publish the outcome once and stop polling. */
-  const finish = (outcome: SubprocessOutcome): void => {
-    if (finished) return
-    finished = true
-    if (timer !== undefined) clearInterval(timer)
-    output.end(decoder.end())
-    resolveDone(outcome)
-  }
-
-  /** One poll: pull what the daemon retains, then ask whether it exited. */
-  const tick = async (): Promise<void> => {
-    if (pumping || finished) return
-    pumping = true
-    try {
-      const read = await channel.request('term.read', { termId: started.termId, fromByte: offset })
-      offset = read.nextOffset
-      if (read.data.length > 0) output.write(decoder.write(Buffer.from(read.data, 'base64')))
-      const outcome = await channel.request('term.outcome', { termId: started.termId })
-      if (outcome !== null) {
-        finish({ exitCode: outcome.exitCode, signal: outcome.signal as NodeJS.Signals | null })
-      }
-    } catch {
-      // A dropped transport ends the terminal: the handle settles rather than
-      // hanging on output that can no longer arrive.
-      finish({ exitCode: null, signal: null })
-    } finally {
-      pumping = false
-    }
-  }
-
-  timer = setInterval(() => void tick(), TERMINAL_POLL_MS)
-  timer.unref()
-  void tick()
-
-  return {
-    pid: started.pid,
-    output,
-    done,
-    async write(data: string): Promise<void> {
-      await channel.request('term.write', { termId: started.termId, data })
-    },
-    async resize(cols: number, rows: number): Promise<void> {
-      await channel.request('term.resize', { termId: started.termId, cols, rows })
-    },
-    async inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
-      return await channel.request('term.inspectForeground', { termId: started.termId }) ?? undefined
-    },
-    async signalForeground(signal: SubprocessTerminalSignal): Promise<number> {
-      const result = await channel.request('term.signalForeground', {
-        termId: started.termId,
-        signal: signal as SubprocessTerminalSignal,
-      })
-      return result.processGroupId
-    },
-    async terminate(): Promise<void> {
-      if (finished) return
-      await channel.request('term.terminate', { termId: started.termId })
-      // One last pull so output produced during teardown is not lost.
-      try {
-        const read = await channel.request('term.read', { termId: started.termId, fromByte: offset })
-        offset = read.nextOffset
-        if (read.data.length > 0) output.write(decoder.write(Buffer.from(read.data, 'base64')))
-      } catch {
-        // Teardown already removed the window; the buffered output stands.
-      }
-      // A terminal the daemon no longer knows reads as "no outcome": the exit
-      // facts are absent, which is exactly what a released terminal has.
-      const outcome = await channel.request('term.outcome', { termId: started.termId }).catch(() => null)
-      finish({
-        exitCode: outcome?.exitCode ?? null,
-        signal: (outcome?.signal ?? null) as NodeJS.Signals | null,
-      })
-    },
-  }
-}
-
-/**
  * Build the routing subprocess runtime.
  * @param deps - the composed local delegate, the live anchors, and channel lookup.
  * @returns an object satisfying the subprocess seam, ready for `ctx.provide`.
@@ -567,7 +445,28 @@ export function createRoutingSubprocessRuntime(
     async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
       const remote = remoteRoute(spec.cwd)
       if (remote === undefined) return deps.localProc.spawnTerminal(spec)
-      return createRemoteTerminal(remote.channel, remote.remotePath, spec)
+      const request: TtySpawnRequest = {
+        // A terminal always has a program to run; the subprocess request is the
+        // same non-empty argv without the type that says so.
+        argv: [...spec.argv] as [string, ...string[]],
+        cwd: remote.remotePath,
+        cols: spec.cols,
+        rows: spec.rows,
+        graceMs: spec.graceMs,
+        ...spec.env === undefined ? {} : { env: spec.env },
+      }
+      return await createRemoteTty(terminalWire(remote.channel), request, termId => ({
+        async inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
+          return await remote.channel.request('term.inspectForeground', { termId: asTermId(termId) }) ?? undefined
+        },
+        async signalForeground(signal: SubprocessTerminalSignal): Promise<number> {
+          const result = await remote.channel.request('term.signalForeground', {
+            termId: asTermId(termId),
+            signal,
+          })
+          return result.processGroupId
+        },
+      }))
     },
   }
 }

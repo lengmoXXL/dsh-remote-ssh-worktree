@@ -28,10 +28,8 @@ jobs:
             exit 1
           fi
 
-  # The tarball is what a deployment installs: it carries the built `lib/`, so
-  # the machine that installs it compiles nothing and runs no dependency build
-  # script beyond the ones it already allows. `npm ci` runs the `prepare`
-  # script, which is what puts `lib/` there.
+  # The tarball is what a deployment installs: `npm ci` runs the `prepare`
+  # script, which is what puts the built `lib/` into it.
   pack:
     needs: guard
     runs-on: ubuntu-latest

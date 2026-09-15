@@ -173,20 +173,6 @@ export const Config: z<Config> = z.object({
 /** Root managed worktrees are cut under when the config names none. */
 const DEFAULT_WORKTREE_ROOT = '~/.dsh/worktrees'
 
-/** What a deployment runs when it names no shell. */
-const LOGIN_SHELL_VIA_SH = ['/bin/sh', '-c', 'exec "${SHELL:-/bin/sh}" -l'] as const
-
-/**
- * Resolve the argv a terminal is started with.
- * @param config - the validated plugin config.
- * @returns the program and its arguments.
- */
-function shellArgv(config: Config): readonly string[] {
-  if (config.shell === undefined || config.shell.length === 0) return LOGIN_SHELL_VIA_SH
-  const args = config.shellArgs !== undefined && config.shellArgs.length > 0 ? config.shellArgs : ['-l']
-  return [config.shell, ...args]
-}
-
 /**
  * Mount the plugin.
  *
@@ -276,20 +262,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   registerNodeApi(ctx, { registry, repos, connections, worktrees, worktreeRoot })
 
-  // The Sidebar terminal is registered here rather than behind `ctx.tty`: the
-  // socket handler reads the seam when a person opens a terminal, so a profile
-  // that composes another provider still gets a working terminal.
-  const argv = shellArgv(config)
-  const terminalSettings: TerminalSettings = {
-    shell: argv[0]!,
-    shellArgs: argv.slice(1),
-    // A terminal is the only consumer here that cares, and both names are what
-    // every full-screen program reads to decide what it may draw.
-    env: { TERM: 'xterm-256color', COLORTERM: 'truecolor' },
-    graceMs: config.graceMs ?? 3000,
-  }
-  registerTerminalSocket(ctx, SOCKET_PATH, terminalSettings)
-
   const subprocessScope = ctx.isolate('subprocess')
   subprocessScope.plugin(LocalSubprocessRuntime)
   subprocessScope.inject(['subprocess'], (scoped) => {
@@ -348,6 +320,25 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     })
     return publishSeam(ctx, 'tty', router)
   })
+
+  // The Sidebar terminal is registered here rather than behind `ctx.tty`: the
+  // socket handler reads the seam when a person opens a terminal, so a profile
+  // that composes another provider still gets a working terminal.
+  const configuredShell = config.shell !== undefined && config.shell.length > 0 ? config.shell : undefined
+  const terminalSettings: TerminalSettings = {
+    // An unnamed shell is the machine's own login shell, reached through `sh`
+    // so the node's profile loads; a named one keeps the caller's arguments, or
+    // gets a login shell's.
+    shell: configuredShell ?? '/bin/sh',
+    shellArgs: configuredShell === undefined
+      ? ['-c', 'exec "${SHELL:-/bin/sh}" -l']
+      : config.shellArgs !== undefined && config.shellArgs.length > 0 ? config.shellArgs : ['-l'],
+    // A terminal is the only consumer here that cares, and both names are what
+    // every full-screen program reads to decide what it may draw.
+    env: { TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+    graceMs: config.graceMs ?? 3000,
+  }
+  registerTerminalSocket(ctx, SOCKET_PATH, terminalSettings)
 }
 
 /** The handle a workspace record is addressed by. */
@@ -370,17 +361,7 @@ interface WorkspaceRegistry {
    * @returns the record, existing or created.
    */
   create(path: string, title?: string): Promise<WorkspaceHandle>
-  /**
-   * Find the workspace owning a path.
-   * @param path - the canonical directory path.
-   * @returns the record, or undefined when the path is not registered.
-   */
   resolveByPath(path: string): Promise<WorkspaceHandle | undefined>
-  /**
-   * Drop a workspace registration without touching the directory.
-   * @param id - the record id.
-   * @returns whether a record was removed.
-   */
   delete(id: string): Promise<boolean>
 }
 
