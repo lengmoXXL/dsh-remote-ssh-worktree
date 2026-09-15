@@ -133,10 +133,27 @@ const TERMINAL_VALUE_SCHEMA = {
 } as const
 
 /**
+ * Render one page of a terminal's output with the offset that resumes after it.
+ *
+ * The model sees only this text, so the resumable offset is part of it: that is
+ * what lets a caller chain a wait after a read without guessing.
+ * @param id - the terminal.
+ * @param offset - the absolute byte offset just past `text`.
+ * @param text - the page's text, possibly empty.
+ * @param label - what the page is: a wait reason, `truncated`, `no output`, or nothing.
+ * @returns the model-facing text.
+ */
+function renderPage(id: string, offset: number, text: string, label = ''): string {
+  const marker = `[${id}${label === '' ? '' : ` ${label}`} offset ${String(offset)}]`
+  return text === '' ? marker : `${marker}\n${text}`
+}
+
+/**
  * Render one canonical value for the model.
  *
- * The terminal's own text is the answer to a read or a wait, so it is passed
- * through; the other actions say what they did in one line.
+ * A read and a wait answer with the terminal's own text under a marker that
+ * carries what the page is and the offset that resumes after it; the other
+ * actions say what they did in one line.
  * @param value - the canonical value the body returned.
  * @returns the model-facing text.
  */
@@ -152,12 +169,13 @@ function renderValue(value: TerminalValue): string {
       ? `Wrote ${String(value.wrote.bytes)} byte(s) to ${value.id}.`
       : `Sent ${String(value.wrote.keys)} key(s) to ${value.id}.`
   }
-  if ('matched' in value) {
-    const marker = `[${value.id} ${value.reason}]`
-    return value.text === '' ? marker : `${marker}\n${value.text}`
-  }
-  if (value.text === '') return `[${value.id} no output]`
-  return value.truncated ? `[${value.id} truncated]\n${value.text}` : value.text
+  if ('matched' in value) return renderPage(value.id, value.offset, value.text, value.reason)
+  return renderPage(
+    value.id,
+    value.offset,
+    value.text,
+    value.text === '' ? 'no output' : value.truncated ? 'truncated' : '',
+  )
 }
 
 /**
@@ -189,7 +207,7 @@ export function registerTerminalTool(ctx: Context, registry: TerminalRegistry): 
 
   tools.register(defineTool({
     name: 'terminal',
-    description: 'Work with the terminals a person has open in the sidebar: read their output, type into them, send named keys, and wait for output. This is one terminal tool with an "action"; the other parameters apply only to the actions named in their descriptions. It never opens a terminal — a person opening a sidebar tab does that — and it never closes one: a terminal belongs to its tab, so a tab the person closed leaves no terminal to address. Use "list" to see what is open, "read" for recent output, "send" to run a command ("enter" defaults to true), "keys" for named keys such as ctrl+c, and "wait" to block until output matches or the command exits.',
+    description: 'Work with the terminals a person has open in the sidebar: read their output, type into them, send named keys, and wait for output. This is one terminal tool with an "action"; the other parameters apply only to the actions named in their descriptions. It never opens a terminal — a person opening a sidebar tab does that — and it never closes one: a terminal belongs to its tab, so a tab the person closed leaves no terminal to address. Use "list" to see what is open, "read" for recent output, "send" to run a command ("enter" defaults to true), "keys" for named keys such as ctrl+c, and "wait" to search the recent output and settle when it matches or the command exits.',
     parameters: {
       action: {
         type: 'string',
@@ -220,7 +238,7 @@ export function registerTerminalTool(ctx: Context, registry: TerminalRegistry): 
       },
       offset: {
         type: 'number',
-        description: 'Absolute byte offset to read or wait from; omitted reads the tail and starts a wait at the current end. Valid with read and wait; the reply carries the offset that resumes after it.',
+        description: 'Absolute byte offset to read or wait from. Omitted reads the tail, and starts a wait at the beginning of that same retained tail, so output that already arrived can match. Valid with read and wait; the render carries the offset that resumes after it.',
       },
       match: {
         type: 'string',

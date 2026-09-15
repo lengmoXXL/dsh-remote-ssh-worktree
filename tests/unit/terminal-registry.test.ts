@@ -208,6 +208,40 @@ test('a read keeps the requested tail line count', async () => {
   assert.equal(registry.read('t1', undefined, 5).truncated, false)
 })
 
+test('a wait with no offset searches the tail a read returns, so output that already arrived can match', async () => {
+  const { registry, terminal } = harness()
+  await registry.open('s1', '/w/a', { cols: 80, rows: 24 })
+  // One line beyond a default read's window, so the first line is not searched.
+  const lines = Array.from({ length: 200 }, (_, index) => `line ${String(index + 1)}`)
+  terminal.emit(`gone\n${lines.join('\n')}\n`)
+  await settle()
+
+  const seen = await registry.wait('t1', { match: 'line 200', timeoutMs: 20 })
+  assert.equal(seen.matched, true)
+  assert.equal(seen.reason, 'match')
+  // The text searched is exactly the tail a default read returns, and its
+  // offset resumes from that window's end.
+  assert.equal(seen.text, registry.read('t1').text)
+  assert.equal(seen.text.includes('gone'), false)
+  assert.equal(seen.offset, registry.read('t1').offset)
+
+  const outside = await registry.wait('t1', { match: 'gone', timeoutMs: 20 })
+  assert.equal(outside.matched, false)
+  assert.equal(outside.reason, 'timeout')
+})
+
+test('a wait with an explicit offset searches from there, not from the retained tail', async () => {
+  const { registry, terminal } = harness()
+  await registry.open('s1', '/w/a', { cols: 80, rows: 24 })
+  terminal.emit('ready\n')
+  await settle()
+
+  const fromEnd = await registry.wait('t1', { offset: 6, match: 'ready', timeoutMs: 20 })
+  assert.equal(fromEnd.matched, false)
+  assert.equal(fromEnd.reason, 'timeout')
+  assert.equal(fromEnd.text, '')
+})
+
 test('every logical key resolves to its bytes, and an unknown one writes nothing', async () => {
   const { registry, terminal } = harness()
   await registry.open('s1', '/w/a', { cols: 80, rows: 24 })

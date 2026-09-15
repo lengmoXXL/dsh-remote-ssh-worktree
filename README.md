@@ -22,7 +22,7 @@ English | [中文](README.zh.md)
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.1/dsh-remote-workspace-0.1.1.tgz
+dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.2/dsh-remote-workspace-0.1.2.tgz
 ```
 
 The tarball carries the built `lib/`, so the machine that installs it compiles nothing. While developing the plugin,

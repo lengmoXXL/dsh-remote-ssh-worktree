@@ -21,7 +21,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.1/dsh-remote-workspace-0.1.1.tgz
+dsh plugin --profile web add https://github.com/lengmoXXL/dsh-remote-workspace/releases/download/plugin-v0.1.2/dsh-remote-workspace-0.1.2.tgz
 ```
 
 tarball 里带着构建好的 `lib/`，安装的机器不需要编译任何东西。改插件本身时，改为从检出安装：`git clone`、

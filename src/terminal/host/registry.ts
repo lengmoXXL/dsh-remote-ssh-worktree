@@ -122,7 +122,11 @@ export interface TerminalRead {
 
 /** What one wait is asked for. */
 export interface TerminalWaitRequest {
-  /** Start watching from this absolute byte offset; omitted starts at the current end. */
+  /**
+   * Absolute byte offset to start searching from; omitted starts at the
+   * beginning of the retained tail a default read returns, so output that
+   * already arrived can match.
+   */
   readonly offset?: number
   /** Plain substring to wait for. Exactly one of `match` and `regex` is required. */
   readonly match?: string
@@ -137,7 +141,7 @@ export interface TerminalWait {
   readonly id: string
   /** Absolute byte offset just past the returned text. */
   readonly offset: number
-  /** Output seen since the wait started, including the match when there was one. */
+  /** Everything searched, from the wait's start offset through the newest byte. */
   readonly text: string
   readonly matched: boolean
   readonly reason: 'match' | 'exit' | 'timeout'
@@ -359,6 +363,18 @@ export function createTerminalRegistry(options: TerminalRegistryOptions): Termin
     return { text: parts.slice(parts.length - lines).join('\n'), cut: true }
   }
 
+  /**
+   * The absolute offset that begins the tail a default read returns.
+   *
+   * An offset-less wait searches from here rather than from the current end, so
+   * output that arrived before the wait can still match.
+   */
+  const retainedStart = (entry: TerminalEntry): number => {
+    const seen = textFrom(entry, entry.dropped)
+    const tail = tailLines(seen.text, DEFAULT_READ_LINES)
+    return Math.max(entry.dropped, entry.bytes - Buffer.byteLength(tail.text, 'utf8'))
+  }
+
   /** Wake every waiter, which re-checks the terminal's new state. */
   const notify = (entry: TerminalEntry): void => {
     for (const waiter of [...entry.waiters]) waiter()
@@ -553,7 +569,7 @@ export function createTerminalRegistry(options: TerminalRegistryOptions): Termin
     async wait(id, request, signal): Promise<TerminalWait> {
       const entry = entryOf(id)
       const budget = Math.min(Math.max(Math.trunc(request.timeoutMs ?? DEFAULT_WAIT_MS), 1), MAX_WAIT_MS)
-      const start = request.offset ?? entry.bytes
+      const start = request.offset ?? retainedStart(entry)
       const test = matcher(request)
       return new Promise<TerminalWait>((resolve, reject) => {
         let timer: NodeJS.Timeout | undefined

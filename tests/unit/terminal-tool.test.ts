@@ -95,6 +95,14 @@ function valueOf<T>(value: unknown): T {
   return value as T
 }
 
+/** The one text block a definition renders for a value; the model sees only this. */
+function renderText(definition: ToolDefinition, args: Record<string, unknown>, value: unknown): string {
+  const content = definition.output.render(args as never, value as never)
+  assert.equal(content.length, 1)
+  assert.equal(content[0]?.type, 'text')
+  return (content[0] as { text: string }).text
+}
+
 /** Let an action's synchronous setup run before a case drives the seam. */
 const settle = (): Promise<void> => new Promise(resolve => setImmediate(resolve))
 
@@ -220,17 +228,20 @@ test('keys sends named keys and reports how many', async () => {
   assert.deepEqual(sent.wrote, { bytes: 1, keys: 1 })
 })
 
-test('read returns the tail and the offset that resumes after it', async () => {
+test('read returns the tail, the offset that resumes it, and the offset in its render', async () => {
   const { tools, registry, terminal, exec } = compose()
   await registry.open('s1', '/w/a', { cols: 80, rows: 24 })
   terminal.emit('one\ntwo\nthree')
   await settle()
 
+  const args = { action: 'read', terminal: 't1', lines: 2 }
   const read = valueOf<{ id: string; offset: number; text: string; truncated: boolean }>(
-    await soleTool(tools).execute({ action: 'read', terminal: 't1', lines: 2 }, exec('s1')),
+    await soleTool(tools).execute(args, exec('s1')),
   )
   assert.equal(read.text, 'two\nthree')
   assert.equal(read.offset, 13)
+  // The model sees only the render, so the resume offset is in it.
+  assert.equal(renderText(soleTool(tools), args, read), '[t1 truncated offset 13]\ntwo\nthree')
 })
 
 test('wait returns on a match, on exit, and on its budget', async () => {
@@ -261,7 +272,47 @@ test('wait returns on a match, on exit, and on its budget', async () => {
   const outcome = valueOf<{ matched: boolean; reason: string; text: string }>(await exited)
   assert.equal(outcome.matched, false)
   assert.equal(outcome.reason, 'exit')
-  assert.equal(outcome.text, 'bye')
+  // An offset-less wait reports the retained window it searched, so the earlier
+  // output is part of the text rather than invisible.
+  assert.equal(outcome.text, 'server ready\nre42bye')
+})
+
+test('send then an offset-less wait matches output that already arrived, and renders its text and offset', async () => {
+  const { tools, registry, terminal, exec } = compose()
+  await registry.open('s1', '/w/a', { cols: 80, rows: 24 })
+  const tool = soleTool(tools)
+
+  await tool.execute({ action: 'send', terminal: 't1', text: 'echo hello world' }, exec('s1'))
+  // The output lands before the wait starts: the failure was that a wait from
+  // "now" could never see it.
+  terminal.emit('echo hello world\r\nhello world\r\n')
+  await settle()
+
+  const args = { action: 'wait', terminal: 't1', match: 'hello world' }
+  const value = valueOf<{ offset: number; text: string; matched: boolean; reason: string }>(
+    await tool.execute(args, exec('s1')),
+  )
+  assert.equal(value.matched, true)
+  assert.equal(value.reason, 'match')
+  assert.equal(
+    renderText(tool, args, value),
+    `[t1 match offset ${String(value.offset)}]\necho hello world\r\nhello world\r\n`,
+  )
+})
+
+test('a timed-out wait renders the window it searched and the offset that resumes it', async () => {
+  const { tools, registry, terminal, exec } = compose()
+  await registry.open('s1', '/w/a', { cols: 80, rows: 24 })
+  terminal.emit('$ echo hi\nhi\n')
+  await settle()
+
+  const tool = soleTool(tools)
+  const args = { action: 'wait', terminal: 't1', match: 'never', timeoutMs: 20 }
+  const value = valueOf<{ offset: number; text: string; matched: boolean; reason: string }>(
+    await tool.execute(args, exec('s1')),
+  )
+  assert.equal(value.reason, 'timeout')
+  assert.equal(renderText(tool, args, value), '[t1 timeout offset 13]\n$ echo hi\nhi\n')
 })
 
 test('a wait that runs out of budget reports a timeout instead of failing', async () => {
